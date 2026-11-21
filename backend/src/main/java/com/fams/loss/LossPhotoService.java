@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -39,7 +38,7 @@ public class LossPhotoService {
         this.evidence = evidence;
     }
 
-    public Map<String, Object> upload(
+    public LossViews.PhotoReceipt upload(
             Actor actor,
             long id,
             long version,
@@ -60,7 +59,7 @@ public class LossPhotoService {
                             return reports.registerPhoto(
                                     actor, id, version, key, filename, attachment);
                         });
-        if (!received.get().toString().equals(result.get("objectId"))) {
+        if (!received.get().toString().equals(result.objectId())) {
             storage.delete(received.get());
         }
         return result;

@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.UUID;
 
 @Profile("fams-product")
@@ -39,7 +38,7 @@ public class LossPhotoController {
     }
 
     @PostMapping("/{id}/photos")
-    Map<String, Object> upload(
+    LossViews.PhotoReceipt upload(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -59,15 +58,14 @@ public class LossPhotoController {
     }
 
     @PostMapping("/{id}/photos/{object}/download-grant")
-    Map<String, Object> grant(
+    LossViews.PhotoGrant grant(
             @PathVariable @Positive long id,
             @PathVariable UUID object,
             HttpServletRequest request) {
         var grant = photos.grant(actors.capture(), id, object);
         String prefix =
                 request.getRequestURI().startsWith("/api/v1/mini/") ? "/api/v1/mini" : "/api/v1";
-        return Map.of(
-                "url",
+        return new LossViews.PhotoGrant(
                 prefix
                         + "/loss-reports/"
                         + id
@@ -75,7 +73,6 @@ public class LossPhotoController {
                         + object
                         + "/content?grant="
                         + grant.token(),
-                "expiresAtEpochSecond",
                 grant.expiresAtEpochSecond());
     }
 

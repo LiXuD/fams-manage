@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -43,7 +42,7 @@ public class LossController {
     }
 
     @GetMapping
-    Map<String, Object> list(
+    LossViews.Page<LossViews.LossReport> list(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reports.list(actors.capture(), page, pageSize);
@@ -57,12 +56,12 @@ public class LossController {
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable @Positive long id) {
+    LossViews.LossDetail get(@PathVariable @Positive long id) {
         return reports.get(actors.capture(), id);
     }
 
     @PostMapping
-    Map<String, Object> submit(
+    LossViews.LossReport submit(
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.Submission input) {
         var actor = actors.capture();
@@ -70,7 +69,7 @@ public class LossController {
     }
 
     @PostMapping("/factory/{repairId}/rounds/{roundId}")
-    Map<String, Object> submitFactory(
+    LossViews.LossReport submitFactory(
             @PathVariable @Positive long repairId,
             @PathVariable @Positive long roundId,
             @RequestHeader("If-Match-Version") @PositiveOrZero long repairVersion,
@@ -81,7 +80,7 @@ public class LossController {
     }
 
     @PostMapping("/internal-repairs/{repairId}")
-    Map<String, Object> submitInternalRepair(@PathVariable @Positive long repairId,
+    LossViews.LossReport submitInternalRepair(@PathVariable @Positive long repairId,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.InternalRepairSubmission input) {
@@ -90,7 +89,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decide(
+    LossViews.LossReport decide(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -100,7 +99,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/cancel")
-    Map<String, Object> cancel(
+    LossViews.LossReport cancel(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -110,7 +109,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/claim")
-    Map<String, Object> claim(
+    LossViews.LossReport claim(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key) {
@@ -119,7 +118,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/search")
-    Map<String, Object> search(
+    LossViews.LossReport search(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -129,14 +128,14 @@ public class LossController {
     }
 
     @GetMapping("/follow-ups")
-    Map<String, Object> followUps(
+    LossViews.Page<LossViews.LossReport> followUps(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reports.followUps(actors.capture(), page, pageSize);
     }
 
     @PostMapping("/{id}/confirm-lost")
-    Map<String, Object> confirmLost(
+    LossViews.LossReport confirmLost(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -146,7 +145,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/follow-up")
-    Map<String, Object> followUp(
+    LossViews.LossReport followUp(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -156,7 +155,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-original")
-    Map<String, Object> recoverOriginal(
+    LossViews.LossReport recoverOriginal(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -166,7 +165,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-to-repair")
-    Map<String, Object> recoverToRepair(
+    LossViews.LossReport recoverToRepair(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -176,7 +175,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recovery-requests")
-    Map<String, Object> requestRecovery(
+    LossViews.LossReportWithRecovery requestRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -186,7 +185,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/repair-recovery-requests")
-    Map<String, Object> requestRepairRecovery(
+    LossViews.LossReportWithRecovery requestRepairRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -196,7 +195,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/execute-to-repair")
-    Map<String, Object> executeRecoveryToRepair(
+    LossViews.LossReportWithRecovery executeRecoveryToRepair(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -206,7 +205,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/decision")
-    Map<String, Object> decideRecovery(
+    LossViews.LossReportWithRecovery decideRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -216,7 +215,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/cancel")
-    Map<String, Object> cancelRecovery(
+    LossViews.LossReportWithRecovery cancelRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -226,7 +225,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/claim")
-    Map<String, Object> claimRecovery(
+    LossViews.LossReportWithRecovery claimRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key) {
@@ -235,7 +234,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/execute")
-    Map<String, Object> executeRecovery(
+    LossViews.LossReportWithRecovery executeRecovery(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -245,7 +244,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-to-return")
-    Map<String, Object> recoverToReturn(@PathVariable @Positive long id,
+    LossViews.LossReport recoverToReturn(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
@@ -254,7 +253,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/return-recovery-requests")
-    Map<String, Object> requestReturnRecovery(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery requestReturnRecovery(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
@@ -263,7 +262,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/execute-to-return")
-    Map<String, Object> executeRecoveryToReturn(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery executeRecoveryToReturn(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
@@ -272,7 +271,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-to-transfer")
-    Map<String, Object> recoverToTransfer(@PathVariable @Positive long id,
+    LossViews.LossReport recoverToTransfer(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.TransferRecoveryExecution input) {
@@ -281,7 +280,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/transfer-recovery-requests")
-    Map<String, Object> requestTransferRecovery(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery requestTransferRecovery(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
@@ -290,7 +289,7 @@ public class LossController {
     }
 
     @PostMapping("/recoveries/{id}/execute-to-transfer")
-    Map<String, Object> executeRecoveryToTransfer(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery executeRecoveryToTransfer(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.TransferRecoveryExecution input) {
@@ -299,7 +298,7 @@ public class LossController {
     }
 
     @PostMapping("/{id}/factory-recovery-requests")
-    Map<String, Object> requestFactoryRecovery(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery requestFactoryRecovery(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
@@ -308,25 +307,25 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-to-factory")
-    Map<String, Object> recoverToFactory(@PathVariable @Positive long id,
+    LossViews.LossReport recoverToFactory(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
         var actor = actors.capture();
-        return retry(() -> reports.recoverToFactory(actor, id, version, key, input, false));
+        return retry(() -> reports.recoverToFactory(actor, id, version, key, input));
     }
 
     @PostMapping("/recoveries/{id}/execute-to-factory")
-    Map<String, Object> executeRecoveryToFactory(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery executeRecoveryToFactory(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
         var actor = actors.capture();
-        return retry(() -> reports.recoverToFactory(actor, id, version, key, input, true));
+        return retry(() -> reports.executeRecoveryToFactory(actor, id, version, key, input));
     }
 
     @PostMapping("/{id}/internal-repair-recovery-requests")
-    Map<String, Object> requestInternalRepairRecovery(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery requestInternalRepairRecovery(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ReturnRecoveryRequest input) {
@@ -335,24 +334,24 @@ public class LossController {
     }
 
     @PostMapping("/{id}/recover-to-internal-repair")
-    Map<String, Object> recoverToInternalRepair(@PathVariable @Positive long id,
+    LossViews.LossReport recoverToInternalRepair(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
         var actor = actors.capture();
-        return retry(() -> reports.recoverToInternalRepair(actor, id, version, key, input, false));
+        return retry(() -> reports.recoverToInternalRepair(actor, id, version, key, input));
     }
 
     @PostMapping("/recoveries/{id}/execute-to-internal-repair")
-    Map<String, Object> executeRecoveryToInternalRepair(@PathVariable @Positive long id,
+    LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(@PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody LossInput.ExplicitRecoveryExecution input) {
         var actor = actors.capture();
-        return retry(() -> reports.recoverToInternalRepair(actor, id, version, key, input, true));
+        return retry(() -> reports.executeRecoveryToInternalRepair(actor, id, version, key, input));
     }
 
-    private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
+    private <T> T retry(Supplier<T> operation) {
         for (int attempt = 0; ; attempt++) {
             try {
                 return operation.get();

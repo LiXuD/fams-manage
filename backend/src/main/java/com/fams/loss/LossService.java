@@ -84,7 +84,7 @@ public class LossService {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
-    public Map<String, Object> list(Actor actor, int page, int size) {
+    public LossViews.Page<LossViews.LossReport> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
                 " FROM fams_loss_report WHERE (? OR creator_account_id=? OR"
@@ -102,29 +102,25 @@ public class LossService {
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
         args.add(((long) page - 1) * size);
-        return Map.of(
-                "items",
+        return new LossViews.Page<>(
                 db
                         .queryForList(
                                 "SELECT *" + where + " ORDER BY id DESC LIMIT ? OFFSET ?",
                                 args.toArray())
                         .stream()
-                        .map(this::view)
+                        .map(row -> LossViews.lossReport(json, row))
                         .toList(),
-                "total",
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> get(Actor actor, long id) {
+    public LossViews.LossDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
         visible(current, row);
-        var result = new LinkedHashMap<>(view(row));
+        var base = LossViews.lossReport(json, row);
         var locks =
                 db.queryForList(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
@@ -132,123 +128,132 @@ public class LossService {
                             + " NULL",
                         row.get("asset_id"),
                         id);
-        result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
+        Long lockVersion =
+                locks.isEmpty()
+                        ? null
+                        : ((Number) locks.getFirst().get("lock_version")).longValue();
         var photos = evidence.getIfAvailable();
-        result.put("photosAvailable", photos != null);
-        result.put("photos", photos == null ? List.of() : photoProjection(photos.list("LOST_REPORT", id)));
-        result.put(
-                "history",
-                wire(
-                        db.queryForList(
+        var photoList =
+                photos == null ? List.<Photo>of() : photoProjection(photos.list("LOST_REPORT", id));
+        var history =
+                db.queryForList(
                                 "SELECT * FROM fams_loss_event WHERE report_id=? ORDER BY id DESC"
                                         + " LIMIT 100",
-                                id)));
-        result.put(
-                "historyTotal",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_loss_event WHERE report_id=?", Long.class, id));
+                                id)
+                        .stream()
+                        .map(LossViews::lossEvent)
+                        .toList();
+        long historyTotal =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_loss_event WHERE report_id=?",
+                                Long.class,
+                                id));
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("report_status"));
         Long factoryProcessor = factoryProcessor(row);
         Long returnProcessor = returnProcessor(row);
         Long internal = internalRepairProcessor(row);
-        result.put(
-                "confirmation",
+        var confirmation =
                 row.get("confirmation_snapshot_json") == null
                         ? null
-                        : json.readTree(row.get("confirmation_snapshot_json").toString()));
+                        : json.readTree(row.get("confirmation_snapshot_json").toString());
         boolean recoveryOpen =
                 row.get("recovered_at") == null
                         && List.of("SEARCHING", "CONFIRMED_LOST")
                                 .contains(row.get("report_status"));
         var recoveryAsset = recoveryOpen ? assets.recoveryView(number(row, "asset_id")) : null;
         String currentLifecycle = recoveryAsset == null ? "" : recoveryAsset.lifecycle();
-        result.put("recoveryAsset", recoveryAsset);
         var recoveries =
                 db.queryForList(
-                        "SELECT * FROM fams_loss_recovery WHERE report_id=?"
-                                + " ORDER BY (active_guard IS NOT NULL) DESC,id DESC LIMIT 20",
-                        id);
-        result.put(
-                "recoveries",
-                recoveries.stream().map(item -> recoveryView(current, item)).toList());
-        result.put(
-                "recoveriesTotal",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_loss_recovery WHERE report_id=?",
-                        Long.class,
-                        id));
-        var actions = new LinkedHashMap<>(Map.of(
-                        "recoverOriginal",
+                                "SELECT * FROM fams_loss_recovery WHERE report_id=?"
+                                        + " ORDER BY (active_guard IS NOT NULL) DESC,id DESC LIMIT 20",
+                                id)
+                        .stream()
+                        .map(item -> recoveryView(current, item))
+                        .toList();
+        long recoveriesTotal =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_loss_recovery WHERE report_id=?",
+                                Long.class,
+                                id));
+        var original = json.readTree(row.get("source_snapshot_json").toString());
+        var actions =
+                new LossViews.ReportActions(
                         "SEARCHING".equals(row.get("report_status"))
                                 && factoryProcessor == null && internal == null
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id")),
-                        "requestRecovery",
                         "CONFIRMED_LOST".equals(row.get("report_status"))
                                 && recoveryOpen
                                 && applicant(current)
                                 && recoveryAsset.eligible()
                                 && !recoveryAsset.locked(),
-                        "confirmLost",
                         "SEARCHING".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id")),
-                        "followUp",
                         "CONFIRMED_LOST".equals(row.get("report_status"))
                                 && row.get("recovered_at") == null
                                 && !List.of("PENDING_SCRAP", "SCRAPPED").contains(currentLifecycle)
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id")),
-                        "decide",
                         pending && current.has(Role.ASSET_ADMIN),
-                        "cancel",
                         pending
                                 && (current.has(Role.ASSET_ADMIN)
                                         || current.id() == number(row, "creator_account_id")),
-                        "addPhoto",
                         pending
                                 && photos != null
                                 && current.id() == number(row, "creator_account_id"),
-                        "claim",
                         "WAITING_WAREHOUSE_CLAIM".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && (factoryProcessor == null || factoryProcessor == current.id())
                                 && (returnProcessor == null || returnProcessor == current.id())
                                 && (internal == null || internal == current.id()),
-                        "search",
                         "VERIFYING".equals(row.get("report_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
-                                        current.id(), row.get("processor_account_id"))));
-        actions.put("recoverFactory", factoryProcessor != null && factoryProcessor == current.id()
-                && current.has(Role.WAREHOUSE_OPERATOR) && "SEARCHING".equals(row.get("report_status")));
-        actions.put("requestFactoryRecovery", factoryProcessor != null && recoveryOpen && applicant(current)
-                && "CONFIRMED_LOST".equals(row.get("report_status"))
-                && recoveryAsset.factoryScrapEligible()
-                && !recoveryAsset.locked());
-        actions.put("recoverInternalRepair", internal != null && internal == current.id()
-                && current.has(Role.WAREHOUSE_OPERATOR) && "SEARCHING".equals(row.get("report_status")));
-        actions.put("requestInternalRepairRecovery", internal != null && recoveryOpen && applicant(current)
-                && "CONFIRMED_LOST".equals(row.get("report_status")) && "UNDER_REPAIR".equals(currentLifecycle)
-                && !recoveryAsset.locked());
-        var original = json.readTree(row.get("source_snapshot_json").toString());
-        actions.put("requestScrap", recoveryAsset != null && currentLifecycle.equals(original.path("lifecycle").asText())
-                && "LOST".equals(recoveryAsset.exceptionStatus())
-                && (recoveryAsset.eligible() || recoveryAsset.factoryScrapEligible())
-                && !recoveryAsset.locked()
-                && LossScrapSourcePort.canSubmit(current, row)
-                && LossScrapSourcePort.confirmedScrapSource(row, original));
-        result.put("actions", actions);
-        return result;
+                                        current.id(), row.get("processor_account_id")),
+                        factoryProcessor != null && factoryProcessor == current.id()
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && "SEARCHING".equals(row.get("report_status")),
+                        factoryProcessor != null && recoveryOpen && applicant(current)
+                                && "CONFIRMED_LOST".equals(row.get("report_status"))
+                                && recoveryAsset.factoryScrapEligible()
+                                && !recoveryAsset.locked(),
+                        internal != null && internal == current.id()
+                                && current.has(Role.WAREHOUSE_OPERATOR)
+                                && "SEARCHING".equals(row.get("report_status")),
+                        internal != null && recoveryOpen && applicant(current)
+                                && "CONFIRMED_LOST".equals(row.get("report_status"))
+                                && "UNDER_REPAIR".equals(currentLifecycle)
+                                && !recoveryAsset.locked(),
+                        recoveryAsset != null && currentLifecycle.equals(original.path("lifecycle").asText())
+                                && "LOST".equals(recoveryAsset.exceptionStatus())
+                                && (recoveryAsset.eligible() || recoveryAsset.factoryScrapEligible())
+                                && !recoveryAsset.locked()
+                                && LossScrapSourcePort.canSubmit(current, row)
+                                && LossScrapSourcePort.confirmedScrapSource(row, original));
+        return LossViews.lossDetail(
+                base,
+                lockVersion,
+                photos != null,
+                photoList,
+                history,
+                historyTotal,
+                confirmation,
+                recoveryAsset,
+                recoveries,
+                recoveriesTotal,
+                actions);
     }
 
-    public Map<String, Object> submit(Actor actor, UUID key, LossInput.Submission input) {
+    public LossViews.LossReport submit(Actor actor, UUID key, LossInput.Submission input) {
         var current = actors.revalidateLocked(actor);
         String hash = LossPayloads.fingerprint(json, "SUBMIT", 0, input);
-        var prior = replay(current, "SUBMIT", key, hash);
+        var prior = replay(current, "SUBMIT", key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -293,13 +298,13 @@ public class LossService {
         return row;
     }
 
-    public Map<String, Object> submitFactory(Actor actor, long repairId, long roundId, long repairVersion,
+    public LossViews.LossReport submitFactory(Actor actor, long repairId, long roundId, long repairVersion,
             UUID key, LossInput.FactorySubmission input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "FACTORY_SUBMIT:" + repairId + ":" + roundId;
         String hash = LossPayloads.fingerprint(json, operation, repairVersion, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -326,13 +331,13 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> submitInternalRepair(Actor actor, long repairId, long repairVersion, UUID key,
+    public LossViews.LossReport submitInternalRepair(Actor actor, long repairId, long repairVersion, UUID key,
             LossInput.InternalRepairSubmission input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "INTERNAL_REPAIR_SUBMIT:" + repairId;
         String hash = LossPayloads.fingerprint(json, operation, repairVersion, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -454,13 +459,13 @@ public class LossService {
                 Long.parseLong(source.path("roundId").asText()), number(row, "asset_id"), number(row, "id"));
     }
 
-    public Map<String, Object> decide(
+    public LossViews.LossReport decide(
             Actor actor, long id, long version, UUID key, LossInput.Decision input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         String operation = "DECIDE:" + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -474,7 +479,7 @@ public class LossService {
         Long repairProcessor = retainedRepairProcessor(row);
         var photos = evidence.getIfAvailable();
         var frozen = new LinkedHashMap<String, Object>();
-        frozen.put("report", view(row));
+        frozen.put("report", LossViews.lossReport(json, row));
         frozen.put("reason", input.reason());
         frozen.put("photos", photos == null ? List.of() : photoProjection(photos.list("LOST_REPORT", id)));
         if (approve) {
@@ -501,7 +506,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> cancel(
+    public LossViews.LossReport cancel(
             Actor actor, long id, long version, UUID key, LossInput.Reason input) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -510,7 +515,7 @@ public class LossService {
         }
         String operation = "CANCEL:" + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -527,12 +532,12 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> claim(Actor actor, long id, long version, UUID key) {
+    public LossViews.LossReport claim(Actor actor, long id, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "CLAIM:" + id,
                 hash = LossPayloads.fingerprint(json, operation, version, Map.of());
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -571,13 +576,13 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> search(
+    public LossViews.LossReport search(
             Actor actor, long id, long version, UUID key, LossInput.Search input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "SEARCH:" + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -613,7 +618,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> followUps(Actor actor, int page, int size) {
+    public LossViews.Page<LossViews.LossReport> followUps(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
                 " FROM fams_loss_report r JOIN fams_asset a ON a.id=r.asset_id"
@@ -633,8 +638,7 @@ public class LossService {
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
         args.add(((long) page - 1) * size);
-        return Map.of(
-                "items",
+        return new LossViews.Page<>(
                 db
                         .queryForList(
                                 "SELECT r.*"
@@ -642,24 +646,21 @@ public class LossService {
                                         + " ORDER BY r.next_review_date,r.id LIMIT ? OFFSET ?",
                                 args.toArray())
                         .stream()
-                        .map(this::view)
+                        .map(row -> LossViews.lossReport(json, row))
                         .toList(),
-                "total",
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> confirmLost(
+    public LossViews.LossReport confirmLost(
             Actor actor, long id, long version, UUID key, LossInput.Confirmation input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "CONFIRM_LOST:" + id;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -709,13 +710,13 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> followUp(
+    public LossViews.LossReport followUp(
             Actor actor, long id, long version, UUID key, LossInput.FollowUp input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "FOLLOW_UP:" + id;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -754,13 +755,13 @@ public class LossService {
         }
     }
 
-    public Map<String, Object> recoverSearching(
+    public LossViews.LossReport recoverSearching(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryExecution input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVER_ORIGINAL:" + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -788,13 +789,13 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
-    public Map<String, Object> recoverToRepair(
+    public LossViews.LossReport recoverToRepair(
             Actor actor, long id, long version, UUID key, LossInput.RepairRecovery input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVER_TO_REPAIR:" + id;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReport.class);
         if (prior != null) {
             return prior;
         }
@@ -844,23 +845,22 @@ public class LossService {
                 id);
         closeTodos(id);
         audit(actor, current, row, "LOSS_RECOVERED_TO_REPAIR", version + 1, snapshot);
-        var result = new LinkedHashMap<>(view(header(id)));
-        result.put("repairId", repair.id());
+        var result = LossViews.withRepairId(LossViews.lossReport(json, header(id)), repair.id());
         saveReceipt(current, operation, key, hash, id, result);
         return result;
     }
 
-    public Map<String, Object> requestRecovery(
+    public LossViews.LossReportWithRecovery requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
         return requestRecovery(actor, id, version, key, input, false, null);
     }
 
-    public Map<String, Object> requestRepairRecovery(
+    public LossViews.LossReportWithRecovery requestRepairRecovery(
             Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
         return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, null);
     }
 
-    private Map<String, Object> requestRecovery(
+    private LossViews.LossReportWithRecovery requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input,
             boolean damaged, String destination) {
         boolean returning = "ASSET_RETURN".equals(destination);
@@ -873,7 +873,7 @@ public class LossService {
         }
         String operation = (internal ? "RECOVERY_INTERNAL_REPAIR_REQUEST:" : factory ? "RECOVERY_FACTORY_REQUEST:" : transferring ? "RECOVERY_TRANSFER_REQUEST:" : returning ? "RECOVERY_RETURN_REQUEST:" : damaged ? "RECOVERY_REPAIR_REQUEST:" : "RECOVERY_REQUEST:") + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -963,13 +963,13 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, id, recovery);
     }
 
-    public Map<String, Object> decideRecovery(
+    public LossViews.LossReportWithRecovery decideRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Decision input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         String operation = "RECOVERY_DECIDE:" + recovery,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -1016,12 +1016,12 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
-    public Map<String, Object> cancelRecovery(
+    public LossViews.LossReportWithRecovery cancelRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Reason input) {
         var current = actors.revalidateLocked(actor);
         String operation = "RECOVERY_CANCEL:" + recovery,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -1050,12 +1050,12 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
-    public Map<String, Object> claimRecovery(Actor actor, long recovery, long version, UUID key) {
+    public LossViews.LossReportWithRecovery claimRecovery(Actor actor, long recovery, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVERY_CLAIM:" + recovery,
                 hash = LossPayloads.fingerprint(json, operation, version, null);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -1094,13 +1094,13 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
-    public Map<String, Object> executeRecovery(
+    public LossViews.LossReportWithRecovery executeRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.RecoveryExecution input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVERY_EXECUTE:" + recovery,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -1140,13 +1140,13 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
-    public Map<String, Object> executeRecoveryToRepair(
+    public LossViews.LossReportWithRecovery executeRecoveryToRepair(
             Actor actor, long recovery, long version, UUID key, LossInput.ClosedRepairRecovery input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVERY_EXECUTE_TO_REPAIR:" + recovery;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
             return prior;
         }
@@ -1186,13 +1186,13 @@ public class LossService {
         return assets.recoveryLocations(page, size);
     }
 
-    public Map<String, Object> requestReturnRecovery(Actor actor, long id, long version,
+    public LossViews.LossReportWithRecovery requestReturnRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "ASSET_RETURN");
     }
 
-    public Map<String, Object> requestTransferRecovery(Actor actor, long id, long version,
+    public LossViews.LossReportWithRecovery requestTransferRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "TRANSFER");
@@ -1217,23 +1217,24 @@ public class LossService {
         }
     }
 
-    public Map<String, Object> recoverToReturn(Actor actor, long id, long version, UUID key,
+    public LossViews.LossReport recoverToReturn(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
-        return recoverToReturn(actor, id, version, key, input, false);
+        return recoverToReturn(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
-    public Map<String, Object> executeRecoveryToReturn(Actor actor, long recovery, long version,
+    public LossViews.LossReportWithRecovery executeRecoveryToReturn(Actor actor, long recovery, long version,
             UUID key, LossInput.ExplicitRecoveryExecution input) {
-        return recoverToReturn(actor, recovery, version, key, input, true);
+        return recoverToReturn(actor, recovery, version, key, input, true,
+                LossViews.LossReportWithRecovery.class);
     }
 
-    private Map<String, Object> recoverToReturn(Actor actor, long id, long version, UUID key,
-            LossInput.ExplicitRecoveryExecution input, boolean closed) {
+    private <T> T recoverToReturn(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input, boolean closed, Class<T> type) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = (closed ? "RECOVERY_EXECUTE_TO_RETURN:" : "RECOVER_TO_RETURN:") + id;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, type);
         if (prior != null) { return prior; }
         var row = closed ? recoveryParent(id) : header(id);
         var request = closed ? recoveryHeader(id) : row;
@@ -1276,27 +1277,28 @@ public class LossService {
         closeTodos(number(row, "id"));
         audit(actor, current, row, "LOSS_RECOVERED_TO_RETURN", number(row, "version") + 1, snapshot);
         loans.refreshLiability(number(row, "asset_id"));
-        return closed ? rememberRecovery(current, operation, key, hash, number(row, "id"), id)
-                : remember(current, operation, key, hash, header(number(row, "id")));
+        return type.cast(closed
+                ? rememberRecovery(current, operation, key, hash, number(row, "id"), id)
+                : remember(current, operation, key, hash, header(number(row, "id"))));
     }
 
-    public Map<String, Object> recoverToTransfer(Actor actor, long id, long version, UUID key,
+    public LossViews.LossReport recoverToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
-        return recoverToTransfer(actor, id, version, key, input, false);
+        return recoverToTransfer(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
-    public Map<String, Object> executeRecoveryToTransfer(Actor actor, long id, long version, UUID key,
+    public LossViews.LossReportWithRecovery executeRecoveryToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
-        return recoverToTransfer(actor, id, version, key, input, true);
+        return recoverToTransfer(actor, id, version, key, input, true, LossViews.LossReportWithRecovery.class);
     }
 
-    private Map<String, Object> recoverToTransfer(Actor actor, long id, long version, UUID key,
-            LossInput.TransferRecoveryExecution input, boolean closed) {
+    private <T> T recoverToTransfer(Actor actor, long id, long version, UUID key,
+            LossInput.TransferRecoveryExecution input, boolean closed, Class<T> type) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String operation = (closed ? "RECOVERY_EXECUTE_TO_TRANSFER:" : "RECOVER_TO_TRANSFER:") + id;
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, type);
         if (prior != null) {
             return prior;
         }
@@ -1340,41 +1342,56 @@ public class LossService {
                 json.writeValueAsString(snapshot), closed ? "CONFIRMED_LOST" : "RECOVERED", now(), report);
         closeTodos(report);
         audit(actor, current, row, "LOSS_RECOVERED_TO_TRANSFER", number(row, "version") + 1, snapshot);
-        return closed ? rememberRecovery(current, operation, key, hash, report, id)
-                : remember(current, operation, key, hash, header(report));
+        return type.cast(closed
+                ? rememberRecovery(current, operation, key, hash, report, id)
+                : remember(current, operation, key, hash, header(report)));
     }
 
-    public Map<String, Object> requestFactoryRecovery(Actor actor, long id, long version, UUID key,
+    public LossViews.LossReportWithRecovery requestFactoryRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "FACTORY_REPAIR");
     }
 
-    public Map<String, Object> requestInternalRepairRecovery(Actor actor, long id, long version, UUID key,
+    public LossViews.LossReportWithRecovery requestInternalRepairRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "INTERNAL_REPAIR");
     }
 
-    public Map<String, Object> recoverToFactory(Actor actor, long id, long version, UUID key,
-            LossInput.ExplicitRecoveryExecution input, boolean closed) {
-        return recoverToRetainedRepair(actor, id, version, key, input, closed, false);
+    public LossViews.LossReport recoverToFactory(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input) {
+        return recoverToRetainedRepair(actor, id, version, key, input, false, false,
+                LossViews.LossReport.class);
     }
 
-    public Map<String, Object> recoverToInternalRepair(Actor actor, long id, long version, UUID key,
-            LossInput.ExplicitRecoveryExecution input, boolean closed) {
-        return recoverToRetainedRepair(actor, id, version, key, input, closed, true);
+    public LossViews.LossReportWithRecovery executeRecoveryToFactory(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input) {
+        return recoverToRetainedRepair(actor, id, version, key, input, true, false,
+                LossViews.LossReportWithRecovery.class);
     }
 
-    private Map<String, Object> recoverToRetainedRepair(Actor actor, long id, long version, UUID key,
-            LossInput.ExplicitRecoveryExecution input, boolean closed, boolean internal) {
+    public LossViews.LossReport recoverToInternalRepair(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input) {
+        return recoverToRetainedRepair(actor, id, version, key, input, false, true,
+                LossViews.LossReport.class);
+    }
+
+    public LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input) {
+        return recoverToRetainedRepair(actor, id, version, key, input, true, true,
+                LossViews.LossReportWithRecovery.class);
+    }
+
+    private <T> T recoverToRetainedRepair(Actor actor, long id, long version, UUID key,
+            LossInput.ExplicitRecoveryExecution input, boolean closed, boolean internal, Class<T> type) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         String prefix = internal ? "INTERNAL_REPAIR" : "FACTORY";
         String operation = (closed ? "RECOVERY_EXECUTE_TO_" : "RECOVER_TO_") + prefix + ":" + id;
         String destination = internal ? "INTERNAL_REPAIR" : "FACTORY_REPAIR";
         String hash = LossPayloads.fingerprint(json, operation, version, input);
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, type);
         if (prior != null) {
             return prior;
         }
@@ -1431,8 +1448,9 @@ public class LossService {
         closeTodos(report);
         loans.refreshLiability(assetId);
         audit(actor, current, row, "LOSS_RECOVERED_TO_" + prefix, number(row, "version") + 1, snapshot);
-        return closed ? rememberRecovery(current, operation, key, hash, report, id)
-                : remember(current, operation, key, hash, header(report));
+        return type.cast(closed
+                ? rememberRecovery(current, operation, key, hash, report, id)
+                : remember(current, operation, key, hash, header(report)));
     }
 
     private void factoryRecoveryFacts(Map<String, Object> row, LossInput.RecoveryFacts facts) {
@@ -1620,74 +1638,36 @@ public class LossService {
         audit(actor, current, row, action, number(row, "version") + 1, detail);
     }
 
-    private Map<String, Object> rememberRecovery(
+    private LossViews.LossReportWithRecovery rememberRecovery(
             Current current, String operation, UUID key, String hash, long report, long recovery) {
-        var result = new LinkedHashMap<>(view(header(report)));
+        var row = header(report);
         var attempt = recoveryHeader(recovery);
-        result.put("recoveryId", Long.toString(recovery));
-        result.put("recoveryVersion", attempt.get("version"));
-        result.put("recoveryStatus", attempt.get("recovery_status"));
+        var result = LossViews.lossReportWithRecovery(
+                json,
+                row,
+                Long.toString(recovery),
+                ((Number) attempt.get("version")).longValue(),
+                (String) attempt.get("recovery_status"));
         saveReceipt(current, operation, key, hash, report, result);
         return result;
     }
 
-    private Map<String, Object> recoveryView(Current current, Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        for (String field :
-                List.of(
-                        "id",
-                        "version",
-                        "asset_version",
-                        "recovery_status",
-                        "creator_account_id",
-                        "processor_account_id",
-                        "ownership_version")) {
-            String key =
-                    switch (field) {
-                        case "asset_version" -> "assetVersion";
-                        case "recovery_status" -> "status";
-                        case "creator_account_id" -> "creatorAccountId";
-                        case "processor_account_id" -> "processorAccountId";
-                        case "ownership_version" -> "ownershipVersion";
-                        default -> field;
-                    };
-            Object value = row.get(field);
-            result.put(
-                    key,
-                    field.equals("id") || field.endsWith("_id")
-                            ? value == null ? null : value.toString()
-                            : value);
-        }
-        result.put("request", json.readTree(row.get("request_snapshot_json").toString()));
-        result.put(
-                "approval",
-                row.get("approval_snapshot_json") == null
-                        ? null
-                        : json.readTree(row.get("approval_snapshot_json").toString()));
-        result.put(
-                "execution",
-                row.get("execution_snapshot_json") == null
-                        ? null
-                        : json.readTree(row.get("execution_snapshot_json").toString()));
+    private LossViews.LossRecovery recoveryView(Current current, Map<String, Object> row) {
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("recovery_status"));
-        result.put(
-                "actions",
-                Map.of(
-                        "decide",
+        return LossViews.lossRecovery(
+                json,
+                row,
+                new LossViews.RecoveryActions(
                         pending && current.has(Role.ASSET_ADMIN),
-                        "cancel",
                         pending
                                 && (current.has(Role.ASSET_ADMIN)
                                         || current.id() == number(row, "creator_account_id")),
-                        "claim",
                         "WAITING_WAREHOUSE_CLAIM".equals(row.get("recovery_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR),
-                        "execute",
                         "VERIFYING".equals(row.get("recovery_status"))
                                 && current.has(Role.WAREHOUSE_OPERATOR)
                                 && java.util.Objects.equals(
                                         current.id(), row.get("processor_account_id"))));
-        return result;
     }
 
     public void photoUploader(Actor actor, long id) {
@@ -1703,7 +1683,7 @@ public class LossService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public Map<String, Object> registerPhoto(
+    public LossViews.PhotoReceipt registerPhoto(
             Actor actor,
             long id,
             long version,
@@ -1730,7 +1710,7 @@ public class LossService {
                                         attachment.format().mime(),
                                         "size",
                                         attachment.file().size()));
-        var prior = replay(current, operation, key, hash);
+        var prior = replay(current, operation, key, hash, LossViews.PhotoReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -1753,12 +1733,9 @@ public class LossService {
         db.update(
                 "UPDATE fams_loss_report SET version=version+1,updated_at=? WHERE id=?", now(), id);
         var result =
-                Map.<String, Object>of(
-                        "id",
+                new LossViews.PhotoReceipt(
                         Long.toString(id),
-                        "objectId",
                         attachment.file().id().toString(),
-                        "version",
                         version + 1);
         audit(
                 actor,
@@ -1775,7 +1752,7 @@ public class LossService {
         return result;
     }
 
-    private Map<String, Object> replay(Current current, String operation, UUID key, String hash) {
+    private <T> T replay(Current current, String operation, UUID key, String hash, Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT * FROM fams_loss_receipt WHERE actor_account_id=? AND operation=?"
@@ -1791,14 +1768,12 @@ public class LossService {
         if (!hash.equals(row.get("payload_sha256"))) {
             throw new LossFailure(409, "LOSS_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                row.get("response_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_json").toString(), type);
     }
 
-    private Map<String, Object> remember(
+    private LossViews.LossReport remember(
             Current current, String operation, UUID key, String hash, Map<String, Object> row) {
-        var result = view(row);
+        var result = LossViews.lossReport(json, row);
         saveReceipt(current, operation, key, hash, number(row, "id"), result);
         return result;
     }
@@ -1809,7 +1784,7 @@ public class LossService {
             UUID key,
             String hash,
             long id,
-            Map<String, Object> result) {
+            Object result) {
         db.update(
                 "INSERT INTO"
                     + " fams_loss_receipt(actor_account_id,operation,request_id,report_id,payload_sha256,response_json,created_at)"
@@ -1946,48 +1921,6 @@ public class LossService {
                 body);
     }
 
-    private Map<String, Object> view(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        for (var field :
-                Map.ofEntries(
-                                Map.entry("id", "id"),
-                                Map.entry("asset_id", "assetId"),
-                                Map.entry("creator_account_id", "creatorAccountId"),
-                                Map.entry("version", "version"),
-                                Map.entry("asset_version", "assetVersion"),
-                                Map.entry("report_status", "status"),
-                                Map.entry("last_seen_at", "lastSeenAt"),
-                                Map.entry("last_location", "lastLocation"),
-                                Map.entry("circumstances", "circumstances"),
-                                Map.entry("processor_account_id", "processorAccountId"),
-                                Map.entry("ownership_version", "ownershipVersion"),
-                                Map.entry("recovered_at", "recoveredAt"),
-                                Map.entry("confirmed_lost_at", "confirmedLostAt"),
-                                Map.entry("last_follow_up_at", "lastFollowUpAt"),
-                                Map.entry("next_review_date", "nextReviewDate"))
-                        .entrySet()) {
-            var value = row.get(field.getKey());
-            result.put(
-                    field.getValue(),
-                    field.getKey().equals("id") || field.getKey().endsWith("_id")
-                            ? value == null ? null : value.toString()
-                            : wire(value));
-        }
-        result.put("source", json.readTree(row.get("source_snapshot_json").toString()));
-        var recovery = row.get("recovery_snapshot_json");
-        var repair = recovery == null ? null : json.readTree(recovery.toString()).get("repairId");
-        result.put("repairId", repair == null ? null : repair.asText());
-        var linkedReturn = recovery == null ? null : json.readTree(recovery.toString()).get("returnId");
-        result.put("returnId", linkedReturn == null ? null : linkedReturn.asText());
-        if (recovery != null) {
-            var linkedTransfer = json.readTree(recovery.toString()).get("transferId");
-            if (linkedTransfer != null) {
-                result.put("transferId", linkedTransfer.asText());
-            }
-        }
-        return result;
-    }
-
     /**
      * Frozen wire() projection of the attachment list rows surfaced under the photos key
      * (get() and the approval_snapshot_json freeze): no key matches the id stringification
@@ -2025,33 +1958,6 @@ public class LossService {
         }
         if (value instanceof java.time.LocalDateTime time) {
             return time.toInstant(java.time.ZoneOffset.UTC).toString();
-        }
-        return value;
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            var result = new LinkedHashMap<String, Object>();
-            map.forEach(
-                    (k, v) ->
-                            result.put(
-                                    k.toString(),
-                                    k.toString().equals("id") || k.toString().endsWith("_id")
-                                            ? v == null ? null : v.toString()
-                                            : wire(v)));
-            return result;
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(this::wire).toList();
-        }
-        if (value instanceof java.sql.Timestamp time) {
-            return time.toInstant().toString();
-        }
-        if (value instanceof java.time.LocalDateTime time) {
-            return time.toInstant(java.time.ZoneOffset.UTC).toString();
-        }
-        if (value instanceof java.sql.Date date) {
-            return date.toLocalDate().toString();
         }
         return value;
     }
