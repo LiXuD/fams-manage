@@ -16,7 +16,8 @@ import java.util.Objects;
 
 /**
  * Typed wire shapes of the scrap domain, mirroring contracts/fams-core-v1.yaml
- * (ScrapRequest/ScrapRequestPage/ScrapChoicePage/ScrapEligiblePage/ScrapAttachment*).
+ * (ScrapRequest/ScrapRequestPage/ScrapChoicePage/ScrapAttachment*).
+ * The eligible envelope (contract ScrapEligiblePage) is owned by AssetScrapPort.
  * Rows follow the frozen ScrapReadService.view projection: identifiers stringified,
  * snapshot JSON kept as JsonNode, disposition and history rows keeping their SQL
  * snake_case keys, and the custody snapshot staying raw JSON text on the wire.
@@ -183,15 +184,6 @@ public final class ScrapViews {
 
     public record ChoicePage(List<Choice> items, long total, int page, int pageSize) {
         public ChoicePage {
-            items = items == null ? null : List.copyOf(items);
-        }
-    }
-
-    public record EligibleAsset(String id, String assetCode, String name, long version) {
-    }
-
-    public record EligiblePage(List<EligibleAsset> items, long total, int page, int pageSize) {
-        public EligiblePage {
             items = items == null ? null : List.copyOf(items);
         }
     }
@@ -426,18 +418,6 @@ public final class ScrapViews {
 
     static Choice choice(Map<String, Object> row) {
         return new Choice(row.get("id").toString(), (String) row.get("name"), num(row, "version"));
-    }
-
-    /** Boundary conversion of the AssetScrapPort.eligible envelope; the port stays Map. */
-    static EligiblePage eligiblePage(Map<String, Object> envelope) {
-        var items = ((List<?>) envelope.get("items")).stream()
-                .map(item -> {
-                    var row = (Map<?, ?>) item;
-                    return new EligibleAsset((String) row.get("id"), (String) row.get("assetCode"),
-                            (String) row.get("name"), ((Number) row.get("version")).longValue());
-                }).toList();
-        return new EligiblePage(items, num(envelope, "total"),
-                (int) num(envelope, "page"), (int) num(envelope, "pageSize"));
     }
 
     private static String id(Map<String, Object> row, String key) {

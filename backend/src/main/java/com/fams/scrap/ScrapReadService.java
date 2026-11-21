@@ -58,8 +58,8 @@ public class ScrapReadService {
         this.clock = clock;
     }
 
-    public ScrapViews.EligiblePage eligible(Actor actor, int page, int size) {
-        return ScrapViews.eligiblePage(assets.eligible(actors.revalidateLocked(actor), page, size));
+    public AssetScrapPort.EligiblePage eligible(Actor actor, int page, int size) {
+        return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
     public ScrapViews.RequestPage list(Actor actor, int page, int size) {

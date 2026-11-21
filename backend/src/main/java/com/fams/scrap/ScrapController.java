@@ -1,6 +1,7 @@
 package com.fams.scrap;
 
 import com.fams.asset.AssetHandoverPort;
+import com.fams.asset.AssetScrapPort;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.product.contract.model.ErrorResponse;
 
@@ -54,7 +55,7 @@ public class ScrapController {
     }
 
     @GetMapping("/eligible")
-    ScrapViews.EligiblePage eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
+    AssetScrapPort.EligiblePage eligible(@RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return reads.eligible(actors.capture(), page, pageSize);
     }

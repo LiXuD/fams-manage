@@ -2,6 +2,7 @@ package com.fams.scrap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.fams.asset.AssetScrapPort;
 import com.fams.attachment.AttachmentEvidencePort;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
@@ -25,6 +26,8 @@ import java.util.Set;
  * db.queryForList call sites are replaced by the supplied row lists, which is exactly what
  * the refactored service passes into ScrapViews.request); legacyCorrectionView,
  * legacyReversalView and legacyRecoveryView are the deleted private helpers verbatim.
+ * legacyEligibleEnvelope freezes the pre-JAVA-07 AssetScrapPort.eligible Map assembly; the
+ * typed side now uses the port-owned EligibleAsset/EligiblePage records (JAVA-07).
  * Comparison round-trips through JSON text so integral node widths normalize and object key
  * order (never stable in Map.of responses) is ignored, while key presence, explicit nulls
  * and value shapes all count.
@@ -271,16 +274,17 @@ class ScrapWireShapeTest {
         var legacyCatalog = Map.of("items", List.of(legacyCatalogItem), "total", 1L, "page", 1, "pageSize", 100);
         assertWireEquals(legacyCatalog, new ScrapViews.ChoicePage(List.of(ScrapViews.choice(catalogRow)), 1, 1, 100));
 
-        // Frozen AssetScrapPort.eligible assembly; the port envelope stays Map, the scrap exit converts.
+        // Frozen pre-JAVA-07 AssetScrapPort.eligible assembly; the port now returns the typed page directly.
         var assetRow = new LinkedHashMap<String, Object>();
         assetRow.put("id", 40L);
         assetRow.put("asset_code", "FA-1");
         assetRow.put("name", "laptop");
         assetRow.put("version", 3L);
-        var legacyEligibleItem = Map.of("id", assetRow.get("id").toString(), "assetCode", assetRow.get("asset_code"),
-                "name", assetRow.get("name"), "version", assetRow.get("version"));
-        var envelope = Map.of("items", List.of(legacyEligibleItem), "total", 1L, "page", 1, "pageSize", 20);
-        assertWireEquals(envelope, ScrapViews.eligiblePage(envelope));
+        assertWireEquals(legacyEligibleEnvelope(List.of(assetRow), 1L, 1, 20),
+                new AssetScrapPort.EligiblePage(List.of(eligibleAsset(assetRow)), 1, 1, 20));
+        // Empty pages keep the items key present with an empty array.
+        assertWireEquals(legacyEligibleEnvelope(List.of(), 0L, 2, 20),
+                new AssetScrapPort.EligiblePage(List.of(), 0, 2, 20));
     }
 
     @Test
@@ -461,6 +465,21 @@ class ScrapWireShapeTest {
         row.put("actor_username", "creator");
         row.put("occurred_at", occurredAt);
         return row;
+    }
+
+    /** Frozen pre-JAVA-07 AssetScrapPort.eligible envelope assembly; reference oracle only. */
+    private static Map<String, Object> legacyEligibleEnvelope(List<Map<String, Object>> rows,
+            long total, int page, int pageSize) {
+        var items = rows.stream()
+                .map(row -> Map.of("id", row.get("id").toString(), "assetCode", row.get("asset_code"),
+                        "name", row.get("name"), "version", row.get("version"))).toList();
+        return Map.of("items", items, "total", total, "page", page, "pageSize", pageSize);
+    }
+
+    /** Mirrors the AssetScrapPort.eligible row mapping verbatim (JAVA-01 snapshot(row) precedent). */
+    private static AssetScrapPort.EligibleAsset eligibleAsset(Map<String, Object> row) {
+        return new AssetScrapPort.EligibleAsset(row.get("id").toString(), (String) row.get("asset_code"),
+                (String) row.get("name"), ((Number) row.get("version")).longValue());
     }
 
     /** Frozen pre-JAVA-03 ScrapReadService.view projection; reference oracle only. */

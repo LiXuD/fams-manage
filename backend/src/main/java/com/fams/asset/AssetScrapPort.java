@@ -22,6 +22,17 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetScrapPort {
+    /** Eligible picker row covering the eligible SQL columns; camelCase keys match the HTTP wire. */
+    public record EligibleAsset(String id, String assetCode, String name, long version) {
+    }
+
+    /** Eligible page envelope owned by the asset domain; keys match the pre-typing Map.of assembly. */
+    public record EligiblePage(List<EligibleAsset> items, long total, int page, int pageSize) {
+        public EligiblePage {
+            items = items == null ? null : List.copyOf(items);
+        }
+    }
+
     private final JdbcTemplate db;
     private final AssetMapper mapper;
     private final ObjectMapper json;
@@ -471,7 +482,7 @@ public class AssetScrapPort {
         return version + 1;
     }
 
-    public Map<String, Object> eligible(Current actor, int page, int size) {
+    public EligiblePage eligible(Current actor, int page, int size) {
         String where = " FROM fams_asset a WHERE a.card_stage='ACTIVE' AND a.exception_status='NORMAL'"
                 + " AND a.lifecycle_status IN ('IN_STOCK','IN_USE') AND (? OR (? AND a.responsible_employee_id=?)"
                 + " OR (? AND a.using_organization_id=?)) AND NOT EXISTS (SELECT 1 FROM fams_asset_business_lock b"
@@ -483,10 +494,9 @@ public class AssetScrapPort {
         args.add(((long) page - 1) * size);
         var items = db.queryForList("SELECT a.id,a.asset_code,a.name,a.version" + where
                 + " ORDER BY a.id DESC LIMIT ? OFFSET ?", args.toArray()).stream()
-                .map(row -> Map.of("id", row.get("id").toString(), "assetCode", row.get("asset_code"),
-                        "name", row.get("name"), "version", row.get("version"))).toList();
-        return Map.of("items", items, "total", Objects.requireNonNull(
-                db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)),
-                "page", page, "pageSize", size);
+                .map(row -> new EligibleAsset(row.get("id").toString(), (String) row.get("asset_code"),
+                        (String) row.get("name"), ((Number) row.get("version")).longValue())).toList();
+        return new EligiblePage(items, Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope)), page, size);
     }
 }
