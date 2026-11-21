@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
+import AppCommandPalette from "./AppCommandPalette.vue";
 import { useGlowTilt } from "@/composables/useGlowTilt";
 import { useLiquidNavHighlight } from "@/composables/useLiquidNavHighlight";
 
@@ -235,5 +236,6 @@ async function handleLogout(): Promise<void> {
         <slot />
       </main>
     </div>
+    <AppCommandPalette v-if="session.isAuthenticated" />
   </div>
 </template>

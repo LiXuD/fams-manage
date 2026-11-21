@@ -11,4 +11,5 @@
 @import "./components/navigation.css";
 @import "./components/progress.css";
 @import "./components/dialog.css";
+@import "./components/command.css";
 @import "./layout.css";
