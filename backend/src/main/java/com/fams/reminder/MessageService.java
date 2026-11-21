@@ -3,11 +3,7 @@ package com.fams.reminder;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.Role;
 
-import java.sql.Timestamp;
 import java.time.Clock;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -154,7 +150,7 @@ public class MessageService {
         this.clock = clock;
     }
 
-    public Map<String, Object> list(RequisitionActorContext.Actor actor, String view, int page, int pageSize) {
+    public ReminderViews.MessagePage list(RequisitionActorContext.Actor actor, String view, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
         var exception = "EXCEPTION".equals(view);
         if (exception && !current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) {
@@ -183,19 +179,19 @@ public class MessageService {
         var read = readIds(current.id(), rows);
         var unreadArgs = new ArrayList<>(args);
         unreadArgs.add(current.id());
-        return Map.of(
-                "items", rows.stream().map(row -> item(row, read)).toList(),
-                "total", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM (" + sql + ") m",
-                        Long.class, args.toArray())),
-                "unread", Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM (" + sql + ") m WHERE"
-                        + " NOT EXISTS (SELECT 1 FROM fams_message_receipt c WHERE c.account_id=?"
-                        + " AND c.message_kind=m.message_kind AND c.message_id=m.id)",
-                        Long.class, unreadArgs.toArray())),
-                "page", page, "pageSize", pageSize, "view", exception ? "EXCEPTION" : "INBOX");
+        var items = rows.stream().map(row -> ReminderViews.messageItem(row, read)).toList();
+        var total = Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM (" + sql + ") m",
+                Long.class, args.toArray()));
+        var unread = Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM (" + sql + ") m WHERE"
+                + " NOT EXISTS (SELECT 1 FROM fams_message_receipt c WHERE c.account_id=?"
+                + " AND c.message_kind=m.message_kind AND c.message_id=m.id)",
+                Long.class, unreadArgs.toArray()));
+        return new ReminderViews.MessagePage(items, total, unread, page, pageSize,
+                exception ? "EXCEPTION" : "INBOX");
     }
 
     /** Marking read records only personal read state; the todo, its business lock and its deadline stay untouched. */
-    public Map<String, Object> read(RequisitionActorContext.Actor actor, String kind, long id) {
+    public ReminderViews.MessageReadReceipt read(RequisitionActorContext.Actor actor, String kind, long id) {
         var current = actors.revalidateLocked(actor);
         String addressable;
         List<Object> args = new ArrayList<>();
@@ -216,7 +212,7 @@ public class MessageService {
         db.update("INSERT INTO fams_message_receipt (account_id,message_kind,message_id,read_at)"
                 + " VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE message_id=message_id",
                 current.id(), kind, id, clock.instant());
-        return Map.of("kind", kind, "id", Long.toString(id), "read", true);
+        return new ReminderViews.MessageReadReceipt(kind, Long.toString(id), true);
     }
 
     private String inboxSql(RequisitionActorContext.Current current) {
@@ -313,28 +309,6 @@ public class MessageService {
         db.queryForList("SELECT message_id FROM fams_message_receipt WHERE account_id=? AND message_kind=?"
                 + " AND message_id IN (" + markers(ids.size()) + ")", Long.class, args.toArray())
                 .forEach(id -> read.add(kind + ":" + id));
-    }
-
-    private static Map<String, Object> item(Map<String, Object> row, Set<String> read) {
-        var kind = String.valueOf(row.get("message_kind"));
-        return Map.ofEntries(Map.entry("kind", kind), Map.entry("id", row.get("id").toString()),
-                Map.entry("businessType", row.get("business_type")),
-                Map.entry("businessId", row.get("business_id").toString()),
-                Map.entry("parentBusinessId", Objects.toString(row.get("parent_business_id"), "")),
-                Map.entry("parentBusinessType", Objects.toString(row.get("parent_business_type"), "")),
-                Map.entry("stage", row.get("stage")), Map.entry("objectStage", row.get("object_stage")),
-                Map.entry("poolType", row.get("pool_type")),
-                Map.entry("assigneeAccountId", row.get("assignee_account_id") == null
-                        ? "" : row.get("assignee_account_id").toString()),
-                Map.entry("openedAt", instant(row.get("moment")).toString()),
-                Map.entry("deadlineAt", row.get("deadline_at") == null ? ""
-                        : instant(row.get("deadline_at")).toString()),
-                Map.entry("read", read.contains(kind + ":" + row.get("id"))));
-    }
-
-    private static Instant instant(Object value) {
-        return value instanceof LocalDateTime local
-                ? local.toInstant(ZoneOffset.UTC) : ((Timestamp) value).toInstant();
     }
 
     private static String markers(int count) {

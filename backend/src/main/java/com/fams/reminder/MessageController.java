@@ -39,14 +39,14 @@ class MessageController {
     }
 
     @GetMapping
-    Map<String, Object> list(@RequestParam(defaultValue = "INBOX") @Pattern(regexp = "INBOX|EXCEPTION") String view,
+    ReminderViews.MessagePage list(@RequestParam(defaultValue = "INBOX") @Pattern(regexp = "INBOX|EXCEPTION") String view,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return messages.list(actors.capture(), view, page, pageSize);
     }
 
     @PostMapping("/{kind}/{id}/read")
-    Map<String, Object> read(@PathVariable @Pattern(regexp = "TODO|REMINDER") String kind,
+    ReminderViews.MessageReadReceipt read(@PathVariable @Pattern(regexp = "TODO|REMINDER") String kind,
             @PathVariable @Min(1) long id,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
         return messages.read(actors.capture(), kind, id);
