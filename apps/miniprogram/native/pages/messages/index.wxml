@@ -15,6 +15,6 @@
   </view>
   <view wx:if="{{!rows.length}}" class="hint">暂无站内消息。</view>
   <button wx:if="{{page > 1}}" bindtap="onPrevious" disabled="{{busy || retryable}}">上一页</button>
-  <button wx:if="{{page * 20 &lt; total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页</button>
+  <button wx:if="{{page * 20 < total}}" bindtap="onNext" disabled="{{busy || retryable}}">下一页</button>
   <navigator url="/pages/mine/index" open-type="redirect">返回我的账号</navigator>
 </view>

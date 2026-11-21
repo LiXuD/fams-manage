@@ -61,6 +61,21 @@ test("loan progress tap posts the accepted template once with a fresh key and ve
     assert.equal(f.page.data.busy, false); assert.equal(f.page.data.error, "");
 });
 
+test("subscribe tap invokes wx synchronously before any network request so the TAP gesture survives", async () => {
+    const f = loanFixture(); await openLoan(f);
+    const order = [];
+    const request = f.services.sessions.request.bind(f.services.sessions);
+    f.services.sessions.request = async (...args) => { order.push("net"); return request(...args); };
+    const subscribe = f.services.requestSubscribe;
+    f.services.requestSubscribe = async templateId => { order.push("wx"); return subscribe(templateId); };
+    const tap = f.page.onSubscribeProgress();
+    assert.deepEqual(order, ["wx"]);
+    assert.deepEqual(f.calls, ["tmpl-1"]);
+    await tap;
+    assert.deepEqual(order, ["wx", "net"]);
+    assert.equal(f.writes.length, 1);
+});
+
 test("loan return tap uses the RETURN scene for the same selected loan", async () => {
     const f = loanFixture(); await openLoan(f);
     await f.page.onSubscribeReturn();

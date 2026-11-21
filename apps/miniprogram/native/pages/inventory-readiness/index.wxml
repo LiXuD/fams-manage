@@ -3,7 +3,7 @@
  <view wx:if="{{error}}" role="alert">{{error}}</view><view wx:if="{{notice}}">{{notice}}</view>
  <button bindtap="onRefresh" disabled="{{busy}}">刷新当前授权与未盘情况</button>
  <view wx:if="{{view}}">尚无结果或明确原因 {{view.missingCount}} 项 · 明确未盘 {{view.notObservedCount}} 项</view>
- <view wx:for="{{view.items}}" wx:key="id" class="card"><view>{{item.item.snapshot_json.assetCode}} · {{item.item.snapshot_json.name}}</view>
+ <view wx:for="{{view.items}}" wx:key="rowId" class="card"><view>{{item.item.snapshot_json.assetCode}} · {{item.item.snapshot_json.name}}</view>
   <view wx:if="{{item.item.review_status === 'NOT_OBSERVED'}}">明确未盘，不计正常 · {{item.item.reason}}</view>
   <view wx:if="{{item.physicalMissingOpen}}">实物未找到：真实后续尚待闭环</view>
   <view wx:for="{{item.missingLosses}}" wx:for-item="source" wx:key="reasonId">
@@ -21,7 +21,7 @@
   <picker mode="time" data-field="lossTime" value="{{lossTime}}" bindchange="onField" disabled="{{busy || retry}}"><view>最后见到时间：{{lossTime || '请选择'}}</view></picker>
   <input data-field="lossLocation" value="{{lossLocation}}" bindinput="onField" maxlength="500" placeholder="最后见到地点" disabled="{{busy || retry}}" />
   <textarea data-field="lossCircumstances" value="{{lossCircumstances}}" bindinput="onField" maxlength="2000" placeholder="实物查找情况" disabled="{{busy || retry}}" />
-  <button bindtap="onReportLoss" disabled="{{busy || retry || !lossDate || !lossTime || !lossLocation || lossCircumstances.length &lt; 10}}">核对并提交关联报失</button>
+  <button bindtap="onReportLoss" disabled="{{busy || retry || !lossDate || !lossTime || !lossLocation || lossCircumstances.length < 10}}">核对并提交关联报失</button>
  </view>
  <view wx:if="{{selected}}" class="card"><view>{{selected.item.snapshot_json.assetCode}}</view>
   <picker range="{{kindNames}}" value="{{kindIndex}}" bindchange="onKind" disabled="{{busy || retry}}"><view>类型：{{kindNames[kindIndex]}}</view></picker>

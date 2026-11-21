@@ -133,9 +133,18 @@ export function createTransferReassignmentPage(getServices: () => MiniServices) 
         async onDeclare(this: Context) {
             const row = this.data.ownedTransfer, reason = this.data.reason.trim();
             if (!services || pending || this.data.busy || !row || !reason) return;
-            pending = { path: `/api/v1/mini/transfers/${row.id}/reassignment/unavailable`,
-                key: services.createKey(), version: row.version, body: { ownershipVersion: row.ownershipVersion, reason } };
-            await perform(this);
+            const current = generation;
+            this.setData({ busy: true, error: "" });
+            try {
+                const confirmed = await services.confirm("声明实物无法接收", "声明后本调拨单将退回管理员处理，不会完成原实物接收阶段。是否继续？");
+                if (!live || current !== generation || !confirmed) return;
+                const owned = this.data.ownedTransfer;
+                if (!owned || owned.id !== row.id) return;
+                pending = { path: `/api/v1/mini/transfers/${owned.id}/reassignment/unavailable`,
+                    key: services.createKey(), version: owned.version, body: { ownershipVersion: owned.ownershipVersion, reason } };
+            } catch { if (live && current === generation) this.setData({ error: "确认未完成，请重新核对后操作。" }); }
+            finally { if (live && current === generation) this.setData({ busy: false }); }
+            if (live && current === generation) await perform(this);
         },
         async onSubmit(this: Context) {
             if (!services || this.data.busy || pending || !this.data.snapshot) return;

@@ -59,7 +59,8 @@ export function createProxyConfirmationPage(getServices: () => MiniServices) {
     let file: { path: string; name: string; size: number } | null = null;
     let fileOwner = "", fileProposal = "", pickerEpoch = 0;
     let pending: { kind: "json" | "file"; path: string; key: string; version: number; body?: unknown; filePath?: string; proposalId?: string } | null = null;
-    const valid = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services?.sessions.identity);
+    const ownerKey = () => JSON.stringify([services?.sessions.identity, services?.sessions.identityRevision]);
+    const valid = (epoch: number) => live && epoch === generation && identity === ownerKey();
     const clear = (page: Context) => {
         generation++; pickerEpoch++; pending = null; file = null; fileOwner = ""; fileProposal = ""; previousId = ""; initialId = ""; initialContext = null;
         page.setData(empty());
@@ -133,7 +134,7 @@ export function createProxyConfirmationPage(getServices: () => MiniServices) {
         },
         async onShow(this: Context) {
             live = true; const current = ++generation; services = getServices();
-            const next = JSON.stringify(services.sessions.identity);
+            const next = ownerKey();
             if (next !== identity) {
                 if (identity) { initialId = ""; initialContext = null; }
                 identity = next; pickerEpoch++; pending = null; file = null; fileOwner = ""; fileProposal = ""; previousId = ""; this.setData(empty());
@@ -275,7 +276,7 @@ export function createProxyConfirmationPage(getServices: () => MiniServices) {
             this.setData({ busy: true, error: "" });
             try {
                 const chosen = await services.chooseEvidence();
-                if (selection !== pickerEpoch || owner !== identity || owner !== JSON.stringify(services.sessions.identity) || proposal !== (this.data.selected?.id ?? initialId)) return;
+                if (selection !== pickerEpoch || owner !== identity || owner !== ownerKey() || proposal !== (this.data.selected?.id ?? initialId)) return;
                 const limit = /\.(png|jpe?g|webp)$/i.test(chosen.name) ? 10 : 20;
                 if (!chosen.path || chosen.size <= 0 || chosen.size > limit * 1024 * 1024) throw new MiniRequestError(413, "ATTACHMENT_SIZE_INVALID");
                 file = chosen; fileOwner = owner; fileProposal = proposal;

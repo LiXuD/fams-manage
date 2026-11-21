@@ -5,7 +5,7 @@ import type { AssetReturn, BusinessPage, Loan, ReturnAssetChoice } from "../../.
 
 interface Data {
     busy: boolean; error: string; notice: string; retryable: boolean; loans: Loan[]; returns: AssetReturn[];
-    returnProgress: AssetReturn | null; selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
+    returnProgress: (AssetReturn & { canRetryLoss?: boolean }) | null; selected: Loan | null; assets: ReturnAssetChoice[]; selectedAsset: ReturnAssetChoice | null;
     reason: string; dueDate: string; page: number; total: number; subscriptionTemplate: string; subscriptionNotice: string;
     missingDate?: string; missingTime?: string; missingLocation?: string; missingCircumstances?: string;
 }
@@ -60,7 +60,7 @@ export function createLoanPage(getServices: () => MiniServices) {
             || !row || !page.data.subscriptionTemplate) return;
         const current = generation; page.setData({ busy: true, error: "", subscriptionNotice: "" });
         try {
-            const outcome = await subscribeReminder(services, { scene, businessType: "LOAN", businessId: row.id });
+            const outcome = await subscribeReminder(services, { scene, businessType: "LOAN", businessId: row.id }, page.data.subscriptionTemplate);
             if (live && generation === current) page.setData(subscriptionUpdate(outcome));
         } catch (error) { if (live && generation === current) page.setData({ error: message(error) }); }
         finally { if (live && generation === current) page.setData({ busy: false }); }
@@ -90,7 +90,8 @@ export function createLoanPage(getServices: () => MiniServices) {
                 missingDate: "", missingTime: "", missingLocation: "", missingCircumstances: "" });
             try {
                 const result = await services.sessions.request("GET", "/api/v1/mini/asset-returns/" + event.currentTarget.dataset.id) as AssetReturn;
-                if (live && generation === current && identity === JSON.stringify(services.sessions.identity)) this.setData({ returnProgress: result });
+                if (live && generation === current && identity === JSON.stringify(services.sessions.identity)) this.setData({ returnProgress: result &&
+                    { ...result, canRetryLoss: result.followups?.some(item => item.businessType === "LOST_REPORT" && item.missingLossLockVersion != null) === true } });
             } catch (error) { if (live && generation === current) this.setData({ error: message(error), returnProgress: null }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
@@ -143,8 +144,10 @@ export function createLoanPage(getServices: () => MiniServices) {
             if(!services||!live||this.data.busy||pending||identity!==JSON.stringify(services.sessions.identity))return;
             const row=this.data.returnProgress;
             if(!row?.lossRecovery||row.returnStatus!=="REJECTED"||!this.data.reason.trim())return;
+            if (!await services.confirm("重新送交退库", `重新送交归还单 ${row.id} 的实物退库？原驳回记录保留。是否继续？`)) return;
+            const current = generation;
             await mutate(this,`/api/v1/mini/asset-returns/${row.id}/resubmit-loss`,row.version,{approved:false,reason:this.data.reason.trim()});
-            this.setData({returnProgress:null});
+            if (live && generation === current) this.setData({returnProgress:null});
         },
         async onDeclareUnavailable(this: Context) {
             const row = this.data.returnProgress, reason = this.data.reason.trim();

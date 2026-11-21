@@ -321,7 +321,7 @@ export function createLossPage(getServices: () => MiniServices) {
             if (editable(this)) this.setData({ transfer: { ...this.data.transfer, sameCustodian: event.detail.value } });
         },
         onTransferReason(this: Context, event: { detail: { value: string } }) {
-            if (editable(this)) this.setData({ transfer: { ...this.data.transfer, reason: event.detail.value } });
+            if (editable(this)) this.setData({ "transfer.reason": event.detail.value } as Partial<Data>);
         },
         onLoad(options: { id?: string }) { selectedId = /^[1-9][0-9]{0,18}$/.test(options.id ?? "") ? options.id! : ""; },
         async onShow(this: Context) { live = true; const next = getServices(); if (services && identity !== JSON.stringify([next.sessions.identity,next.sessions.identityRevision])) wipe(this); services = next; identity = owner(); await read(this); },

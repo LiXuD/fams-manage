@@ -1,6 +1,6 @@
 export type FactoryCostPolicy = "NO_COST" | "LIMITED" | "UNLIMITED";
 export interface FactoryCostSummary { costPolicy: FactoryCostPolicy; costLimit: string | null; confirmedTotal: string; unassessedCount: number; overrun: boolean; followupOpen: boolean }
-export interface FactoryMoneyFact { amount: string; evidenceIds: string[] }
+export interface FactoryMoneyFact { amount: string; evidenceIds: string[]; rowKey?: string }
 export interface FactoryScope { costPolicy?: FactoryCostPolicy; costLimit?: string | null; id: string; scopeStatus: string; version: number; requestReason: string; decisionReason: string | null }
 export interface FactoryRound {
     quotes?: FactoryMoneyFact[]; costFact?: FactoryMoneyFact | null; dispatchScopeId?: string | null;

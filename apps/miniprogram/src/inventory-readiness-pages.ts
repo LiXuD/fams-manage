@@ -2,7 +2,7 @@ import type { MiniServices } from "./pages.ts";
 import { MiniRequestError } from "./session.ts";
 interface MissingLoss { reasonId: string; generation: number; reason: string; canSubmit: boolean;
     report: { reportId: string; status: string; nextReviewDate: string | null } | null }
-interface Row { item: { id: string; recheck_generation: number; review_status?: string; reason_kind?: string; reason?: string;
+interface Row { rowId: string; item: { id: string; recheck_generation: number; review_status?: string; reason_kind?: string; reason?: string;
     snapshot_json: { assetCode: string; name: string } }; current: { version: number } | null; canRecord: boolean; physicalMissingOpen: boolean;
     missingLosses?: MissingLoss[] }
 interface View { task: { version: number; task_status: string }; items: Row[]; total: number; missingCount: number; notObservedCount: number }
@@ -41,6 +41,7 @@ export function createInventoryReadinessPage(getServices: () => MiniServices) {
     const read = async (page: Context) => {
         const epoch = ++generation; page.setData({ busy: true, error: "", view: null, selected: null, lossSource: null, history: [], historyItem: "" });
         try { const view = await services.sessions.request("GET", `/api/v1/mini/inventory-readiness/tasks/${page.data.taskId}?page=${page.data.page}&pageSize=20`) as View;
+            if (view) view.items = view.items.map(row => ({ ...row, rowId: row.item.id }));
             if (current(epoch)) page.setData({ view, retry: !!pending });
         } catch (cause) { if (current(epoch)) failure(page, cause); }
         finally { finish(page, epoch); }

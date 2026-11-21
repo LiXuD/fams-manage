@@ -153,6 +153,16 @@ test("formal target uses current owner catalogs and reference versions without g
     assert.ok(f.calls.filter(row => row.method === "POST").every(row => row.path.endsWith("/differences/decisions")));
 });
 
+test("custody picker maps numeric and string indices to SHARED and PERSONAL", async () => {
+    const f = fixture(); await f.open();
+    f.page.onCustody({ detail: { value: 1 } });
+    assert.equal(f.page.data.custody, "SHARED");
+    f.page.onCustody({ detail: { value: "1" } });
+    assert.equal(f.page.data.custody, "SHARED");
+    f.page.onCustody({ detail: { value: 0 } });
+    assert.equal(f.page.data.custody, "PERSONAL");
+});
+
 test("time selection preserves milliseconds and refuses malformed seconds without posting", async () => {
     const f = fixture(); f.raw.outcome = "TIME_REVIEW"; await f.open();
     f.page.onField({ currentTarget: { dataset: { field: "verifiedSecond" } }, detail: { value: "99" } });

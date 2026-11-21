@@ -29,7 +29,7 @@ const runtime = {
 };
 const sessions = new MiniSessionClient(origin, runtime);
 assert.equal(await sessions.login(process.env.FAMS_TEST_WECHAT_CODE), "BOUND");
-const services = { sessions, createKey: () => selectedRequisition ? randomUUID() : `native-req-key-${++sequence}`, navigate() {} };
+const services = { sessions, createKey: () => selectedRequisition ? randomUUID() : `native-req-key-${++sequence}`, navigate() {}, confirm: async () => true };
 const page = createRequisitionPage(() => services, !selectedRequisition);
 page.data = structuredClone(page.data); page.setData = data => Object.assign(page.data, data);
 if (selectedRequisition) {

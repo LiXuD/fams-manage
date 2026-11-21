@@ -10,7 +10,7 @@ interface Intent { readonly path: string; readonly key: string; readonly version
     readonly form?: Readonly<{ roundVersion: number; assetVersion: number; ownershipVersion: number; lockVersion: number; purpose: string }>; readonly label: string; readonly scrap?: true }
 interface Data { header: FactoryDetail | null; round: FactoryRoundDetail | null; records: Replacements | null; references: Catalog[]; busy: boolean; stale: boolean; retry: boolean; confirmation: string; pendingLabel: string; error: string; notice: string;
     name: string; serial: string; model: string; unit: string; businessDate: string; actualDate: string; actualTime: string; reason: string; checked: boolean; disposition: string; evidenceIds: string[]; fileName: string;
-    originals: { id: string; name: string }[]; dispositions: { id: string; name: string }[];
+    originals: { id: string; name: string; checked: boolean }[]; dispositions: { id: string; name: string }[];
     scrapReason: string; scrapCondition: string; scrapReceipt: string }
 interface Context { data: Data; setData(update: Partial<Data>): void }
 const idPattern = /^[1-9][0-9]{0,18}$/;
@@ -58,8 +58,8 @@ export function createRepairReplacementPage(getServices: () => MiniServices) {
             references.push({ kind, label, ...result, selected: "" });
         }
         const clean = new Map(round.files.filter(file => file.scanStatus === "CLEAN").map(file => [file.objectId, file.filename]));
-        page.setData({ header, round, records, references, stale: false, retry: !!pending, pendingLabel: pending?.label ?? "",
-            originals: round.evidence.filter(item => item.purpose === "REPLACEMENT" && clean.has(item.object_id)).map(item => ({ id: item.object_id, name: clean.get(item.object_id)! })),
+        page.setData({ header, round, records, references, stale: false, retry: !!pending, pendingLabel: pending?.label ?? "", evidenceIds: [],
+            originals: round.evidence.filter(item => item.purpose === "REPLACEMENT" && clean.has(item.object_id)).map(item => ({ id: item.object_id, name: clean.get(item.object_id)!, checked: false })),
             dispositions: round.roundStatus === "RECEIVED" ? dispositions.filter(item => item.id === "CONTINUES_REPAIR") : dispositions });
         return true;
     };
@@ -120,7 +120,8 @@ export function createRepairReplacementPage(getServices: () => MiniServices) {
         onField(this: Context, event: { currentTarget: { dataset: { field: string } }; detail: { value: string } }) { const field = event.currentTarget.dataset.field; if (editable(this) && ["name", "serial", "model", "unit", "businessDate", "actualDate", "actualTime", "reason"].includes(field)) { if (["actualDate", "actualTime"].includes(field)) instant = ""; this.setData({ [field]: event.detail.value }); } },
         onNow(this: Context) { if (editable(this)) { const now = new Date(); instant = now.toISOString(); this.setData({ actualDate: day(now), actualTime: clock(now) }); } },
         onChecked(this: Context, event: { detail: { value: string[] } }) { if (editable(this)) this.setData({ checked: event.detail.value.includes("checked") }); },
-        onEvidence(this: Context, event: { detail: { value: string[] } }) { if (editable(this)) this.setData({ evidenceIds: event.detail.value.filter(id => this.data.originals.some(item => item.id === id)) }); },
+        onEvidence(this: Context, event: { detail: { value: string[] } }) { if (editable(this)) { const ids = event.detail.value.filter(id => this.data.originals.some(item => item.id === id));
+            this.setData({ evidenceIds: ids, originals: this.data.originals.map(item => ({ ...item, checked: ids.includes(item.id) })) }); } },
         onDisposition(this: Context, event: { currentTarget: { dataset: { id: string } } }) { const id = event.currentTarget.dataset.id; if (editable(this) && this.data.dispositions.some(item => item.id === id)) this.setData({ disposition: id }); },
         onReference(this: Context, event: { currentTarget: { dataset: { kind: Kind; id: string } } }) { if (!editable(this)) return; const { kind, id } = event.currentTarget.dataset, warehouse = this.data.references.find(item => item.kind === "warehouse")?.selected; const catalog = this.data.references.find(item => item.kind === kind), item = catalog?.items.find(item => item.id === id); if (!item || kind === "location" && item.warehouse?.id !== warehouse) return; this.setData({ references: this.data.references.map(item => ({ ...item, selected: item.kind === kind ? id : kind === "warehouse" && item.kind === "location" ? "" : item.selected })) }); },
         async onReferences(this: Context, event: { currentTarget: { dataset: { kind: Kind; delta: string } } }) { if (!editable(this)) return; const { kind, delta } = event.currentTarget.dataset, catalog = this.data.references.find(item => item.kind === kind), change = Number(delta), next = (catalog?.page ?? 1) + change; if (!catalog || ![-1, 1].includes(change) || next < 1 || (next - 1) * 20 >= catalog.total) return; const epoch = ++generation; this.setData({ busy: true }); try { const result = await services.sessions.request("GET", route("/replacement-references/" + kind + "?page=" + next + "&pageSize=20")) as Catalog; if (current(epoch)) this.setData({ references: this.data.references.map(item => item.kind === kind ? { ...catalog, ...result, selected: "" } : kind === "warehouse" && item.kind === "location" ? { ...item, selected: "" } : item) }); } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); } },

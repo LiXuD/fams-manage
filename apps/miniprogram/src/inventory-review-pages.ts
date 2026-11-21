@@ -445,7 +445,7 @@ export function createInventoryReviewPage(getServices: () => MiniServices) {
             }
         },
         onClearOwning(this: Context) { if (!locked(this)) this.setData({ owning: null }); },
-        onCustody(this: Context, event: Event) { if (!locked(this)) this.setData({ custody: event.detail?.value === "1" ? "SHARED" : "PERSONAL" }); },
+        onCustody(this: Context, event: Event) { if (!locked(this)) this.setData({ custody: Number(event.detail?.value) === 1 ? "SHARED" : "PERSONAL" }); },
         async onViewTransfer(this: Context, event: Event) {
             const transfer = event.currentTarget?.dataset?.id;
             if (!services || locked(this) || !id(transfer) || !this.data.subjects.some(row => row.links?.some(link => link.transfer_id === transfer))) return;

@@ -6,7 +6,7 @@ type Target = Record<string, unknown>;
 interface Choice { id: string; name: string; version: number; locationType?: string; warehouseId?: string; sharedEligible?: boolean }
 interface Snapshot { businessType: Business; businessId: string; itemId: string; version: number; assetCode: string;
     target: Target; source?: { lifecycleStatus: string }; physical?: { destination?: string; deliveryEvidence?: string };
-    handover?: { destinationText?: string }[] }
+    handover?: { destinationText?: string; rowKey?: string }[] }
 interface Change { id: string; version: number; business_id: string; item_id: string; change_status: string;
     source_snapshot_json: Snapshot; proposed_target_json: Target; reason: string; physical_verification: string; targetDisplay?: { employeeName: string; organizationName: string; locationName: string }; decision_reason?: string }
 interface Data {
@@ -21,6 +21,13 @@ interface Data {
 interface Context { data: Data; setData(value: Partial<Data>): void; onRefresh(): Promise<void>; onSources(): Promise<void> }
 interface Event { detail: { value: string | string[] }; currentTarget: { dataset: { id?: string; field?: string; result?: string } } }
 const base = "/api/v1/mini/item-target-changes";
+// Display-only handover rows arrive without an id; give each a stable key so wx:key resolves.
+const keyed = (snapshot: Snapshot): Snapshot => snapshot.handover
+    ? { ...snapshot, handover: snapshot.handover.map((row, i) => ({ ...row, rowKey: `handover-${i}` })) } : snapshot;
+const keyedChange = (row: Change): Change => ({ ...row, source_snapshot_json: keyed(row.source_snapshot_json) });
+// Request payloads keep the server shape; the display-only rowKey added above must not leak back.
+const unkeyed = (snapshot: Snapshot): Snapshot => snapshot.handover
+    ? { ...snapshot, handover: snapshot.handover.map(({ rowKey: _rowKey, ...rest }) => rest) } : snapshot;
 const empty = (): Data => ({ businessType: "REQUISITION", businessNames: ["领用 / 借用", "调拨", "维修返还"], custodyNames: ["个人使用", "部门公用"],
     rows: [], selected: null, page: 1, total: 0, canApprove: false, canExecute: false, sources: [], sourceId: "", sourcePage: 1,
     sourceTotal: 0, items: [], snapshot: null, organizations: [], owners: [], warehouses: [], locations: [], employees: [], places: [], people: [],
@@ -37,8 +44,8 @@ function message(error: unknown) {
 }
 export function createTargetChangePage(getServices: () => MiniServices) {
     let services: MiniServices | null = null, live = false, generation = 0, identity = "";
-    const valid = (epoch: number) => live && epoch === generation && !!services
-        && identity === JSON.stringify(services.sessions.identity);
+    const owner = () => JSON.stringify([services?.sessions.identity, services?.sessions.identityRevision]);
+    const valid = (epoch: number) => live && epoch === generation && !!services && identity === owner();
     let pending: { path: string; key: string; version: number; body: unknown } | null = null;
     const finish = (page: Context, epoch: number) => {
         if (valid(epoch)) page.setData({ busy: false });
@@ -50,7 +57,7 @@ export function createTargetChangePage(getServices: () => MiniServices) {
     const list = async (page: Context) => {
         const value = await services!.sessions.request("GET", `${base}?businessType=${page.data.businessType}&page=${page.data.page}&pageSize=20`) as
             { items: Change[]; total: number; canApprove: boolean; canExecute: boolean };
-        return { rows: value.items, total: value.total, canApprove: value.canApprove, canExecute: value.canExecute };
+        return { rows: value.items.map(keyedChange), total: value.total, canApprove: value.canApprove, canExecute: value.canExecute };
     };
     const catalog = async (kind: string, organization?: string) => {
         const all: Choice[] = []; let page = 1, items: Choice[];
@@ -76,7 +83,7 @@ export function createTargetChangePage(getServices: () => MiniServices) {
             if (!valid(current)) return;
             const rows = await list(page);
             if (valid(current)) {
-                pending = null; page.setData({ ...rows, selected: result, snapshot: null, retryable: false,
+                pending = null; page.setData({ ...rows, selected: keyedChange(result), snapshot: null, retryable: false,
                     notice: "目标更正已保存。批准不代表实际接收，原物理事实及责任继续保留。" });
             }
         } catch (error) { if (valid(current)) { failed(page, error); page.setData({ retryable: pending !== null }); } }
@@ -86,7 +93,7 @@ export function createTargetChangePage(getServices: () => MiniServices) {
         data: empty(),
         async onShow(this: Context) {
             live = true; const current = ++generation; services = getServices();
-            const next = JSON.stringify(services.sessions.identity);
+            const next = owner();
             if (next !== identity) { identity = next; pending = null; this.setData(empty()); }
             this.setData({ busy: false, retryable: pending !== null }); if (pending) return;
             this.setData({ busy: true, error: "" });
@@ -96,7 +103,7 @@ export function createTargetChangePage(getServices: () => MiniServices) {
         },
         onHide(this: Context) {
             live = false; generation++;
-            if (this.data.businessType === "REPAIR") this.setData({ ...empty(), businessType: "REPAIR" });
+            this.setData({ ...empty(), businessType: this.data.businessType });
         },
         onUnload() { live = false; generation++; pending = null; },
         async onRefresh(this: Context) {
@@ -158,7 +165,7 @@ export function createTargetChangePage(getServices: () => MiniServices) {
                 const target = snapshot.target, using = String(target.usingOrganizationId ?? target.organizationId ?? "");
                 const employees = using ? await catalog("employee", using) : [];
                 if (valid(current)) {
-                    this.setData({ snapshot, selected: null, organizations, owners: [{ id: "", name: "未指定", version: 0 }, ...organizations], warehouses, locations, employees,
+                    this.setData({ snapshot: keyed(snapshot), selected: null, organizations, owners: [{ id: "", name: "未指定", version: 0 }, ...organizations], warehouses, locations, employees,
                         stock: snapshot.businessType === "TRANSFER" && snapshot.source?.lifecycleStatus === "IN_STOCK",
                         owning: String(target.owningOrganizationId ?? ""), using, employee: String(target.employeeId ?? ""),
                         warehouse: String(target.warehouseId ?? ""), location: String(target.locationId ?? ""), custody: String(target.custodyType),
@@ -212,7 +219,8 @@ export function createTargetChangePage(getServices: () => MiniServices) {
                 if (!await services.confirm("提请批准目标更正", "已核对实物；批准不会自动接收、收回或释放业务锁，是否继续？")) return;
                 if (!valid(current)) return;
                 pending = { path: `${base}?businessType=${d.businessType}`, key: services.createKey(), version: d.snapshot!.version,
-                    body: JSON.parse(JSON.stringify({ businessId: d.snapshot!.businessId, itemId: d.snapshot!.itemId, snapshot: d.snapshot,
+                    body: JSON.parse(JSON.stringify({ businessId: d.snapshot!.businessId, itemId: d.snapshot!.itemId,
+                        snapshot: unkeyed(d.snapshot!),
                         target, reason: d.reason.trim(), observedAssetCode: d.code.trim(), physicalVerification: d.physical.trim(), physicalChecked: true })) as unknown };
             } catch (error) { if (valid(current)) failed(this, error); }
             finally { finish(this, current); }

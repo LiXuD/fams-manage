@@ -11,10 +11,10 @@ export async function subscriptionTemplate(services: MiniServices): Promise<stri
     } catch { return ""; }
 }
 
-/** Only an explicit tap reaches this helper; refusal or a missing wx capability never posts a grant. */
+/** Only an explicit tap reaches this helper. The template must be prefetched into page data:
+ * wx.requestSubscribeMessage has to run in the tap's synchronous flow, before any network await. */
 export async function subscribeReminder(services: MiniServices,
-    target: { scene: SubscriptionScene; businessType: string; businessId: string }): Promise<SubscriptionOutcome> {
-    const template = await subscriptionTemplate(services);
+    target: { scene: SubscriptionScene; businessType: string; businessId: string }, template: string): Promise<SubscriptionOutcome> {
     if (!template) return "UNCONFIGURED";
     let reply: "accept" | "reject" | "ban" = "reject";
     if (services.requestSubscribe) {

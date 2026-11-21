@@ -81,7 +81,7 @@ export function createInventoryPage(getServices: () => MiniServices) {
             if (this.data.busy || !task || !current(generation) || !this.data.subscriptionTemplate) return;
             const epoch = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
             try {
-                const outcome = await subscribeReminder(services, { scene: "INVENTORY_TASK", businessType: "INVENTORY_TASK", businessId: task.id });
+                const outcome = await subscribeReminder(services, { scene: "INVENTORY_TASK", businessType: "INVENTORY_TASK", businessId: task.id }, this.data.subscriptionTemplate);
                 if (current(epoch)) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (current(epoch)) failure(this, error); }
             finally { if (current(epoch)) this.setData({ busy: false }); }

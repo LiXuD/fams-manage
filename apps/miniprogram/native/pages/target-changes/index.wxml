@@ -14,7 +14,7 @@
   </view>
   <view wx:if="{{snapshot}}" class="card"><view class="title">实物核对 · {{snapshot.assetCode}}</view>
     <view wx:if="{{snapshot.physical.destination}}">原交出地点：{{snapshot.physical.destination}} · {{snapshot.physical.deliveryEvidence}}</view>
-    <view wx:for="{{snapshot.handover}}" wx:key="id">原交出地点：{{item.destinationText}}</view>
+    <view wx:for="{{snapshot.handover}}" wx:key="rowKey">原交出地点：{{item.destinationText}}</view>
     <view wx:if="{{businessType === 'TRANSFER'}}">新所属组织
       <picker range="{{owners}}" range-key="name" data-field="owning" bindchange="onChoice" disabled="{{busy || retryable}}"><view wx:if="{{!owning}}">请选择</view><view wx:for="{{organizations}}" wx:key="id" wx:if="{{item.id === owning}}">{{item.name}}</view></picker>
     </view>
@@ -37,7 +37,7 @@
   </view>
   <view wx:if="{{selected}}" class="card"><view>{{selected.source_snapshot_json.assetCode}}</view><view>更正原因：{{selected.reason}}</view><view>实物核对：{{selected.physical_verification}}</view>
     <view wx:if="{{selected.source_snapshot_json.physical.destination}}">原交出地点：{{selected.source_snapshot_json.physical.destination}}</view>
-    <view wx:for="{{selected.source_snapshot_json.handover}}" wx:key="id">原交出地点：{{item.destinationText}}</view>
+    <view wx:for="{{selected.source_snapshot_json.handover}}" wx:key="rowKey">原交出地点：{{item.destinationText}}</view>
     <view>原责任模式：{{selected.source_snapshot_json.target.custodyType === 'STORAGE' ? '仓库保管' : selected.source_snapshot_json.target.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}；新责任模式：{{selected.proposed_target_json.custodyType === 'STORAGE' ? '仓库保管' : selected.proposed_target_json.custodyType === 'SHARED' ? '部门公用' : '个人使用'}}</view>
     <view wx:if="{{businessType === 'REPAIR'}}">本次新目标：{{selected.targetDisplay.organizationName || '待核实'}} · {{selected.targetDisplay.employeeName || '待核实'}} · {{selected.targetDisplay.locationName || '待核实'}}</view>
     <view wx:if="{{businessType !== 'REPAIR'}}">原组织：{{selected.source_snapshot_json.target.usingOrganizationId || selected.source_snapshot_json.target.organizationId || '未指定'}}；新组织：{{selected.proposed_target_json.usingOrganizationId || selected.proposed_target_json.organizationId || '未指定'}}</view>

@@ -11,7 +11,7 @@ function fixture() {
         stageFactoryEvidence(file) { return Object.freeze({...file,path:"/owned/copy.png",contentType:"image/png"}); }, discardFactoryEvidence(path){discarded.push(path);},
         async uploadEvidence(...upload){calls.push({upload:structuredClone(upload)}); return {id};}, async downloadLossPhoto(){return "/owned/private.png";}, discardInventoryPhoto(path){discarded.push(path);} };
     const services={sessions,createKey:()=>"loss-key-00000000-" + ++keys,navigate(){},chooseInventoryPhoto:async()=>({path:"/chosen/source.png",name:"情况.png",size:10})};
-    const page=createLossPage(()=>services);page.data=structuredClone(page.data);page.setData=update=>Object.assign(page.data,update);page.onLoad({id});return {page,row,calls,discarded,sessions,services};
+    const page=createLossPage(()=>services);page.data=structuredClone(page.data);page.setData=update=>{for(const [key,value] of Object.entries(update)){const path=key.split(".");let target=page.data;for(const segment of path.slice(0,-1))target=target[segment];target[path.at(-1)]=value;}};page.onLoad({id});return {page,row,calls,discarded,sessions,services};
 }
 const writes=f=>f.calls.filter(call=>call.method==="POST"&&!call.path.endsWith("download-grant"));
 async function draft(f){await f.page.onShow();f.page.onAsset(event({id:asset}));for(const [name,value]of Object.entries({lastDate:"2026-10-28",lastTime:"10:20",lastLocation:"原办公室",circumstances:"已逐一核实保管地点仍未找到该资产。"})) f.page.onField(field(name,value));}

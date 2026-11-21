@@ -112,7 +112,7 @@ export function createReceiptPage(getServices: () => MiniServices) {
             if (!services || !live || this.data.busy || pending || !selected || !this.data.subscriptionTemplate) return;
             const current = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
             try {
-                const outcome = await subscribeReminder(services, { scene: "RECEIPT", businessType: "REQUISITION_ALLOCATION", businessId: selected.allocationId });
+                const outcome = await subscribeReminder(services, { scene: "RECEIPT", businessType: "REQUISITION_ALLOCATION", businessId: selected.allocationId }, this.data.subscriptionTemplate);
                 if (live && current === generation) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (live && current === generation) this.setData({ error: message(error) }); }
             finally { if (live && current === generation) this.setData({ busy: false }); }

@@ -30,6 +30,7 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
     let services: MiniServices; let taskId = ""; let identity = ""; let live = false; let generation = 0;
     let eventId = ""; let source: InventoryObservation["source"] = "CODE";
     let scannedAt: string | null = null;
+    let taskItems: InventoryCachedItem[] = [];
     const valid = (epoch: number) => live && epoch === generation && identity === JSON.stringify(services.sessions.identity);
     const runtime = () => {
         if (identity !== JSON.stringify(services.sessions.identity) || !services.inventory) throw new Error("身份已改变，请重新进入盘点任务。");
@@ -55,7 +56,8 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
             if (s.responsibleEmployeeId) people.set(String(s.responsibleEmployeeId), String(s.responsibleEmployeeName || "任务责任人"));
             if (s.departmentResponsibleEmployeeId) people.set(String(s.departmentResponsibleEmployeeId), String(s.departmentResponsibleEmployeeName || "公用责任人"));
         }
-        page.setData({ task, locations: [...locations].map(([id, name]) => ({ id, name })), people: [...people].map(([id, name]) => ({ id, name })) });
+        page.setData({ task: { ...task, items: [] }, locations: [...locations].map(([id, name]) => ({ id, name })), people: [...people].map(([id, name]) => ({ id, name })) });
+        taskItems = task.items;
     };
     const identityChanged = (page: Context, epoch: number) => {
         if (live && epoch === generation && identity !== JSON.stringify(services.sessions.identity)) {
@@ -84,7 +86,7 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
         try {
             const found = await services.sessions.request("POST", `${base}/tasks/${taskId}/identification`, { source: method, value }) as { kind: string; itemId?: string; message?: string };
             if (!valid(epoch)) { identityChanged(page, epoch); return; }
-            const item = page.data.task?.items.find(row => row.id === found.itemId);
+            const item = page.data.task ? taskItems.find(row => row.id === found.itemId) : undefined;
             if (found.kind === "ASSIGNED" && item) select(page, item);
             else { eventId = services.createKey(); page.setData({ query: value, difference: true, message: found.message || "任务外已登记资产仅记录发现线索，不认定盘盈。" }); }
         } catch (error) {
@@ -154,8 +156,11 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
             if (await services.confirm("确认待核实现场位置", `将“${hint}”记录为待核实位置线索？不能按正常项确认。`) && valid(epoch)) this.setData({ roomId: null, roomName: hint, difference: true });
         },
         async onDiscard(this: Context) {
-            if (this.data.busy || !await services.confirm("放弃未保存记录", "仅删除当前尚未保存的照片与编辑，不影响已保存待上传记录。")) return;
-            for (const photo of this.data.photos) await runtime().files.storage.removePhoto(photo.path);
+            if (this.data.busy || !services || !await services.confirm("放弃未保存记录", "仅删除当前尚未保存的照片与编辑，不影响已保存待上传记录。")) return;
+            const epoch = generation;
+            try { for (const photo of this.data.photos) await runtime().files.storage.removePhoto(photo.path); }
+            catch { if (valid(epoch)) this.setData({ error: "本机未保存照片清理失败，请重试放弃操作。" }); return; }
+            if (!valid(epoch)) { identityChanged(this, epoch); return; }
             eventId = ""; this.setData({ photos: [], selected: null, difference: false, error: "", message: "未保存编辑已放弃。" });
         },
         onPerson(this: Context, event: Input) { const person = this.data.people[Number(event.detail.value)]; this.setData({ personId: person?.id ?? null, personName: person?.name || "" }); },
@@ -174,7 +179,7 @@ export function createInventoryCollectionPage(getServices: () => MiniServices) {
         async onSearch(this: Context) {
             if (this.data.busy || !this.data.query.trim()) return;
             const query = this.data.query.trim(); source = "CODE"; scannedAt = null;
-            const candidates = this.data.task?.items.filter(item => String(item.snapshot_json.assetCode).includes(query) || String(item.snapshot_json.name).includes(query)) || [];
+            const candidates = this.data.task ? taskItems.filter(item => String(item.snapshot_json.assetCode).includes(query) || String(item.snapshot_json.name).includes(query)) : [];
             if (candidates.length) this.setData({ candidates, selected: null, message: "请选择实际实物，手工查询确认需填写原因。" });
             else await lookup(this, query, "CODE");
         },

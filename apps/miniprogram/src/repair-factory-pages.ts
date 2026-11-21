@@ -15,14 +15,14 @@ interface Data {
     lossDate: string; lossTime: string; lossLocation: string; lossCircumstances: string; linkedLoss: string;
     originalChecked: boolean; noCostChecked: boolean; condition: string; conditionIndex: number;
     locations: Place[]; locationId: string; locationPage: number; locationTotal: number; evidenceIds: string[];
-    eligibleFiles: { object_id: string; filename: string }[]; activeSelected: boolean;
+    eligibleFiles: { object_id: string; filename: string; checked: boolean }[]; activeSelected: boolean;
     fileName: string; purposeIndex: number; purposeLabels: string[];
     costPolicyIndex: number; costPolicyLabels: string[]; costLimit: string; approvedCostLabel: string; pendingCostLabel: string;
     moneyAmount: string; moneyReason: string; moneyChecked: boolean; moneyEvidenceIds: string[]; costUnassessed: boolean;
-    financialFiles: { object_id: string; filename: string; purpose: string }[]; purposeKinds: string[];
+    financialFiles: { object_id: string; filename: string; purpose: string; checked: boolean }[]; purposeKinds: string[];
     previewPath: string; previewName: string; previewMime: string;
     parts: FactoryPartsPage | null; partsPage: number; partsName: string; partsBefore: string; partsAfter: string; partsReason: string;
-    partsEvidenceIds: string[]; partsFiles: { object_id: string; filename: string }[];
+    partsEvidenceIds: string[]; partsFiles: { object_id: string; filename: string; checked: boolean }[];
 }
 interface Context { data: Data; setData(update: Partial<Data>): void }
 type Action = "parts" | "requestCostScope" | "quote" | "cost" | "requestScope" | "approveScope" | "rejectScope" | "withdrawScope" | "createRound" | "cancelRound" | "dispatch" | "receive" | "upload" | "reportLoss";
@@ -108,13 +108,15 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         const purposeKinds = activeSelected ? ["FAULT", purpose, "QUOTE", "COST_RECEIPT"] : ["QUOTE", "COST_RECEIPT"];
         if (parts?.canRecord) purposeKinds.push("PARTS_CHANGE");
         const files = new Map(selected?.files.filter(f => f.scanStatus === "CLEAN").map(f => [f.objectId, f.filename]) ?? []);
-        page.setData({ detail, rows: list.items, total: list.total, history: events.items, historyTotal: events.total, selected,
-            parts, partsPage, partsFiles: selected?.evidence.filter(f => f.purpose === "PARTS_CHANGE" && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)! })) ?? [],
+        page.setData({ detail, rows: list.items, total: list.total, history: events.items, historyTotal: events.total,
+            selected: selected && { ...selected, quotes: selected.quotes?.map((quote, i) => ({ ...quote, rowKey: `quote-${i}` })) },
+            evidenceIds: [], moneyEvidenceIds: [], partsEvidenceIds: [],
+            parts, partsPage, partsFiles: selected?.evidence.filter(f => f.purpose === "PARTS_CHANGE" && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)!, checked: false })) ?? [],
             activeSelected, stale: false, retry: !!pending, pendingLabel: pending?.label ?? "",
-            eligibleFiles: selected?.evidence.filter(f => f.purpose === purpose && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)! })) ?? [],
+            eligibleFiles: selected?.evidence.filter(f => f.purpose === purpose && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)!, checked: false })) ?? [],
             approvedCostLabel: detail.approvedScope ? costText(detail.approvedScope.costPolicy, detail.approvedScope.costLimit) : "尚无批准范围",
             pendingCostLabel: detail.pendingScope ? costText(detail.pendingScope.costPolicy, detail.pendingScope.costLimit) : "",
-            financialFiles: selected?.evidence.filter(f => ["QUOTE", "COST_RECEIPT"].includes(f.purpose) && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)!, purpose: f.purpose })) ?? [],
+            financialFiles: selected?.evidence.filter(f => ["QUOTE", "COST_RECEIPT"].includes(f.purpose) && files.has(f.object_id)).map(f => ({ object_id: f.object_id, filename: files.get(f.object_id)!, purpose: f.purpose, checked: false })) ?? [],
             purposeKinds, purposeLabels: purposeKinds.map(p => purposeNames[p]!), purposeIndex: 1 });
         return true;
     };
@@ -265,13 +267,16 @@ export function createRepairFactoryPage(getServices: () => MiniServices) {
         },
         onNow(this: Context) { if (editable(this)) { const now = new Date(); actualInstant = now.toISOString(); this.setData({ actualDate: day(now), actualTime: clock(now) }); } },
         onChecked(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ originalChecked: e.detail.value.includes("original"), noCostChecked: e.detail.value.includes("noCost"), costUnassessed: e.detail.value.includes("unassessed") }); },
-        onEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ evidenceIds: e.detail.value.filter(id => this.data.eligibleFiles.some(f => f.object_id === id)) }); },
+        onEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) { const ids = e.detail.value.filter(id => this.data.eligibleFiles.some(f => f.object_id === id));
+            this.setData({ evidenceIds: ids, eligibleFiles: this.data.eligibleFiles.map(f => ({ ...f, checked: ids.includes(f.object_id) })) }); } },
         onCondition(this: Context, e: { detail: { value: string } }) { const index = Number(e.detail.value); if (editable(this) && [0, 1, 2].includes(index)) this.setData({ conditionIndex: index, condition: ["", "RESTORED", "STILL_FAULTY"][index]! }); },
         onPurpose(this: Context, e: { detail: { value: string } }) { const index = Number(e.detail.value); if (editable(this) && Number.isInteger(index) && index >= 0 && index < this.data.purposeKinds.length) this.setData({ purposeIndex: index }); },
         onCostPolicy(this: Context, e: { detail: { value: string } }) { const index = Number(e.detail.value); if (editable(this) && [0, 1, 2].includes(index)) this.setData({ costPolicyIndex: index, costLimit: "" }); },
         onMoneyChecked(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ moneyChecked: e.detail.value.includes("checked") }); },
-        onMoneyEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ moneyEvidenceIds: e.detail.value.filter(id => this.data.financialFiles.some(f => f.object_id === id)) }); },
-        onPartsEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) this.setData({ partsEvidenceIds: e.detail.value.filter(id => this.data.partsFiles.some(f => f.object_id === id)) }); },
+        onMoneyEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) { const ids = e.detail.value.filter(id => this.data.financialFiles.some(f => f.object_id === id));
+            this.setData({ moneyEvidenceIds: ids, financialFiles: this.data.financialFiles.map(f => ({ ...f, checked: ids.includes(f.object_id) })) }); } },
+        onPartsEvidence(this: Context, e: { detail: { value: string[] } }) { if (editable(this)) { const ids = e.detail.value.filter(id => this.data.partsFiles.some(f => f.object_id === id));
+            this.setData({ partsEvidenceIds: ids, partsFiles: this.data.partsFiles.map(f => ({ ...f, checked: ids.includes(f.object_id) })) }); } },
         async onParts(this: Context, e: { currentTarget: { dataset: { delta?: string } } }) {
             if (!ensureCurrent(this) || this.data.busy || prepared || this.data.selected?.roundStatus !== "RECEIVED") return;
             const delta = Number(e.currentTarget.dataset.delta ?? "0"), next = partsPage + delta;

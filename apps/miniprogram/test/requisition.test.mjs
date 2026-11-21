@@ -11,7 +11,7 @@ function fixture() {
         if (lose) { lose = false; throw new Error("lost response"); }
         return { id: "1", version: 0, demands: [], creatorAccountId: "1" };
     } };
-    const services = { sessions, createKey: () => `requisition-key-${++sequence}`, navigate() {} };
+    const services = { sessions, createKey: () => `requisition-key-${++sequence}`, navigate() {}, confirm: async () => true };
     const page = createRequisitionPage(() => services, true);
     page.data = structuredClone(page.data); page.setData = data => Object.assign(page.data, data);
     return { page, sessions, writes, loseNext() { lose = true; } };

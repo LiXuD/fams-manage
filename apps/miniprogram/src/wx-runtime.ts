@@ -4,9 +4,10 @@ import { createInventoryFiles, type InventoryFileSystem, type InventoryFileRunti
 import { createInventoryEvidenceFiles } from "./inventory-evidence-files.ts";
 
 export interface WxApi {
-    chooseImage?(input: { count: number; sourceType: ("camera" | "album")[]; sizeType: ("original" | "compressed")[];
-        success(reply: { tempFiles: { path: string; size: number }[] }): void; fail(error: unknown): void }): void;
+    chooseMedia?(input: { count: number; mediaType: ("image" | "video" | "mix")[]; sourceType: ("camera" | "album")[];
+        sizeType: ("original" | "compressed")[]; success(reply: { tempFiles: { tempFilePath: string; size: number }[] }): void; fail(error: unknown): void }): void;
     getImageInfo?(input: { src: string; success(reply: { type: string }): void; fail(error: unknown): void }): void;
+    getUpdateManager?(): { onUpdateReady(callback: () => void): void; applyUpdate(): void };
     env?: { USER_DATA_PATH: string };
     getFileSystemManager?(): InventoryFileSystem;
     uploadFile?(input: { url: string; filePath: string; name: string; header: Record<string, string>; timeout: number; formData?: Readonly<Record<string, string>>;
@@ -32,13 +33,13 @@ export interface WxApi {
 /** Dedicated scene-photo entry, separate from business-document selection. Server checks bytes again. */
 export function chooseInventoryPhoto(wx: WxApi, source: "camera" | "album"): Promise<{ path: string; name: string; size: number }> {
     return new Promise((resolve, reject) => {
-        if (!wx.chooseImage || !wx.getImageInfo) { reject(new Error("当前微信无法打开相机或相册，请更新后重试。")); return; }
-        wx.chooseImage({ count: 1, sourceType: [source], sizeType: ["compressed"], success: reply => {
+        if (!wx.chooseMedia || !wx.getImageInfo) { reject(new Error("当前微信无法打开相机或相册，请更新后重试。")); return; }
+        wx.chooseMedia({ count: 1, mediaType: ["image"], sourceType: [source], sizeType: ["compressed"], success: reply => {
             const photo = reply.tempFiles[0]; if (!photo) { reject(new Error("尚未选择现场照片。")); return; }
-            wx.getImageInfo!({ src: photo.path, success: info => {
+            wx.getImageInfo!({ src: photo.tempFilePath, success: info => {
                 const extension = ({ jpeg: "jpg", png: "png", webp: "webp" } as Record<string, string>)[info.type];
                 if (!extension) { reject(new Error("请使用JPG、PNG或WEBP现场照片。")); return; }
-                resolve({ path: photo.path, name: `现场照片.${extension}`, size: photo.size });
+                resolve({ path: photo.tempFilePath, name: `现场照片.${extension}`, size: photo.size });
             }, fail: () => reject(new Error("照片无法读取，请重新拍摄或选择。")) });
         }, fail: () => reject(new Error("拍照或选图未完成，请重试。")) });
     });

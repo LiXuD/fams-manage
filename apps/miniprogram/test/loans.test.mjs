@@ -12,7 +12,7 @@ function fixture() {
         if (lose) { lose = false; throw new Error("lost response"); }
         return { id: "61", version: 0 };
     } };
-    const services = { sessions, createKey: () => `loan-mutation-key-${++key}`, navigate() {} };
+    const services = { sessions, createKey: () => `loan-mutation-key-${++key}`, navigate() {}, confirm: async () => true };
     const page = createLoanPage(() => services);
     page.data = structuredClone(page.data); page.setData = data => Object.assign(page.data, data);
     return { page, sessions, writes, loseNext() { lose = true; } };

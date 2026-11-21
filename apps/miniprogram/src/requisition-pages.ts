@@ -5,7 +5,7 @@ import type { Requisition, RequisitionCatalog, RequisitionChoice, RequisitionDem
     from "../../../packages/api-types/src/requisition";
 
 interface FormRow extends RequisitionDemandInput {
-    employeeChoices: RequisitionChoice[]; categoryIndex: number; organizationIndex: number;
+    rowKey: string; employeeChoices: RequisitionChoice[]; categoryIndex: number; organizationIndex: number;
     employeeIndex: number; locationIndex: number;
 }
 interface Data {
@@ -43,7 +43,7 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
         const org = reference("organization", selfOrg);
         const employees = page.data.employees.filter(e => e.organizationId === org.id);
         const employee = employees.find(e => e.id === selfEmployee) ?? employees[0];
-        return { category: reference("category"), organization: org, employee: { id: employee?.id ?? "", version: employee?.version ?? 0 },
+        return { rowKey: services!.createKey(), category: reference("category"), organization: org, employee: { id: employee?.id ?? "", version: employee?.version ?? 0 },
             location: reference("location"), specification: "", purpose: "", expectedDate: new Date().toISOString().slice(0, 10),
             custodyType: "PERSONAL", quantity: 1, preferredBrand: "", preferredModel: "", employeeChoices: employees,
             categoryIndex: 0, organizationIndex: Math.max(0, page.data.organizations.findIndex(o => o.id === org.id)),
@@ -78,7 +78,7 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
         const form: FormRow[] = mode === "new" ? [defaultRow(page)] : page.data.selected!.demands.map(d => {
             const employeeChoices = page.data.employees.filter(e => e.organizationId === d.targetOrganizationId);
             const employeeId = d.targetEmployeeId ?? d.targetDepartmentEmployeeId!;
-            return { category: { id: d.categoryId, version: d.categoryVersionSnapshot }, specification: d.specification,
+            return { rowKey: services!.createKey(), category: { id: d.categoryId, version: d.categoryVersionSnapshot }, specification: d.specification,
                 preferredBrand: d.preferredBrand ?? "", preferredModel: d.preferredModel ?? "", purpose: d.purpose,
                 expectedDate: d.expectedDate, custodyType: d.custodyType,
                 organization: { id: d.targetOrganizationId, version: d.organizationVersionSnapshot },
@@ -218,14 +218,17 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
                 || !this.data.subscriptionTemplate) return;
             const current = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
             try {
-                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REQUISITION", businessId: selected.id });
+                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REQUISITION", businessId: selected.id }, this.data.subscriptionTemplate);
                 if (live && generation === current) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (live && generation === current) this.setData({ error: message(error) }); }
             finally { if (live && generation === current) this.setData({ busy: false }); }
         },
         async onSubmit(this: Context) { if (this.data.selected) await mutate(this, "/" + this.data.selected.id + "/submit"); },
         async onCancel(this: Context) {
-            if (this.data.selected && this.data.reason.trim()) await mutate(this, "/" + this.data.selected.id + "/cancel", { reason: this.data.reason });
+            const selected = this.data.selected, reason = this.data.reason.trim();
+            if (!services || this.data.busy || !selected || !reason) return;
+            if (!await services.confirm("确认取消申请", `取消申请 ${selected.requestNo}？取消后不可恢复，原提交与审批记录继续保留。是否继续？`)) return;
+            await mutate(this, "/" + selected.id + "/cancel", { reason });
         },
         async onDispute(this: Context) {
             if (this.data.selected && this.data.reason.trim()) await mutate(this, "/" + this.data.selected.id + "/dispute", { reason: this.data.reason });
@@ -236,6 +239,7 @@ export function createRequisitionPage(getServices: () => MiniServices, initially
             const reason = this.data.reason.trim();
             if (!live || !account || !selected || !reason || ownership?.processorAccountId !== account
                 || !["WAREHOUSE_PROCESSING", "WAITING_HANDOVER"].includes(selected.requestStatus)) return;
+            if (!await services?.confirm("确认实物无法验收", "声明后本申请将退回管理员处理，不会完成实物接收；原处理记录保留。是否继续？")) return;
             await mutate(this, "/" + selected.id + "/reassignment/unavailable",
                 { reason, ownershipVersion: ownership.ownershipVersion });
         },

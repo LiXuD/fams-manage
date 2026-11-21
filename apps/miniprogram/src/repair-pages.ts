@@ -115,7 +115,7 @@ export function createRepairPage(getServices: () => MiniServices) {
             if (this.data.busy || pending || !current(generation) || !row || !this.data.subscriptionTemplate) return;
             const epoch = generation; this.setData({ busy: true, error: "", subscriptionNotice: "" });
             try {
-                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REPAIR", businessId: row.id });
+                const outcome = await subscribeReminder(services, { scene: "PROGRESS", businessType: "REPAIR", businessId: row.id }, this.data.subscriptionTemplate);
                 if (current(epoch)) this.setData(subscriptionUpdate(outcome));
             } catch (error) { if (current(epoch)) failure(this, error); } finally { finish(this, epoch); }
         },
