@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
 import AppCommandPalette from "./AppCommandPalette.vue";
+import AppDock from "./AppDock.vue";
 import { useGlowTilt } from "@/composables/useGlowTilt";
 import { useLiquidNavHighlight } from "@/composables/useLiquidNavHighlight";
 
@@ -163,6 +164,8 @@ useLiquidNavHighlight(navRef, () => [route.path, navGroups.value]);
 const mainRef = ref<HTMLElement | null>(null);
 useGlowTilt(mainRef);
 
+const paletteRef = ref<InstanceType<typeof AppCommandPalette> | null>(null);
+
 
 const showSessionError = computed(() => session.isAuthenticated && !!session.error && route.name !== "password-change");
 const sessionErrorText = computed(() => session.error?.message ?? "");
@@ -236,6 +239,7 @@ async function handleLogout(): Promise<void> {
         <slot />
       </main>
     </div>
-    <AppCommandPalette v-if="session.isAuthenticated" />
+    <AppCommandPalette v-if="session.isAuthenticated" ref="paletteRef" />
+    <AppDock v-if="session.isAuthenticated" :groups="navGroups" @command="paletteRef?.openPanel()" />
   </div>
 </template>

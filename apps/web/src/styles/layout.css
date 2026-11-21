@@ -106,6 +106,13 @@
   gap: var(--fams-space-24);
 }
 
+@media (min-width: 901px) {
+  /* 底部停靠栏（高约 66 + 下缘 20）不遮挡末页分页与操作行。 */
+  .fams-main {
+    padding-bottom: calc(var(--fams-space-48) + var(--fams-size-64));
+  }
+}
+
 .fams-breadcrumb {
   margin: 0;
   color: var(--fams-text-secondary);
