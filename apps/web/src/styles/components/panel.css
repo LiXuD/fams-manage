@@ -257,3 +257,32 @@ details[open] > summary {
 .fams-tag-preview code { font-size: 12px; overflow-wrap: anywhere; }
 .fams-tag-preview img { width: 160px; height: 160px; }
 .fams-tag-preview small { color: var(--fams-text-secondary); font-size: 12px; line-height: 20px; }
+
+/* U3 随光倾斜：useGlowTilt 委托写入 --glow-x/--glow-y 与 data-tilt，
+   柔光用背景径向层跟随光标（--fams-glow 注册后才能过渡），位移只用 transform。 */
+@property --fams-glow {
+  syntax: "<number>";
+  initial-value: 0;
+  inherits: false;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fams-panel,
+  .fams-card,
+  .fams-metric {
+    background-image: radial-gradient(circle 240px at var(--glow-x, 50%) var(--glow-y, 50%),
+      rgba(255, 240, 214, calc(var(--fams-glow) * 0.55)), transparent 62%);
+    transition: transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
+      --fams-glow 260ms ease,
+      border-color var(--fams-motion-feedback) var(--fams-motion-ease);
+  }
+
+  .fams-panel[data-tilt="on"],
+  .fams-card[data-tilt="on"],
+  .fams-metric[data-tilt="on"] {
+    --fams-glow: 1;
+    border-color: var(--fams-glass-border-hover);
+    box-shadow: var(--fams-shadow-glass), inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+    transition: transform 90ms linear, --fams-glow 180ms ease;
+  }
+}

@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSessionStore } from "@/auth/sessionStore";
+import { useGlowTilt } from "@/composables/useGlowTilt";
 import { useLiquidNavHighlight } from "@/composables/useLiquidNavHighlight";
 
 const router = useRouter();
@@ -157,6 +158,10 @@ const layoutMode = computed(() => session.isAuthenticated ? null : "anonymous");
 const navRef = ref<HTMLElement | null>(null);
 useLiquidNavHighlight(navRef, () => [route.path, navGroups.value]);
 
+/** 主内容区整域委托随光倾斜，视图模板不需要为卡片单独挂指令。 */
+const mainRef = ref<HTMLElement | null>(null);
+useGlowTilt(mainRef);
+
 
 const showSessionError = computed(() => session.isAuthenticated && !!session.error && route.name !== "password-change");
 const sessionErrorText = computed(() => session.error?.message ?? "");
@@ -214,7 +219,7 @@ async function handleLogout(): Promise<void> {
           </div>
         </div>
       </nav>
-      <main class="fams-main">
+      <main ref="mainRef" class="fams-main">
         <header v-if="pageHead" class="fams-page-head">
           <div class="fams-page-head-text">
             <p class="fams-breadcrumb">{{ pageHead.group }} <span aria-hidden="true">/</span> {{ pageHead.title }}</p>
