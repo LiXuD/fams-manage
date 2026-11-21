@@ -1,0 +1,115 @@
+/* 模块原位放大（U6）：聚焦模块在原位放大，其余向下缩出并落进底部玻璃缩略条。 */
+.fams-module-host {
+  min-width: 0;
+}
+
+.fams-module-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--fams-space-8);
+}
+
+.fams-module-toggle {
+  min-height: var(--fams-size-32);
+  padding: var(--fams-space-4) var(--fams-space-16);
+  border: 1px solid var(--fams-glass-border);
+  border-radius: 999px;
+  background: var(--fams-glass-inset);
+  color: var(--fams-action-primary);
+  font: 500 12px/20px var(--fams-font-stack);
+  cursor: pointer;
+  transition: background var(--fams-motion-feedback) var(--fams-motion-ease),
+    border-color var(--fams-motion-feedback) var(--fams-motion-ease),
+    transform var(--fams-motion-feedback) var(--fams-motion-ease);
+}
+
+.fams-module-toggle:hover {
+  border-color: var(--fams-glass-border-hover);
+  background: var(--fams-glass-surface);
+  transform: translateY(-1px);
+}
+
+.fams-module-host.is-focused > .fams-panel,
+.fams-module-host.is-focused > .fams-metric-grid {
+  border-color: var(--fams-glass-border-hover);
+  box-shadow: var(--fams-shadow-glass), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+}
+
+/* 模块进出场：从底部缩起/放大，指向缩略条方向。 */
+.fams-module-enter-active {
+  transition: transform 340ms var(--fams-ease-spring), opacity 200ms ease;
+  transform-origin: bottom center;
+}
+
+.fams-module-leave-active {
+  transition: transform 240ms cubic-bezier(0.5, 0, 0.75, 0.4), opacity 160ms ease;
+  transform-origin: bottom center;
+}
+
+.fams-module-enter-from {
+  opacity: 0;
+  transform: translateY(20px) scale(0.88);
+}
+
+.fams-module-leave-to {
+  opacity: 0;
+  transform: translateY(26px) scale(0.82);
+}
+
+/* 底部缩略条 */
+.fams-module-thumbs {
+  position: fixed;
+  z-index: calc(var(--fams-z-dropdown) - 1);
+  bottom: 104px;
+  left: 50%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--fams-space-8);
+  max-width: calc(100vw - 32px);
+  padding: var(--fams-space-8) var(--fams-space-12);
+  border: 1px solid var(--fams-glass-border-hover);
+  border-radius: var(--fams-radius-20);
+  background: var(--fams-glass-surface);
+  -webkit-backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  backdrop-filter: blur(var(--fams-glass-blur)) saturate(160%);
+  box-shadow: var(--fams-shadow-glass);
+  transform: translateX(-50%);
+}
+
+.fams-thumb {
+  min-height: var(--fams-size-32);
+  padding: var(--fams-space-4) var(--fams-space-12);
+  border: 1px solid var(--fams-glass-border);
+  border-radius: 999px;
+  background: var(--fams-glass-inset);
+  color: var(--fams-text-primary);
+  font: 500 13px/20px var(--fams-font-stack);
+  cursor: pointer;
+  transition: transform var(--fams-motion-feedback) var(--fams-ease-spring),
+    background var(--fams-motion-feedback) var(--fams-motion-ease);
+}
+
+.fams-thumb:hover {
+  background: var(--fams-glass-surface);
+  transform: translateY(-2px) scale(1.04);
+}
+
+.fams-thumb--close {
+  border-color: var(--fams-action-primary);
+  color: var(--fams-action-primary);
+}
+
+.fams-thumbs-enter-active {
+  transition: transform 320ms var(--fams-ease-spring), opacity 180ms ease;
+}
+
+.fams-thumbs-leave-active {
+  transition: transform 220ms cubic-bezier(0.5, 0, 0.75, 0.4), opacity 160ms ease;
+}
+
+.fams-thumbs-enter-from,
+.fams-thumbs-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(22px) scale(0.9);
+}
