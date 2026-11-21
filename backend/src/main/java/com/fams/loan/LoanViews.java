@@ -3,6 +3,7 @@ package com.fams.loan;
 import com.fams.business.ReturnLossOpeningPort;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
@@ -271,6 +272,25 @@ public final class LoanViews {
             String id, long version, String status, long assetVersion, long lockVersion, String assetCode) {
     }
 
+    /**
+     * REPAIR followup rows exposed cross-domain by LoanReturnRepairPort.list. Frozen pre-JAVA-08
+     * wire() projection: raw snake_case column keys, every {@code id}/{@code *_id} value
+     * stringified, version kept as a number, and all keys always present (explicit nulls included).
+     */
+    public record RepairFollowupSource(
+            @JsonProperty("id") String id,
+            @JsonProperty("return_id") String returnId,
+            @JsonProperty("asset_id") String assetId,
+            @JsonProperty("loan_id") String loanId,
+            @JsonProperty("followup_status") String followupStatus,
+            @JsonProperty("processor_account_id") String processorAccountId,
+            @JsonProperty("reason") String reason,
+            @JsonProperty("version") long version,
+            @JsonProperty("linked_repair_id") String linkedRepairId,
+            @JsonProperty("last_repair_id") String lastRepairId,
+            @JsonProperty("repair_status") String repairStatus) {
+    }
+
     public record Operator(String id, String name) {
     }
 
@@ -509,6 +529,22 @@ public final class LoanViews {
                 recoveryReturnStatus,
                 missingLossLockVersion,
                 canRetryMissingLoss);
+    }
+
+    /** Verbatim port-side wire() row mapping; {@code *_id} columns stringify when non-null. */
+    static RepairFollowupSource repairFollowupSource(Map<String, Object> row) {
+        return new RepairFollowupSource(
+                id(row, "id"),
+                id(row, "return_id"),
+                id(row, "asset_id"),
+                id(row, "loan_id"),
+                (String) row.get("followup_status"),
+                id(row, "processor_account_id"),
+                (String) row.get("reason"),
+                num(row, "version"),
+                id(row, "linked_repair_id"),
+                id(row, "last_repair_id"),
+                (String) row.get("repair_status"));
     }
 
     /** checks() rows already use camel keys; values stay the raw JDBC numbers. */

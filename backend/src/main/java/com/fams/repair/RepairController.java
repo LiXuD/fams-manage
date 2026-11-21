@@ -1,6 +1,7 @@
 package com.fams.repair;
 
 import com.fams.auth.RequisitionActorContext;
+import com.fams.loan.LoanViews;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -43,7 +44,7 @@ public class RepairController {
     }
 
     @GetMapping("/return-sources")
-    Map<String, Object> returnSources(
+    LoanViews.Page<LoanViews.RepairFollowupSource> returnSources(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return repairs.returnSources(actors.capture(), page, pageSize);

@@ -8,7 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -39,7 +38,11 @@ public class LoanReturnRepairPort {
         this.clock = clock;
     }
 
-    public Map<String, Object> list(int page, int size) {
+    /**
+     * Pending return-sourced repair followups for the repair domain. The page and row shapes are
+     * the frozen pre-refactor wire projection (JAVA-08); see LoanViews.RepairFollowupSource.
+     */
+    public LoanViews.Page<LoanViews.RepairFollowupSource> list(int page, int size) {
         String from = " FROM fams_return_followup WHERE business_type='REPAIR'";
         var rows =
                 db.queryForList(
@@ -49,14 +52,10 @@ public class LoanReturnRepairPort {
                                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                         size,
                         ((long) page - 1) * size);
-        return Map.of(
-                "items",
-                rows.stream().map(this::wire).toList(),
-                "total",
+        return new LoanViews.Page<>(
+                rows.stream().map(LoanViews::repairFollowupSource).toList(),
                 Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
@@ -226,17 +225,5 @@ public class LoanReturnRepairPort {
 
     private Long nullable(Object value) {
         return value == null ? null : ((Number) value).longValue();
-    }
-
-    private Map<String, Object> wire(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        row.forEach(
-                (key, value) ->
-                        result.put(
-                                key,
-                                (key.equals("id") || key.endsWith("_id")) && value != null
-                                        ? value.toString()
-                                        : value));
-        return result;
     }
 }

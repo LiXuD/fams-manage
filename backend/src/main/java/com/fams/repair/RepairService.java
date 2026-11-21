@@ -11,6 +11,7 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.loan.LoanRepairPort;
 import com.fams.loan.LoanReturnRepairPort;
+import com.fams.loan.LoanViews;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
@@ -80,7 +81,7 @@ public class RepairService {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
-    public Map<String, Object> returnSources(Actor actor, int page, int size) {
+    public LoanViews.Page<LoanViews.RepairFollowupSource> returnSources(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         return returned.list(page, size);
