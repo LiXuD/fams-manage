@@ -4,7 +4,6 @@ import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,10 +54,11 @@ class BrandService {
         return new PageBrand(page, pageSize, mapper.count(), items);
     }
 
-    Map<String, Object> listActive(int page, int pageSize) {
-        List<Map<String, Object>> items = mapper.listActive((page - 1) * pageSize, pageSize).stream()
-                .map(this::toActiveReference).toList();
-        return Map.of("page", page, "pageSize", pageSize, "total", mapper.countActive(), "items", items);
+    MasterdataViews.Page<MasterdataViews.BrandActiveReference> listActive(int page, int pageSize) {
+        List<MasterdataViews.BrandActiveReference> items = mapper
+                .listActive((page - 1) * pageSize, pageSize).stream()
+                .map(MasterdataViews::brandActiveReference).toList();
+        return new MasterdataViews.Page<>(items, mapper.countActive(), page, pageSize);
     }
 
     Brand get(long id) {
@@ -224,19 +224,6 @@ class BrandService {
                     Long.toString(row.defaultManufacturerId()), row.defaultManufacturerVersion()));
         }
         result.setDescription(row.description());
-        return result;
-    }
-
-    private Map<String, Object> toActiveReference(BrandRow row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", Long.toString(row.id()));
-        result.put("code", row.code());
-        result.put("name", row.name());
-        result.put("version", row.version());
-        if (row.defaultManufacturerId() != null
-                && "ACTIVE".equals(row.defaultManufacturerStatus())) {
-            result.put("defaultManufacturerId", Long.toString(row.defaultManufacturerId()));
-        }
         return result;
     }
 

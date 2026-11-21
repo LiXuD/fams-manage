@@ -1,0 +1,23 @@
+JAVA-12a/12b shared HTTP wave-2 gate evidence (2026-11-22)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Tree: rsync copy EXCLUDING parallel-session WIP (backend/src/test/java/com/fams/local) and agent
+  in-flight files; snapshot taken before JAVA-14 agents dispatched, equals the wave-2 combined tree.
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+Run 1: FAIL (not a wave regression in behaviour) — SpotBugs 4 findings, all EI_EXPOSE_REP/REP2 on
+  MasterdataViews$LocationActiveReference embedding the mutable generated class CatalogReference
+  (artifact contract-generation-probe = backend module). Fixed by immutable mirror record
+  MasterdataViews.ActiveReference (identical {id, version} wire under global Include.ALWAYS);
+  tests and batch record updated accordingly.
+Run 2 (after fix):
+[Java blocking quality] exit=0
+[Java quality reports] tests=555, Checkstyle=0, SpotBugs=0
+[JAVA01 coverage] LINE: 27438/29460 (93.14%)
+[JAVA01 coverage] BRANCH: 9882/13061 (75.66%)
+JAVA01_VERIFY_PASS
+steps exit=0: 83
+surefire per-phase result summaries present in the captured log: 74 phases, 401 tests,
+  0 failures, 0 errors (this run's log carries phase summaries only, so the aggregate basis
+  differs from earlier waves' per-class counting; verdict basis is JAVA01_VERIFY_PASS + all
+  83 steps exit=0)
+unit criteria (main tree, 20 wire-shape suites incl. Report/Masterdata): 157/157

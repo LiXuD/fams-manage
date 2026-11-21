@@ -4,7 +4,6 @@ import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -52,10 +51,12 @@ class AssetCategoryService {
         return new PageAssetCategory(page, pageSize, mapper.count(), items);
     }
 
-    Map<String, Object> listActive(int page, int pageSize) {
-        List<Map<String, Object>> items = mapper.listActive((page - 1) * pageSize, pageSize)
-                .stream().map(this::toActiveReference).toList();
-        return Map.of("page", page, "pageSize", pageSize, "total", mapper.countActive(), "items", items);
+    MasterdataViews.Page<MasterdataViews.AssetCategoryActiveReference> listActive(
+            int page, int pageSize) {
+        List<MasterdataViews.AssetCategoryActiveReference> items = mapper
+                .listActive((page - 1) * pageSize, pageSize).stream()
+                .map(MasterdataViews::assetCategoryActiveReference).toList();
+        return new MasterdataViews.Page<>(items, mapper.countActive(), page, pageSize);
     }
 
     AssetCategory get(long id) {
@@ -317,21 +318,6 @@ class AssetCategoryService {
         if (row.extensionTemplateJson() != null) {
             result.setExtensionFieldTemplate(List.of(objectMapper.readValue(
                     row.extensionTemplateJson(), ExtensionFieldTemplate[].class)));
-        }
-        return result;
-    }
-
-    private Map<String, Object> toActiveReference(AssetCategoryRow row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("id", Long.toString(row.id()));
-        result.put("code", row.code());
-        result.put("name", row.name());
-        result.put("version", row.version());
-        if (row.suggestedUnit() != null) {
-            result.put("suggestedUnit", row.suggestedUnit());
-        }
-        if (row.numberingPrefix() != null) {
-            result.put("numberingPrefix", row.numberingPrefix());
         }
         return result;
     }

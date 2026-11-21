@@ -1,7 +1,5 @@
 package com.fams.masterdata;
 
-import java.util.Map;
-
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -54,7 +52,7 @@ class LocationController {
     }
 
     @GetMapping("/active-references")
-    ResponseEntity<Map<String, Object>> listActive(
+    ResponseEntity<MasterdataViews.Page<MasterdataViews.LocationActiveReference>> listActive(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int pageSize) {
         actorContext.requireCatalogSelector();
