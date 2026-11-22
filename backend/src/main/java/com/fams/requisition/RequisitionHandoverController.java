@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
+
 
 @RestController
 @Profile("fams-product")
@@ -38,7 +38,7 @@ class RequisitionHandoverController {
     }
 
     @GetMapping("/receipts/pending")
-    Map<String, Object> pending(
+    RequisitionViews.Page<RequisitionViews.PendingReceiptItem> pending(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize,
             @RequestParam(required = false) @Min(1) Long allocationId) {
@@ -46,12 +46,12 @@ class RequisitionHandoverController {
     }
 
     @GetMapping("/{request}/allocations/{allocation}/receipt")
-    Map<String, Object> detail(@PathVariable long request, @PathVariable long allocation) {
+    RequisitionViews.ReceiptDetail detail(@PathVariable long request, @PathVariable long allocation) {
         return service.receiptDetail(actors.capture(), request, allocation);
     }
 
     @PostMapping("/{request}/allocations/{allocation}/grant")
-    ResponseEntity<Map<String, Object>> grant(
+    ResponseEntity<RequisitionViews.Grant> grant(
             @PathVariable long request, @PathVariable long allocation) {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
@@ -59,7 +59,7 @@ class RequisitionHandoverController {
     }
 
     @PostMapping("/{request}/allocations/{allocation}/deliver")
-    Map<String, Object> deliver(
+    RequisitionViews.Detail deliver(
             @PathVariable long request,
             @PathVariable long allocation,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -69,7 +69,7 @@ class RequisitionHandoverController {
     }
 
     @PostMapping("/{request}/allocations/{allocation}/cancel")
-    Map<String, Object> cancel(
+    RequisitionViews.Detail cancel(
             @PathVariable long request,
             @PathVariable long allocation,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -80,7 +80,7 @@ class RequisitionHandoverController {
     }
 
     @PostMapping("/{request}/allocations/{allocation}/recovery")
-    Map<String, Object> recovery(
+    RequisitionViews.Detail recovery(
             @PathVariable long request,
             @PathVariable long allocation,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -91,7 +91,7 @@ class RequisitionHandoverController {
     }
 
     @PostMapping("/{request}/allocations/{allocation}/recover")
-    Map<String, Object> recover(
+    RequisitionViews.Detail recover(
             @PathVariable long request,
             @PathVariable long allocation,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -102,7 +102,7 @@ class RequisitionHandoverController {
     }
 
     @PostMapping("/{request}/allocations/{allocation}/{action:receive|refuse}")
-    Map<String, Object> receipt(
+    RequisitionViews.ReceiptResult receipt(
             @PathVariable long request,
             @PathVariable long allocation,
             @PathVariable String action,

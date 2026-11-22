@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
+
 
 @RestController
 @Profile("fams-product")
@@ -36,7 +36,7 @@ class RequisitionController {
     }
 
     @GetMapping("/catalog/{kind}")
-    Map<String, Object> catalog(
+    RequisitionViews.CatalogPage catalog(
             @PathVariable String kind,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "200") @Min(1) @Max(200) int pageSize) {
@@ -44,7 +44,7 @@ class RequisitionController {
     }
 
     @GetMapping
-    Map<String, Object> list(
+    RequisitionViews.Page<RequisitionViews.Summary> list(
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int pageSize,
             @RequestParam(required = false) String status) {
@@ -52,19 +52,19 @@ class RequisitionController {
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable long id) {
-        return service.get(actors.capture(), id);
+    RequisitionViews.Detail get(@PathVariable long id) {
+        return service.getDetail(actors.capture(), id);
     }
 
     @PostMapping
-    ResponseEntity<Map<String, Object>> create(
+    ResponseEntity<RequisitionViews.Detail> create(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @Valid @RequestBody RequisitionInput.Draft input) {
         return ResponseEntity.status(201).body(service.create(actors.capture(), key, input));
     }
 
     @PatchMapping("/{id}")
-    Map<String, Object> revise(
+    RequisitionViews.Detail revise(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -73,7 +73,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/submit")
-    Map<String, Object> submit(
+    RequisitionViews.Detail submit(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
@@ -81,7 +81,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/changes")
-    Map<String, Object> change(
+    RequisitionViews.Detail change(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -90,7 +90,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/cancel")
-    Map<String, Object> cancel(
+    RequisitionViews.Detail cancel(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -99,7 +99,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decide(
+    RequisitionViews.Detail decide(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -108,7 +108,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/claim")
-    Map<String, Object> claim(
+    RequisitionViews.Detail claim(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
@@ -116,7 +116,7 @@ class RequisitionController {
     }
 
     @GetMapping("/{id}/demands/{demandId}/inventory")
-    Map<String, Object> inventory(
+    RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(
             @PathVariable long id,
             @PathVariable long demandId,
             @RequestParam(defaultValue = "1") @Min(1) int page,
@@ -125,7 +125,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/demands/{demandId}/allocations")
-    Map<String, Object> allocate(
+    RequisitionViews.Detail allocate(
             @PathVariable long id,
             @PathVariable long demandId,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -135,7 +135,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/demands/{demandId}/unfulfillable")
-    Map<String, Object> unfulfillable(
+    RequisitionViews.Detail unfulfillable(
             @PathVariable long id,
             @PathVariable long demandId,
             @RequestHeader("If-Match-Version") @Min(0) long version,
@@ -145,7 +145,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/dispute")
-    Map<String, Object> dispute(
+    RequisitionViews.Detail dispute(
             @PathVariable long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -154,7 +154,7 @@ class RequisitionController {
     }
 
     @PostMapping("/{id}/demands/{demandId}/followup")
-    Map<String, Object> followup(
+    RequisitionViews.Detail followup(
             @PathVariable long id,
             @PathVariable long demandId,
             @RequestHeader("If-Match-Version") @Min(0) long version,

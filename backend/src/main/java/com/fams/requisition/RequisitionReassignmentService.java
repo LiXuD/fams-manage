@@ -7,7 +7,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,7 +39,7 @@ class RequisitionReassignmentService {
         this.clock = authClock;
     }
 
-    Map<String, Object> inspect(Actor actor, long id) {
+    RequisitionViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
         var owner = owner(id);
@@ -50,18 +49,22 @@ class RequisitionReassignmentService {
                 + "WHERE a.status='ENABLED' AND a.initial_password_required=FALSE "
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
-        var snapshot = new LinkedHashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
-                "ownershipVersion", owner.get("ownership_version"),
-                "processorAccountId", owner.get("processor_account_id").toString(),
-                "items", checks(id), "operators", operators.stream().map(o -> Map.of(
-                        "id", o.get("id").toString(), "name", o.get("name"))).toList()));
+        // Evaluation order frozen: checks() takes the demand/allocation/asset locks before the
+        // unavailability audit read, exactly as the pre-JAVA-14c Map.of argument order did.
+        var items = checks(id);
         var declared = unavailabilityReason(id, number(owner, "ownership_version"),
                 number(owner, "processor_account_id"));
-        if (declared != null) { snapshot.put("unavailableReason", declared); }
-        return snapshot;
+        return new RequisitionViews.ReassignmentSnapshot(
+                Long.toString(id),
+                number(row, "version"),
+                number(owner, "ownership_version"),
+                owner.get("processor_account_id").toString(),
+                items.stream().map(RequisitionViews::reassignmentItem).toList(),
+                operators.stream().map(RequisitionViews::operator).toList(),
+                declared);
     }
 
-    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+    RequisitionViews.Detail declareUnavailable(Actor actor, long id, long version, String key,
             RequisitionUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw RequisitionFailure.forbidden(); }
@@ -84,7 +87,7 @@ class RequisitionReassignmentService {
                 throw RequisitionFailure.conflict("REQUISITION_IDEMPOTENCY_CONFLICT");
             }
             return json.readValue(receipt.get("response_body_json").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    RequisitionViews.Detail.class);
         }
         if (number(row, "version") != version) {
             throw RequisitionFailure.conflict("REQUISITION_VERSION_CONFLICT");
@@ -106,7 +109,7 @@ class RequisitionReassignmentService {
                 VALUES ('ASSET_ADMIN','REQUISITION',?,'REASSIGNMENT_REQUIRED','OPEN',?)
                 ON DUPLICATE KEY UPDATE id=fams_todo.id
                 """, id, now);
-        var result = requisitions.get(actor, id);
+        var result = requisitions.getDetail(actor, id);
         db.update("""
                 INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,
                     result_status,http_status,response_body_json,resource_type,resource_id,resource_version,
@@ -126,8 +129,7 @@ class RequisitionReassignmentService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> reassign(Actor actor, long id, long version, String key,
+    RequisitionViews.Detail reassign(Actor actor, long id, long version, String key,
             RequisitionReassignmentController.Reassignment input) {
         admin(actor);
         String digest = digest(id, version, input);
@@ -137,7 +139,8 @@ class RequisitionReassignmentService {
         if (!prior.isEmpty()) {
             if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
                 throw RequisitionFailure.conflict("REQUISITION_IDEMPOTENCY_CONFLICT"); }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(),
+                    RequisitionViews.Detail.class);
         }
         // Account locks precede receipt/ownership/item/asset locks, matching execution.
         var target = db.queryForList("SELECT id,employee_id,status,initial_password_required "
@@ -195,7 +198,7 @@ class RequisitionReassignmentService {
                 + "VALUES (?,?,'ASSET_ADMIN','REQUISITION_CONTROLLED_REASSIGNMENT','REQUISITION',?,?,?,?,?)",
                 actor.requestId().toString(), actor.id(), id, version, version + 1, now,
                 json.writeValueAsString(details));
-        var result = requisitions.get(actor, id);
+        var result = requisitions.getDetail(actor, id);
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,"
                 + "payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,"
                 + "resource_version,created_at,completed_at,expires_at) "

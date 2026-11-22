@@ -1,0 +1,19 @@
+JAVA-14a/14b1/14b2/14b3/14c shared HTTP wave-3 gate evidence (2026-11-22)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Tree: rsync snapshot of the wave-3 combined main tree (after 14c delivery, before closeout),
+  EXCLUDING parallel-session WIP backend/src/test/java/com/fams/local, .worktrees, target,
+  node_modules. Snapshot contents verified: three new Views files, five new wire-shape suites,
+  AuthWireShapeTest present.
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+[Java blocking quality] exit=0
+[Java quality reports] tests=555, Checkstyle=0, SpotBugs=0
+[JAVA01 coverage] LINE: 27675/29688 (93.22%)
+[JAVA01 coverage] BRANCH: 9896/13089 (75.61%)
+JAVA01_VERIFY_PASS
+steps exit=0: 83
+surefire per-phase result summaries in captured log: 74 phases, 401 tests, 0 failures, 0 errors
+  (phase-summary aggregate, same basis as the wave-2 run; the [Java quality reports] tests=555
+  figure is the gate's own report-path count, unchanged from wave 2 — to close that ambiguity the
+  five wave-3 suites were additionally executed inside the exact gate copy: 45/45 green)
+combined-tree unit criteria (main tree, 25 wire-shape suites incl. wave-3 additions): 202/202

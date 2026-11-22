@@ -67,7 +67,8 @@ class RequisitionHandoverService {
         this.loans = loans;
     }
 
-    Map<String, Object> pending(Actor actor, int page, int size, Long allocationId) {
+    RequisitionViews.Page<RequisitionViews.PendingReceiptItem> pending(
+            Actor actor, int page, int size, Long allocationId) {
         Current current = actors.revalidateLocked(actor);
         String from =
                 " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
@@ -91,18 +92,14 @@ class RequisitionHandoverService {
                         allocationId,
                         size,
                         ((long) page - 1) * size);
-        return Map.of(
-                "items",
-                rows.stream().map(this::clean).toList(),
-                "total",
+        return new RequisitionViews.Page<>(
+                rows.stream().map(row -> RequisitionViews.pendingReceiptItem(json, row)).toList(),
                 total,
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    Map<String, Object> grant(Actor actor, long request, long allocation) {
+    RequisitionViews.Grant grant(Actor actor, long request, long allocation) {
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
         var item = item(request, allocation);
@@ -136,18 +133,14 @@ class RequisitionHandoverService {
                 n(item, "version"),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(300)));
-        return Map.of(
-                "grant",
+        return new RequisitionViews.Grant(
                 token,
-                "expiresAt",
                 clock.instant().plusSeconds(300).toString(),
-                "requestVersion",
                 n(header, "request_version"),
-                "allocationVersion",
                 n(item, "version"));
     }
 
-    Map<String, Object> deliver(
+    RequisitionViews.Detail deliver(
             Actor actor,
             long request,
             long allocation,
@@ -161,7 +154,17 @@ class RequisitionHandoverService {
             throw RequisitionFailure.forbidden();
         }
         var replay =
-                replay(actor, current, "deliver", key, request, allocation, version, input, false);
+                replay(
+                        actor,
+                        current,
+                        "deliver",
+                        key,
+                        request,
+                        allocation,
+                        version,
+                        input,
+                        false,
+                        RequisitionViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -223,10 +226,10 @@ class RequisitionHandoverService {
                 allocation,
                 version,
                 input,
-                requisitions.get(actor, request));
+                requisitions.getDetail(actor, request));
     }
 
-    Map<String, Object> warehouseAction(
+    RequisitionViews.Detail warehouseAction(
             Actor actor,
             long request,
             long allocation,
@@ -241,7 +244,17 @@ class RequisitionHandoverService {
             throw RequisitionFailure.forbidden();
         }
         var replay =
-                replay(actor, current, action, key, request, allocation, version, input, false);
+                replay(
+                        actor,
+                        current,
+                        action,
+                        key,
+                        request,
+                        allocation,
+                        version,
+                        input,
+                        false,
+                        RequisitionViews.Detail.class);
         if (replay != null) {
             return replay;
         }
@@ -307,10 +320,10 @@ class RequisitionHandoverService {
                 allocation,
                 version,
                 input,
-                requisitions.get(actor, request));
+                requisitions.getDetail(actor, request));
     }
 
-    Map<String, Object> receipt(
+    RequisitionViews.ReceiptResult receipt(
             Actor actor,
             long request,
             long allocation,
@@ -324,7 +337,18 @@ class RequisitionHandoverService {
         var demand = demand(item);
         receiver(current, demand);
         String action = refuse ? "refuse" : "receive";
-        var replay = replay(actor, current, action, key, request, allocation, version, input, true);
+        var replay =
+                replay(
+                        actor,
+                        current,
+                        action,
+                        key,
+                        request,
+                        allocation,
+                        version,
+                        input,
+                        true,
+                        RequisitionViews.ReceiptResult.class);
         if (replay != null) {
             return replay;
         }
@@ -384,12 +408,19 @@ class RequisitionHandoverService {
                 refuse ? input.reason() : "接收人核对实物与资产编码，确认收到",
                 Role.EMPLOYEE);
         progress(request);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("allocationId", Long.toString(allocation));
-        result.put("requestId", Long.toString(request));
-        result.put("result", refuse ? "REFUSED" : "RECEIVED");
-        result.put("version", n(header, "version") + 1);
-        return finish(current, action, key, request, allocation, version, input, result);
+        return finish(
+                current,
+                action,
+                key,
+                request,
+                allocation,
+                version,
+                input,
+                new RequisitionViews.ReceiptResult(
+                        Long.toString(allocation),
+                        Long.toString(request),
+                        refuse ? "REFUSED" : "RECEIVED",
+                        n(header, "version") + 1));
     }
 
     private void completeReceipt(Current current, Map<String, Object> header,
@@ -498,13 +529,12 @@ class RequisitionHandoverService {
                 "RECEIVED", Long.toString(target(demand)), observed);
     }
 
-    Map<String, Object> receiptDetail(Actor actor, long request, long allocation) {
+    RequisitionViews.ReceiptDetail receiptDetail(Actor actor, long request, long allocation) {
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
         var item = item(request, allocation);
         var demand = demand(item);
         receiver(current, demand);
-        Map<String, Object> result = new LinkedHashMap<>();
         var handover =
                 one(
                         "SELECT delivered_at,receipt_deadline_at,destination_text"
@@ -514,18 +544,19 @@ class RequisitionHandoverService {
                 || !"DELIVERED_WAITING_RECEIPT".equals(item.get("allocation_status"))) {
             throw RequisitionFailure.unavailable();
         }
-        result.put("requestId", Long.toString(request));
-        result.put("requestNo", header.get("request_no"));
-        result.put("requestType", header.get("request_type"));
-        result.put("expectedReturnDate", header.get("expected_return_date") == null ? null
-                : header.get("expected_return_date").toString());
-        result.put("requestVersion", n(header, "version"));
-        result.put("allocationId", Long.toString(allocation));
-        result.put("allocationStatus", item.get("allocation_status"));
-        result.put("allocationVersion", n(item, "version"));
-        result.put("asset", json.readTree(item.get("asset_snapshot_json").toString()));
-        result.put("handover", clean(handover));
-        return result;
+        return new RequisitionViews.ReceiptDetail(
+                Long.toString(request),
+                (String) header.get("request_no"),
+                (String) header.get("request_type"),
+                header.get("expected_return_date") == null
+                        ? null
+                        : header.get("expected_return_date").toString(),
+                n(header, "version"),
+                Long.toString(allocation),
+                (String) item.get("allocation_status"),
+                n(item, "version"),
+                json.readTree(item.get("asset_snapshot_json").toString()),
+                RequisitionViews.receiptHandover(handover));
     }
 
     TargetChangeViews.RequisitionContext targetChangeContext(Actor actor, long request, long allocation) {
@@ -962,7 +993,7 @@ class RequisitionHandoverService {
         return result;
     }
 
-    private Map<String, Object> replay(
+    private <T extends RequisitionViews.Reply> T replay(
             Actor actor,
             Current current,
             String action,
@@ -971,7 +1002,8 @@ class RequisitionHandoverService {
             long allocation,
             long version,
             Object input,
-            boolean receiver) {
+            boolean receiver,
+            Class<T> type) {
         var row =
                 one(
                         "SELECT * FROM fams_idempotency_record WHERE actor_account_id=? AND"
@@ -999,14 +1031,12 @@ class RequisitionHandoverService {
         // Current identity was checked; receiver relation is checked before replay, warehouse
         // history remains readable.
         if (!receiver) {
-            requisitions.get(actor, request);
+            requisitions.getDetail(actor, request);
         }
-        return json.readValue(
-                row.get("response_body_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(row.get("response_body_json").toString(), type);
     }
 
-    private Map<String, Object> finish(
+    private <T extends RequisitionViews.Reply> T finish(
             Current current,
             String action,
             String key,
@@ -1014,7 +1044,7 @@ class RequisitionHandoverService {
             long allocation,
             long version,
             Object input,
-            Map<String, Object> result) {
+            T result) {
         db.update(
                 "INSERT INTO fams_idempotency_record"
                     + " (actor_account_id,operation_id,idempotency_key,payload_sha256,"
@@ -1026,7 +1056,7 @@ class RequisitionHandoverService {
                 fingerprint(action, request, allocation, version, input),
                 json.writeValueAsString(result),
                 request,
-                result.get("version"),
+                result.version(),
                 now(),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(86400)));
@@ -1047,38 +1077,6 @@ class RequisitionHandoverService {
         } catch (java.security.NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
-    }
-
-    private Map<String, Object> clean(Map<String, Object> row) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        row.forEach(
-                (key, value) -> {
-                    StringBuilder name = new StringBuilder();
-                    boolean upper = false;
-                    for (char c : key.toCharArray()) {
-                        if (c == '_') {
-                            upper = true;
-                        } else {
-                            name.append(upper ? Character.toUpperCase(c) : c);
-                            upper = false;
-                        }
-                    }
-                    result.put(
-                            name.toString(),
-                            value == null
-                                    ? null
-                                    : key.endsWith("_json")
-                                            ? json.readTree(value.toString())
-                                            : key.equals("id") || key.endsWith("_id")
-                                                    ? value.toString()
-                                                    : value instanceof java.time.LocalDateTime time
-                                                            ? time.toInstant(
-                                                                            java.time.ZoneOffset
-                                                                                    .UTC)
-                                                                    .toString()
-                                                            : value);
-                });
-        return result;
     }
 
     private Map<String, Object> one(String sql, Object... args) {

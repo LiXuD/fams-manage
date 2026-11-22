@@ -1,7 +1,5 @@
 package com.fams.requisition;
 
-import java.util.Map;
-
 import com.fams.auth.RequisitionActorContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -32,7 +30,7 @@ class RequisitionUnavailabilityController {
 
     @PostMapping({"/api/v1/requisitions/{receiptId}/reassignment/unavailable",
             "/api/v1/mini/requisitions/{receiptId}/reassignment/unavailable"})
-    Map<String, Object> declareUnavailable(@PathVariable @Min(1) long receiptId,
+    RequisitionViews.Detail declareUnavailable(@PathVariable @Min(1) long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @Valid @RequestBody Input input) {

@@ -1,7 +1,6 @@
 package com.fams.requisition;
 
 import java.util.List;
-import java.util.Map;
 
 import com.fams.auth.RequisitionActorContext;
 import jakarta.validation.Valid;
@@ -41,12 +40,12 @@ class RequisitionReassignmentController {
     }
 
     @GetMapping
-    Map<String, Object> inspect(@PathVariable long receiptId) {
+    RequisitionViews.ReassignmentSnapshot inspect(@PathVariable long receiptId) {
         return service.inspect(actors.capture(), receiptId);
     }
 
     @PostMapping
-    Map<String, Object> reassign(@PathVariable long receiptId,
+    RequisitionViews.Detail reassign(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @Valid @RequestBody Reassignment input) {

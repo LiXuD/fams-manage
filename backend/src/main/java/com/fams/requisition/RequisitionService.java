@@ -64,7 +64,7 @@ class RequisitionService {
         this.references = references;
     }
 
-    Map<String, Object> catalog(Actor actor, String kind, int page, int size) {
+    RequisitionViews.CatalogPage catalog(Actor actor, String kind, int page, int size) {
         Current current = actors.revalidateLocked(actor);
         if (!List.of("category", "organization", "employee", "location").contains(kind)) {
             throw RequisitionFailure.invalid("REQUISITION_CATALOG_INVALID");
@@ -75,22 +75,16 @@ class RequisitionService {
                         ? null
                         : current.employeeId();
         var items = references.choices(kind, employee, org, page, size);
-        return Map.of(
-                "items",
+        return new RequisitionViews.CatalogPage(
                 items,
-                "page",
                 page,
-                "pageSize",
                 size,
-                "employeeId",
                 Long.toString(current.employeeId()),
-                "organizationId",
                 Long.toString(current.organizationId()),
-                "canApplyShared",
                 current.globalApplicant() || current.has(Role.DEPARTMENT_ASSET_MANAGER));
     }
 
-    Map<String, Object> list(Actor actor, int page, int size, String status) {
+    RequisitionViews.Page<RequisitionViews.Summary> list(Actor actor, int page, int size, String status) {
         Current current = actors.revalidateLocked(actor);
         if (status != null && !STATUSES.contains(status)) {
             throw RequisitionFailure.invalid("REQUISITION_FILTER_INVALID");
@@ -114,24 +108,28 @@ class RequisitionService {
                                 + from
                                 + " ORDER BY updated_at DESC,r.id DESC LIMIT ? OFFSET ?",
                         args.toArray());
-        return Map.of(
-                "items",
-                items.stream().map(this::clean).toList(),
-                "total",
+        return new RequisitionViews.Page<>(
+                items.stream().map(row -> RequisitionViews.summary(json, row)).toList(),
                 total,
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    Map<String, Object> get(Actor actor, long id) {
+    /**
+     * Typed detail for HTTP exits and idempotency receipts (JAVA-14b1/14c).
+     *
+     * <p>Single assembly source for every detail-shaped exit, including the reassignment
+     * declareUnavailable/reassign receipts, so responses and stored receipts stay tree-identical
+     * by construction. The former {@code Map}-facade {@code get} compatibility wrapper was
+     * removed in JAVA-14c once RequisitionReassignmentService moved to this typed exit.
+     */
+    RequisitionViews.Detail getDetail(Actor actor, long id) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
-        return detail(id);
+        return detailView(id);
     }
 
-    Map<String, Object> create(Actor actor, String key, Draft input) {
+    RequisitionViews.Detail create(Actor actor, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
         var replay = replay(current, "create", key, hash);
@@ -143,7 +141,7 @@ class RequisitionService {
         return finish(current, "create", key, hash, id, 201);
     }
 
-    Map<String, Object> revise(Actor actor, long id, long version, String key, Draft input) {
+    RequisitionViews.Detail revise(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("revise:" + id + ":" + version, input);
@@ -176,7 +174,7 @@ class RequisitionService {
         return finish(current, "revise", key, hash, id, 200);
     }
 
-    Map<String, Object> submit(Actor actor, long id, long version, String key) {
+    RequisitionViews.Detail submit(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("submit:" + id + ":" + version, Map.of());
@@ -201,7 +199,7 @@ class RequisitionService {
         return finish(current, "submit", key, hash, id, 200);
     }
 
-    Map<String, Object> decide(
+    RequisitionViews.Detail decide(
             Actor actor, long id, long version, String key, RequisitionInput.Decision input) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -264,7 +262,7 @@ class RequisitionService {
         return finish(current, "decide", key, hash, id, 200);
     }
 
-    Map<String, Object> proposeChange(Actor actor, long id, long version, String key, Draft input) {
+    RequisitionViews.Detail proposeChange(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("change:" + id + ":" + version, input);
@@ -349,7 +347,7 @@ class RequisitionService {
         }
     }
 
-    private Map<String, Object> decideChange(
+    private RequisitionViews.Detail decideChange(
             Actor actor,
             Current current,
             Map<String, Object> header,
@@ -458,7 +456,7 @@ class RequisitionService {
         return finish(current, "decide", key, hash, id, 200);
     }
 
-    Map<String, Object> cancel(
+    RequisitionViews.Detail cancel(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -498,7 +496,7 @@ class RequisitionService {
         return finish(current, "cancel", key, hash, id, 200);
     }
 
-    Map<String, Object> claim(Actor actor, long id, long version, String key) {
+    RequisitionViews.Detail claim(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         requireVisible(current, id);
@@ -516,7 +514,7 @@ class RequisitionService {
         return finish(current, "claim", key, hash, id, 200);
     }
 
-    Map<String, Object> inventory(Actor actor, long id, long demandId, int page, int size) {
+    RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId, int page, int size) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         requireVisible(current, id);
@@ -534,18 +532,14 @@ class RequisitionService {
                         number(demand, "category_id"),
                         size,
                         (page - 1) * size);
-        return Map.of(
-                "items",
-                cleanRows(values),
-                "total",
+        return new RequisitionViews.Page<>(
+                values.stream().map(RequisitionViews::inventoryAsset).toList(),
                 available(number(demand, "category_id")),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    Map<String, Object> allocate(
+    RequisitionViews.Detail allocate(
             Actor actor, long id, long demandId, long version, String key, Allocation input) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -679,7 +673,7 @@ class RequisitionService {
         return finish(current, "allocate", key, hash, id, 200);
     }
 
-    Map<String, Object> unfulfillable(
+    RequisitionViews.Detail unfulfillable(
             Actor actor,
             long id,
             long demandId,
@@ -754,7 +748,7 @@ class RequisitionService {
         return finish(current, "unfulfillable", key, hash, id, 200);
     }
 
-    Map<String, Object> dispute(
+    RequisitionViews.Detail dispute(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -781,7 +775,7 @@ class RequisitionService {
         return finish(current, "dispute", key, hash, id, 200);
     }
 
-    Map<String, Object> followup(Actor actor, long id, long demandId, long version, String key) {
+    RequisitionViews.Detail followup(Actor actor, long id, long demandId, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("followup:" + id + ":" + demandId + ":" + version, Map.of());
@@ -1288,73 +1282,46 @@ class RequisitionService {
         }
     }
 
-    private Map<String, Object> detail(long id) {
-        var value =
-                new LinkedHashMap<>(
-                        clean(
-                                Objects.requireNonNull(
-                                        one("SELECT * FROM fams_requisition WHERE id=?", id))));
-        value.put("demands", cleanRows(demands(id)));
-        value.put(
-                "handovers",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT h.* FROM fams_requisition_handover h JOIN"
-                                    + " fams_requisition_allocation a ON a.id=h.allocation_id WHERE"
-                                    + " a.request_id=? ORDER BY a.id",
-                                id)));
-        value.put(
-                "handoverEvents",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT e.* FROM fams_requisition_handover_event e JOIN"
-                                    + " fams_requisition_allocation a ON a.id=e.allocation_id WHERE"
-                                    + " a.request_id=? ORDER BY e.id",
-                                id)));
-
-        value.put(
-                "decisions",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT * FROM fams_requisition_decision WHERE request_id=? ORDER"
-                                        + " BY id",
-                                id)));
-        value.put(
-                "allocations",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT a.*,l.lock_version FROM fams_requisition_allocation a JOIN"
-                                    + " fams_asset_business_lock l ON l.id=a.business_lock_id WHERE"
-                                    + " a.request_id=? ORDER BY a.id",
-                                id)));
-        value.put(
-                "unfulfillable",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT * FROM fams_requisition_unfulfillable WHERE request_id=?"
-                                        + " ORDER BY id",
-                                id)));
-        value.put(
-                "ownership",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT * FROM fams_requisition_ownership WHERE request_id=? ORDER"
-                                        + " BY id",
-                                id)));
-        value.put(
-                "changes",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT * FROM fams_requisition_change_proposal WHERE request_id=?"
-                                        + " ORDER BY id",
-                                id)));
-        value.put(
-                "followups",
-                cleanRows(
-                        db.queryForList(
-                                "SELECT * FROM fams_requisition_followup WHERE source_request_id=?",
-                                id)));
-        return value;
+    private RequisitionViews.Detail detailView(long id) {
+        return RequisitionViews.detail(
+                json,
+                Objects.requireNonNull(
+                        one("SELECT * FROM fams_requisition WHERE id=?", id)),
+                demands(id),
+                db.queryForList(
+                        "SELECT h.* FROM fams_requisition_handover h JOIN"
+                            + " fams_requisition_allocation a ON a.id=h.allocation_id WHERE"
+                            + " a.request_id=? ORDER BY a.id",
+                        id),
+                db.queryForList(
+                        "SELECT e.* FROM fams_requisition_handover_event e JOIN"
+                            + " fams_requisition_allocation a ON a.id=e.allocation_id WHERE"
+                            + " a.request_id=? ORDER BY e.id",
+                        id),
+                db.queryForList(
+                        "SELECT * FROM fams_requisition_decision WHERE request_id=? ORDER"
+                                + " BY id",
+                        id),
+                db.queryForList(
+                        "SELECT a.*,l.lock_version FROM fams_requisition_allocation a JOIN"
+                            + " fams_asset_business_lock l ON l.id=a.business_lock_id WHERE"
+                            + " a.request_id=? ORDER BY a.id",
+                        id),
+                db.queryForList(
+                        "SELECT * FROM fams_requisition_unfulfillable WHERE request_id=?"
+                                + " ORDER BY id",
+                        id),
+                db.queryForList(
+                        "SELECT * FROM fams_requisition_ownership WHERE request_id=? ORDER"
+                                + " BY id",
+                        id),
+                db.queryForList(
+                        "SELECT * FROM fams_requisition_change_proposal WHERE request_id=?"
+                                + " ORDER BY id",
+                        id),
+                db.queryForList(
+                        "SELECT * FROM fams_requisition_followup WHERE source_request_id=?",
+                        id));
     }
 
     private String inventoryPredicate() {
@@ -1387,7 +1354,8 @@ class RequisitionService {
         return clean(snapshot);
     }
 
-    private Map<String, Object> replay(Current current, String operation, String key, String hash) {
+    private RequisitionViews.Detail replay(
+            Current current, String operation, String key, String hash) {
         var row =
                 one(
                         "SELECT * FROM fams_idempotency_record WHERE actor_account_id=? AND"
@@ -1413,13 +1381,12 @@ class RequisitionService {
         }
         requireVisible(current, number(row, "resource_id"));
         return json.readValue(
-                text(row, "response_body_json"),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                text(row, "response_body_json"), RequisitionViews.Detail.class);
     }
 
-    private Map<String, Object> finish(
+    private RequisitionViews.Detail finish(
             Current current, String operation, String key, String hash, long id, int status) {
-        var result = detail(id);
+        var result = detailView(id);
         db.update(
                 "INSERT INTO fams_idempotency_record"
                     + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
@@ -1431,7 +1398,7 @@ class RequisitionService {
                 status,
                 encode(result),
                 id,
-                ((Number) result.get("version")).longValue(),
+                result.version(),
                 now(),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(86400)));
