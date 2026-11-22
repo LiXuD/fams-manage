@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -36,12 +35,12 @@ public class RepairFactoryController {
     }
 
     @GetMapping
-    Map<String, Object> get(@PathVariable @Positive long id) {
+    RepairViews.FactoryDetail get(@PathVariable @Positive long id) {
         return factory.get(actors.capture(), id);
     }
 
     @GetMapping("/rounds")
-    Map<String, Object> rounds(
+    RepairViews.Page<RepairViews.FactoryRoundView> rounds(
             @PathVariable @Positive long id,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
@@ -49,12 +48,12 @@ public class RepairFactoryController {
     }
 
     @GetMapping("/rounds/{round}")
-    Map<String, Object> round(@PathVariable @Positive long id, @PathVariable @Positive long round) {
+    RepairViews.FactoryRoundView round(@PathVariable @Positive long id, @PathVariable @Positive long round) {
         return factory.round(actors.capture(), id, round);
     }
 
     @GetMapping("/history")
-    Map<String, Object> history(
+    RepairViews.Page<RepairViews.FactoryEventRow> history(
             @PathVariable @Positive long id,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
@@ -62,7 +61,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/scopes")
-    Map<String, Object> requestScope(
+    RepairViews.FactoryReply requestScope(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -72,7 +71,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/scope-decision")
-    Map<String, Object> decideScope(
+    RepairViews.FactoryReply decideScope(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -82,7 +81,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/scope-withdrawal")
-    Map<String, Object> withdrawScope(
+    RepairViews.FactoryReply withdrawScope(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -92,7 +91,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds")
-    Map<String, Object> createRound(
+    RepairViews.FactoryReply createRound(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -102,7 +101,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/cancel")
-    Map<String, Object> cancelRound(
+    RepairViews.FactoryReply cancelRound(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -113,7 +112,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/dispatch")
-    Map<String, Object> dispatch(
+    RepairViews.FactoryReply dispatch(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -124,7 +123,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/receive-original")
-    Map<String, Object> receive(
+    RepairViews.FactoryReply receive(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -135,7 +134,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/quotes")
-    Map<String, Object> quote(
+    RepairViews.FactoryReply quote(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -146,7 +145,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/cost")
-    Map<String, Object> cost(
+    RepairViews.FactoryReply cost(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -157,7 +156,7 @@ public class RepairFactoryController {
     }
 
     @GetMapping("/rounds/{round}/parts")
-    Map<String, Object> parts(
+    RepairViews.FactoryPartsPage parts(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
@@ -166,7 +165,7 @@ public class RepairFactoryController {
     }
 
     @PostMapping("/rounds/{round}/parts")
-    Map<String, Object> recordParts(
+    RepairViews.FactoryReply recordParts(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -177,12 +176,12 @@ public class RepairFactoryController {
     }
 
     @GetMapping("/rounds/{round}/replacements")
-    Map<String, Object> replacements(@PathVariable @Positive long id, @PathVariable @Positive long round) {
+    RepairViews.FactoryReplacementsPage replacements(@PathVariable @Positive long id, @PathVariable @Positive long round) {
         return factory.replacements(actors.capture(), id, round);
     }
 
     @PostMapping("/rounds/{round}/replacements")
-    Map<String, Object> recordReplacement(@PathVariable @Positive long id,
+    RepairViews.FactoryReply recordReplacement(@PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -191,7 +190,7 @@ public class RepairFactoryController {
         return retry(() -> factory.recordReplacement(actor, id, round, version, key, input));
     }
 
-    private Map<String, Object> retry(Supplier<Map<String, Object>> command) {
+    private <T> T retry(Supplier<T> command) {
         try {
             return command.get();
         } catch (org.springframework.dao.CannotAcquireLockException conflict) {

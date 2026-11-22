@@ -39,7 +39,13 @@ public class RepairCollaborationPhotoService {
         this.evidence = evidence;
     }
 
-    public Map<String, Object> upload(
+    /** Internal write-callback envelope: a receipt or the conflict to rethrow after cleanup. */
+    private record UploadOutcome(
+            RepairViews.CollaborationAttachmentReceipt receipt,
+            String conflictCode,
+            Map<String, String> conflictFields) {}
+
+    public RepairViews.CollaborationAttachmentReceipt upload(
             Actor actor,
             long invitation,
             long version,
@@ -50,7 +56,7 @@ public class RepairCollaborationPhotoService {
             throws IOException {
         collaboration.uploader(actor, invitation);
         var received = new AtomicReference<UUID>();
-        var result =
+        var outcome =
                 writer.write(
                         filename,
                         mime,
@@ -58,25 +64,31 @@ public class RepairCollaborationPhotoService {
                         attachment -> {
                             received.set(attachment.file().id());
                             try {
-                                return collaboration.registerAttachment(
-                                        actor, invitation, version, key, filename, attachment);
+                                return new UploadOutcome(
+                                        collaboration.registerAttachment(
+                                                actor,
+                                                invitation,
+                                                version,
+                                                key,
+                                                filename,
+                                                attachment),
+                                        null,
+                                        null);
                             } catch (RepairConflict conflict) {
-                                return Map.<String, Object>of(
-                                        "conflictCode",
-                                        conflict.getMessage(),
-                                        "conflictFields",
-                                        conflict.fields());
+                                return new UploadOutcome(
+                                        null, conflict.getMessage(), conflict.fields());
                             }
                         });
-        if (!received.get().toString().equals(result.get("objectId"))) {
+        var result = outcome.receipt();
+        if (result == null || !received.get().toString().equals(result.objectId())) {
             storage.delete(received.get());
         }
-        if (result.get("conflictCode") instanceof String code) {
+        if (outcome.conflictCode() != null) {
             var fields = new java.util.LinkedHashMap<String, String>();
-            if (result.get("conflictFields") instanceof Map<?, ?> map) {
-                map.forEach((k, v) -> fields.put(k.toString(), v.toString()));
+            if (outcome.conflictFields() != null) {
+                fields.putAll(outcome.conflictFields());
             }
-            throw new RepairConflict(code, fields);
+            throw new RepairConflict(outcome.conflictCode(), fields);
         }
         return result;
     }

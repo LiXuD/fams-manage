@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.UUID;
 
 @Profile("fams-product")
@@ -39,7 +38,7 @@ public class RepairCollaborationPhotoController {
     }
 
     @PostMapping("/{invitation}/attachments")
-    Map<String, Object> upload(
+    RepairViews.CollaborationAttachmentReceipt upload(
             @PathVariable @Positive long invitation,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -59,13 +58,12 @@ public class RepairCollaborationPhotoController {
     }
 
     @PostMapping("/{invitation}/{kind}/{object}/download-grant")
-    Map<String, Object> grant(
+    RepairViews.PhotoGrant grant(
             @PathVariable @Positive long invitation,
             @PathVariable String kind,
             @PathVariable UUID object) {
         var grant = photos.grant(actors.capture(), invitation, object, kind);
-        return Map.of(
-                "url",
+        return new RepairViews.PhotoGrant(
                 "/api/v1/repair-collaborations/"
                         + invitation
                         + "/"
@@ -74,7 +72,6 @@ public class RepairCollaborationPhotoController {
                         + object
                         + "/content?grant="
                         + grant.token(),
-                "expiresAtEpochSecond",
                 grant.expiresAtEpochSecond());
     }
 

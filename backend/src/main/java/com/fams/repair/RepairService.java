@@ -40,6 +40,10 @@ import java.util.UUID;
 @Profile("fams-product")
 @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
 public class RepairService {
+    /** Target type of the typed-view to Map mirrors required by frozen port consumers. */
+    private static final tools.jackson.core.type.TypeReference<Map<String, Object>> WIRE_MAP =
+            new tools.jackson.core.type.TypeReference<>() {};
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -87,20 +91,18 @@ public class RepairService {
         return returned.list(page, size);
     }
 
-    public Map<String, Object> returnSource(Actor actor, long followup) {
+    public RepairViews.ReturnSourceDetail returnSource(Actor actor, long followup) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         var source = returned.pending(followup);
-        var result = new LinkedHashMap<>(returnSourceWire(source));
-        result.put(
-                "asset",
+        return RepairViews.returnSourceDetail(
+                source,
                 json.readTree(
                         assets.damagedReturnSource(
                                 source.assetId(), -1, source.warehouseId(), source.locationId())));
-        return result;
     }
 
-    public Map<String, Object> submitReturned(
+    public RepairViews.RepairSummary submitReturned(
             Actor actor,
             long followup,
             long version,
@@ -110,7 +112,7 @@ public class RepairService {
         require(current, Role.ASSET_ADMIN);
         String operation = "RETURN_SOURCE:" + followup,
                 fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -161,7 +163,7 @@ public class RepairService {
                     + " VALUES (?,?,?,?)",
                 id,
                 followup,
-                json.writeValueAsString(returnSourceWire(source)),
+                json.writeValueAsString(RepairViews.returnSourceWire(source)),
                 now());
         returned.adopt(source, id);
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
@@ -174,29 +176,13 @@ public class RepairService {
                 0,
                 Map.of(
                         "source",
-                        returnSourceWire(source),
+                        RepairViews.returnSourceWire(source),
                         "fault",
                         input.fault(),
                         "impact",
                         input.impact()),
                 Role.ASSET_ADMIN.name());
         return remember(current, operation, key, fingerprint, header(id));
-    }
-
-    private Map<String, Object> returnSourceWire(LoanReturnRepairPort.Context source) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("followupId", Long.toString(source.id()));
-        result.put("version", source.version());
-        result.put("returnId", Long.toString(source.returnId()));
-        result.put("assetId", Long.toString(source.assetId()));
-        result.put("closedLoanId", source.loanId() == null ? null : source.loanId().toString());
-        result.put("processorAccountId", Long.toString(source.processorAccountId()));
-        result.put("warehouseId", Long.toString(source.warehouseId()));
-        result.put("locationId", Long.toString(source.locationId()));
-        result.put("inspectedAt", source.inspectedAt().toString());
-        result.put("inspectionReason", source.reason());
-        result.put("lockVersion", source.lockVersion());
-        return result;
     }
 
     private Map<String, Object> returnOrigin(long repair) {
@@ -229,7 +215,7 @@ public class RepairService {
         }
     }
 
-    public Map<String, Object> list(Actor actor, int page, int size) {
+    public RepairViews.Page<RepairViews.RepairSummary> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
                 " FROM fams_repair_request WHERE (? OR creator_account_id=? OR"
@@ -262,24 +248,28 @@ public class RepairService {
         long total =
                 java.util.Objects.requireNonNull(
                         db.queryForObject("SELECT COUNT(*)" + where, Long.class, scope));
-        return Map.of(
-                "items",
-                rows.stream().map(this::view).toList(),
-                "total",
+        return new RepairViews.Page<>(
+                rows.stream().map(row -> RepairViews.summary(json, row)).toList(),
                 total,
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
+    /**
+     * Map mirror of {@link #getDetail} for the frozen InventoryRepairPort consumer (single
+     * assembly source, equivalent to the pre-JAVA-16a get() tree; frozen by
+     * RepairCoreWireShapeTest). HTTP exits and RepairCollaboration use getDetail directly.
+     */
     public Map<String, Object> get(Actor actor, long id) {
+        return json.convertValue(getDetail(actor, id), WIRE_MAP);
+    }
+
+    public RepairViews.RepairDetail getDetail(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
         visible(current, row);
-        var result = new LinkedHashMap<>(view(row));
-        result.put(
-                "inventoryEvidence",
+        var summary = RepairViews.summary(json, row);
+        var inventoryEvidence =
                 inventoryEvidenceAllowed(current, row)
                         ? db
                                 .queryForList(
@@ -289,96 +279,88 @@ public class RepairService {
                                         id)
                                 .stream()
                                 .map(
-                                        source -> {
-                                            var facts =
-                                                    json.readTree(
-                                                            source.get("source_context_json")
-                                                                    .toString());
-                                            return Map.of(
-                                                    "taskId",
-                                                    facts.path("taskId").asText(),
-                                                    "observationId",
-                                                    facts.path("observationId").asText(),
-                                                    "clientEventId",
-                                                    facts.path("clientEventId").asText(),
-                                                    "photoIds",
-                                                    facts.path("photoIds"));
-                                        })
+                                        source ->
+                                                RepairViews.inventoryEvidence(
+                                                        json.readTree(
+                                                                source.get("source_context_json")
+                                                                        .toString())))
                                 .toList()
-                        : List.of());
-        result.put(
-                "decisions",
-                wire(
+                        : List.<RepairViews.InventoryEvidenceRef>of();
+        var decisions =
+                RepairViews.decisions(
+                        json,
                         db.queryForList(
                                 "SELECT * FROM fams_repair_decision WHERE repair_id=? ORDER BY id"
                                         + " DESC LIMIT 100",
-                                id)));
-        result.put(
-                "history",
-                wire(
+                                id));
+        var history =
+                RepairViews.events(
+                        json,
                         db.queryForList(
                                 "SELECT * FROM fams_repair_event WHERE repair_id=? ORDER BY id DESC"
                                         + " LIMIT 100",
-                                id)));
-        result.put(
-                "historyTotal",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_repair_event WHERE repair_id=?",
-                        Long.class,
-                        id));
+                                id));
+        long historyTotal =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_repair_event WHERE repair_id=?",
+                                Long.class,
+                                id));
         var locks =
                 db.queryForList(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
                             + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
                         row.get("asset_id"),
                         id);
-        result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
-        var port = evidence.getIfAvailable();
-        result.put("photosAvailable", port != null);
-        result.put("photos", port == null ? List.of() : photoProjection(port.list("REPAIR", id)));
-        var returnOrigin = returnOrigin(id);
-        result.put(
-                "returnOrigin",
-                returnOrigin == null
+        Long lockVersion =
+                locks.isEmpty()
                         ? null
-                        : json.readTree(returnOrigin.get("source_context_json").toString()));
-        boolean inheritedReturn = returnOrigin != null;
+                        : ((Number) locks.getFirst().get("lock_version")).longValue();
+        var port = evidence.getIfAvailable();
+        boolean photosAvailable = port != null;
+        var photos =
+                port == null
+                        ? List.<RepairService.Photo>of()
+                        : photoProjection(port.list("REPAIR", id));
+        var origin = returnOrigin(id);
+        var returnOrigin =
+                origin == null
+                        ? null
+                        : json.readTree(origin.get("source_context_json").toString());
+        boolean inheritedReturn = origin != null;
         boolean away = hasPhysicalHandling(id);
-        result.put(
-                "physicalHandling",
-                wire(
+        var physicalHandling =
+                RepairViews.physicalHandlings(
                         db.queryForList(
                                 "SELECT * FROM fams_repair_physical_handling WHERE repair_id=?",
-                                id)));
-        result.put(
-                "inbound",
-                wire(db.queryForList("SELECT * FROM fams_repair_inbound WHERE repair_id=?", id)));
+                                id));
+        var inbound =
+                RepairViews.inbounds(
+                        db.queryForList("SELECT * FROM fams_repair_inbound WHERE repair_id=?", id));
         var currentLoan = loans.open(number(row, "asset_id"));
-        result.put("loanVersion", currentLoan == null ? null : currentLoan.version());
-        result.put(
-                "loanExpectedReturnDate",
-                currentLoan == null ? null : currentLoan.expectedReturnDate());
+        Long loanVersion = currentLoan == null ? null : currentLoan.version();
+        var loanExpectedReturnDate =
+                currentLoan == null ? null : currentLoan.expectedReturnDate();
         var returns =
                 db.queryForList(
                         "SELECT * FROM fams_repair_return_handover"
                                 + " WHERE repair_id=? ORDER BY id DESC LIMIT 100",
                         id);
-        result.put("returnHandovers", wire(returns));
-        result.put(
-                "approvedReturnTargets",
-                wire(
+        var returnHandovers = RepairViews.returnHandovers(json, returns);
+        var approvedReturnTargets =
+                RepairViews.approvedTargets(
+                        json,
                         db.queryForList(
                                 "SELECT * FROM fams_repair_approved_return_target WHERE repair_id=?"
                                         + " ORDER BY id DESC LIMIT 100",
-                                id)));
-        result.put(
-                "returnRecollections",
-                wire(
+                                id));
+        var returnRecollections =
+                RepairViews.recollections(
                         db.queryForList(
                                 "SELECT r.* FROM fams_repair_return_recollection r JOIN"
                                     + " fams_repair_return_handover h ON h.id=r.handover_id WHERE"
                                     + " h.repair_id=? ORDER BY h.id DESC LIMIT 100",
-                                id)));
+                                id));
         var outstanding = outstandingReturn(id);
         boolean pending = "PENDING_ADMIN_DECISION".equals(row.get("repair_status"));
         boolean processing =
@@ -387,41 +369,23 @@ public class RepairService {
                         && current.has(Role.WAREHOUSE_OPERATOR)
                         && java.util.Objects.equals(
                                 current.id(), nullable(row.get("processor_account_id")));
-        var actions =
-                new LinkedHashMap<>(
-                        Map.of(
-                                "approve", current.has(Role.ASSET_ADMIN) && pending,
-                                "claim",
-                                        current.has(Role.WAREHOUSE_OPERATOR)
-                                                && "WAITING_WAREHOUSE_CLAIM"
-                                                        .equals(row.get("repair_status")),
-                                "acceptInPlace",
-                                        processing
-                                                && !inheritedReturn
-                                                && !away
-                                                && row.get("accepted_at") == null,
-                                "completeInPlace",
-                                        processing
-                                                && !inheritedReturn
-                                                && !away
-                                                && row.get("accepted_at") != null,
-                                "acceptAway", processing && !away,
-                                "closeInbound",
-                                        processing
-                                                && row.get("accepted_at") != null
-                                                && outstanding == null,
-                                "addFaultPhoto",
-                                        port != null
-                                                && pending
-                                                && current.id()
-                                                        == number(row, "creator_account_id"),
-                                "cancel",
-                                        pending
-                                                && (current.has(Role.ASSET_ADMIN)
-                                                        || current.id()
-                                                                == number(
-                                                                        row,
-                                                                        "creator_account_id"))));
+        boolean approveAction = current.has(Role.ASSET_ADMIN) && pending;
+        boolean claimAction =
+                current.has(Role.WAREHOUSE_OPERATOR)
+                        && "WAITING_WAREHOUSE_CLAIM".equals(row.get("repair_status"));
+        boolean acceptInPlaceAction =
+                processing && !inheritedReturn && !away && row.get("accepted_at") == null;
+        boolean completeInPlaceAction =
+                processing && !inheritedReturn && !away && row.get("accepted_at") != null;
+        boolean acceptAwayAction = processing && !away;
+        boolean closeInboundAction =
+                processing && row.get("accepted_at") != null && outstanding == null;
+        boolean addFaultPhotoAction =
+                port != null && pending && current.id() == number(row, "creator_account_id");
+        boolean cancelAction =
+                pending
+                        && (current.has(Role.ASSET_ADMIN)
+                                || current.id() == number(row, "creator_account_id"));
         boolean receiver = outstanding != null && isReturnReceiver(current, outstanding);
         boolean returnable =
                 List.of("IN_USE", "BORROWED")
@@ -429,63 +393,116 @@ public class RepairService {
                                 json.readTree(row.get("source_snapshot_json").toString())
                                         .path("lifecycle")
                                         .asText());
-        actions.put("requestScrap", processing && row.get("accepted_at") != null && outstanding == null
-                && noCostHandling(row.get("allowed_method")));
-        actions.put("deliverReturn", processing && away && outstanding == null && returnable);
-        actions.put("changeReturnTarget", processing && away && outstanding == null && returnable);
-        actions.put(
-                "receiveReturn",
+        boolean requestScrapAction =
+                processing
+                        && row.get("accepted_at") != null
+                        && outstanding == null
+                        && noCostHandling(row.get("allowed_method"));
+        boolean deliverReturnAction = processing && away && outstanding == null && returnable;
+        boolean changeReturnTargetAction = deliverReturnAction;
+        boolean receiveReturnAction =
                 receiver
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
-                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
-        actions.put("refuseReturn", actions.get("receiveReturn"));
-        actions.put("recollectReturn", processing && outstanding != null);
-        actions.put(
-                "reassign",
+                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status"));
+        boolean refuseReturnAction = receiveReturnAction;
+        boolean recollectReturnAction = processing && outstanding != null;
+        boolean reassignAction =
                 current.has(Role.ASSET_ADMIN)
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
-                        && !locks.isEmpty() && row.get("processor_account_id") != null);
-        actions.put(
-                "proxyReturn",
+                        && !locks.isEmpty()
+                        && row.get("processor_account_id") != null;
+        boolean proxyReturnAction =
                 processing
                         && outstanding != null
-                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status")));
-        if (current.has(Role.ASSET_ADMIN)
-                || current.has(Role.WAREHOUSE_OPERATOR)
-                        && java.util.Objects.equals(
-                                current.id(), nullable(row.get("processor_account_id")))) {
-            actions.put("manageFactory", true);
-        }
-        var factorySummary = factory.summary(id);
-        if (factorySummary != null) {
-            result.put("factorySummary", wire(factorySummary));
-            if (Boolean.TRUE.equals(factorySummary.get("followupOpen"))) {
-                for (var action :
-                        List.of(
-                                "requestScrap",
-                                "acceptInPlace",
-                                "completeInPlace",
-                                "acceptAway",
-                                "closeInbound",
-                                "deliverReturn",
-                                "receiveReturn",
-                                "refuseReturn",
-                                "recollectReturn",
-                                "changeReturnTarget",
-                                "proxyReturn")) {
-                    actions.put(action, false);
-                }
+                        && "WAITING_RECEIPT".equals(outstanding.get("handover_status"));
+        Boolean manageFactoryAction =
+                current.has(Role.ASSET_ADMIN)
+                                || current.has(Role.WAREHOUSE_OPERATOR)
+                                        && java.util.Objects.equals(
+                                                current.id(),
+                                                nullable(row.get("processor_account_id")))
+                        ? true
+                        : null;
+        var factorySummaryRow = factory.summary(id);
+        RepairViews.FactorySummary factorySummary = null;
+        if (factorySummaryRow != null) {
+            factorySummary = RepairViews.factorySummary(factorySummaryRow);
+            if (factorySummary.followupOpen()) {
+                requestScrapAction = false;
+                acceptInPlaceAction = false;
+                completeInPlaceAction = false;
+                acceptAwayAction = false;
+                closeInboundAction = false;
+                deliverReturnAction = false;
+                receiveReturnAction = false;
+                refuseReturnAction = false;
+                recollectReturnAction = false;
+                changeReturnTargetAction = false;
+                proxyReturnAction = false;
             }
         }
-        actions.put("requestLoss", Boolean.TRUE.equals(actions.get("requestScrap")));
-        var reports = db.queryForList("SELECT JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.reportId'))"
-                + " FROM fams_repair_event WHERE repair_id=? AND action='REPAIR_LOSS_HANDED_OFF' ORDER BY id DESC LIMIT 1",
-                String.class, id);
-        if (!reports.isEmpty()) {
-            result.put("latestLossReportId", reports.getFirst());
-        }
-        result.put("actions", actions);
-        return result;
+        boolean requestLossAction = requestScrapAction;
+        var reports =
+                db.queryForList(
+                        "SELECT JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.reportId'))"
+                            + " FROM fams_repair_event WHERE repair_id=?"
+                            + " AND action='REPAIR_LOSS_HANDED_OFF' ORDER BY id DESC LIMIT 1",
+                        String.class,
+                        id);
+        String latestLossReportId = reports.isEmpty() ? null : reports.getFirst();
+        return new RepairViews.RepairDetail(
+                summary.id(),
+                summary.assetId(),
+                summary.creatorAccountId(),
+                summary.version(),
+                summary.assetVersion(),
+                summary.status(),
+                summary.fault(),
+                summary.impact(),
+                summary.occurredAt(),
+                summary.allowedMethod(),
+                summary.processorAccountId(),
+                summary.ownershipVersion(),
+                summary.claimedAt(),
+                summary.acceptedAt(),
+                summary.completedAt(),
+                summary.source(),
+                inventoryEvidence,
+                decisions,
+                history,
+                historyTotal,
+                lockVersion,
+                photosAvailable,
+                photos,
+                returnOrigin,
+                physicalHandling,
+                inbound,
+                loanVersion,
+                loanExpectedReturnDate,
+                returnHandovers,
+                approvedReturnTargets,
+                returnRecollections,
+                factorySummary,
+                latestLossReportId,
+                new RepairViews.ReportActions(
+                        approveAction,
+                        claimAction,
+                        acceptInPlaceAction,
+                        completeInPlaceAction,
+                        acceptAwayAction,
+                        closeInboundAction,
+                        addFaultPhotoAction,
+                        cancelAction,
+                        requestScrapAction,
+                        deliverReturnAction,
+                        changeReturnTargetAction,
+                        receiveReturnAction,
+                        refuseReturnAction,
+                        recollectReturnAction,
+                        reassignAction,
+                        proxyReturnAction,
+                        manageFactoryAction,
+                        requestLossAction));
     }
 
     public void requireInventoryAdministrator(Actor actor) {
@@ -507,16 +524,26 @@ public class RepairService {
                                 current.id(), nullable(row.get("processor_account_id")));
     }
 
+    /**
+     * Map mirror of {@link #submitSummary} for the frozen InventoryRepairPort consumer; HTTP
+     * exits use submitSummary.
+     */
     public Map<String, Object> submit(Actor actor, UUID key, RepairInput.Submission input) {
+        return json.convertValue(submitSummary(actor, key, input), WIRE_MAP);
+    }
+
+    public RepairViews.RepairSummary submitSummary(
+            Actor actor, UUID key, RepairInput.Submission input) {
         return submitSource(actor, key, input, null);
     }
 
     Map<String, Object> submitLossRecovery(
             Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
-        return submitSource(actor, key, input, loss);
+        return json.convertValue(
+                submitSource(actor, key, input, loss, null), WIRE_MAP);
     }
 
-    private Map<String, Object> submitSource(
+    private RepairViews.RepairSummary submitSource(
             Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss) {
         return submitSource(actor, key, input, loss, null);
     }
@@ -524,10 +551,11 @@ public class RepairService {
     Map<String, Object> submitClosedLossRecovery(
             Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
             long recoveryId) {
-        return submitSource(actor, key, input, loss, recoveryId);
+        return json.convertValue(
+                submitSource(actor, key, input, loss, recoveryId), WIRE_MAP);
     }
 
-    private Map<String, Object> submitSource(
+    private RepairViews.RepairSummary submitSource(
             Actor actor, UUID key, RepairInput.Submission input, LossRepairPort.Source loss,
             Long recoveryId) {
         var current = actors.revalidateLocked(actor);
@@ -536,7 +564,8 @@ public class RepairService {
                 hash(operation, 0, loss == null ? input : recoveryId == null
                         ? Map.of("input", input, "source", loss)
                         : Map.of("input", input, "source", loss, "recoveryId", recoveryId));
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -651,13 +680,14 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> decide(
+    public RepairViews.RepairSummary decide(
             Actor actor, long id, long version, UUID key, RepairInput.Decision input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         var row = header(id);
         String operation = "DECIDE:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -780,7 +810,7 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> cancel(
+    public RepairViews.RepairSummary cancel(
             Actor actor, long id, long version, UUID key, RepairInput.Reason input) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -789,7 +819,8 @@ public class RepairService {
             throw new RepairFailure(403, "REPAIR_CREATOR_REQUIRED");
         }
         String operation = "CANCEL:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -807,13 +838,14 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> claim(Actor actor, long id, long version, UUID key) {
+    public RepairViews.RepairSummary claim(Actor actor, long id, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         var row = header(id);
         visible(current, row);
         String operation = "CLAIM:" + id, fingerprint = hash(operation, version, Map.of());
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -841,17 +873,17 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> acceptInPlace(
+    public RepairViews.RepairSummary acceptInPlace(
             Actor actor, long id, long version, UUID key, RepairInput.InPlace input) {
         return inPlace(actor, id, version, key, input, false);
     }
 
-    public Map<String, Object> completeInPlace(
+    public RepairViews.RepairSummary completeInPlace(
             Actor actor, long id, long version, UUID key, RepairInput.InPlace input) {
         return inPlace(actor, id, version, key, input, true);
     }
 
-    private Map<String, Object> inPlace(
+    private RepairViews.RepairSummary inPlace(
             Actor actor,
             long id,
             long version,
@@ -865,7 +897,8 @@ public class RepairService {
         owner(actor, current, row);
         String operation = (complete ? "COMPLETE:" : "ACCEPT:") + id,
                 fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1167,7 +1200,7 @@ public class RepairService {
         return assets.physicalCatalog(kind, page, size);
     }
 
-    public Map<String, Object> acceptAway(
+    public RepairViews.RepairSummary acceptAway(
             Actor actor, long id, long version, UUID key, RepairInput.AwayAcceptance input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1175,7 +1208,8 @@ public class RepairService {
         visible(current, row);
         owner(actor, current, row);
         String operation = "ACCEPT_AWAY:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1244,7 +1278,7 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> closeInbound(
+    public RepairViews.RepairSummary closeInbound(
             Actor actor, long id, long version, UUID key, RepairInput.Inbound input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1252,7 +1286,8 @@ public class RepairService {
         visible(current, row);
         owner(actor, current, row);
         String operation = "INBOUND:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1392,7 +1427,7 @@ public class RepairService {
         return effectiveReturnTarget(row);
     }
 
-    public Map<String, Object> deliverReturn(
+    public RepairViews.RepairSummary deliverReturn(
             Actor actor, long id, long version, UUID key, RepairInput.ReturnDelivery input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1400,7 +1435,8 @@ public class RepairService {
         visible(current, row);
         owner(actor, current, row);
         String operation = "RETURN_DELIVER:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1467,7 +1503,7 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> receiveReturn(
+    public RepairViews.RepairSummary receiveReturn(
             Actor actor,
             long id,
             long version,
@@ -1483,7 +1519,8 @@ public class RepairService {
         }
         String operation = (refuse ? "RETURN_REFUSE:" : "RETURN_RECEIVE:") + id,
                 fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1568,7 +1605,7 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
-    public Map<String, Object> recollectReturn(
+    public RepairViews.RepairSummary recollectReturn(
             Actor actor, long id, long version, UUID key, RepairInput.ReturnRecollection input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1576,7 +1613,8 @@ public class RepairService {
         visible(current, row);
         owner(actor, current, row);
         String operation = "RETURN_RECOLLECT:" + id, fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairSummary.class);
         if (prior != null) {
             return prior;
         }
@@ -1859,7 +1897,7 @@ public class RepairService {
                 Map.of("proposalId", Long.toString(proposal), "target", valid));
     }
 
-    public Map<String, Object> reassignment(Actor actor, long id) {
+    public RepairViews.ReassignmentView reassignment(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         var row = reassignable(id);
@@ -1874,15 +1912,12 @@ public class RepairService {
                             + " o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' AND a.id<>?"
                             + " ORDER BY a.id",
                         row.get("processor_account_id"));
-        var result = new LinkedHashMap<String, Object>(Map.of("snapshot", snapshot, "operators", wire(operators)));
         var declared = unavailabilityReason(id, number(row, "ownership_version"), number(row, "processor_account_id"));
-        if (declared != null) {
-            result.put("unavailableReason", declared);
-        }
-        return result;
+        return new RepairViews.ReassignmentView(
+                snapshot, RepairViews.operators(operators), declared);
     }
 
-    public Map<String, Object> declareUnavailable(
+    public RepairViews.UnavailabilityReceipt declareUnavailable(
             Actor actor, long id, long version, UUID key, RepairReassignmentController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1899,7 +1934,9 @@ public class RepairService {
         String operation = "DECLARE_UNAVAILABLE:" + id;
         String fingerprint = hash(operation, version,
                 Map.of("ownershipVersion", input.ownershipVersion(), "reason", reason));
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint,
+                RepairViews.UnavailabilityReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -1921,7 +1958,7 @@ public class RepairService {
                 VALUES ('ASSET_ADMIN','REPAIR',?,'REASSIGNMENT_REQUIRED','OPEN',?)
                 ON DUPLICATE KEY UPDATE id=fams_todo.id
                 """, id, now());
-        var result = Map.<String, Object>of("id", Long.toString(id), "version", version, "recorded", true);
+        var result = new RepairViews.UnavailabilityReceipt(Long.toString(id), version, true);
         saveReceipt(current, operation, key, fingerprint, id, result);
         return result;
     }
@@ -1935,7 +1972,7 @@ public class RepairService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
-    public Map<String, Object> reassign(
+    public RepairViews.RepairDetail reassign(
             Actor actor,
             long id,
             long version,
@@ -1946,7 +1983,8 @@ public class RepairService {
         String operation = "REASSIGN:" + id;
         String fingerprint =
                 hash(operation, version, canonicalReassignment(json.valueToTree(input)));
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.RepairDetail.class);
         if (prior != null) {
             return prior;
         }
@@ -2025,7 +2063,7 @@ public class RepairService {
                 version + 1,
                 detail,
                 Role.ASSET_ADMIN.name());
-        var result = get(actor, id);
+        var result = getDetail(actor, id);
         saveReceipt(current, operation, key, fingerprint, id, result);
         return result;
     }
@@ -2061,7 +2099,7 @@ public class RepairService {
         return row;
     }
 
-    private Map<String, Object> reassignmentSnapshot(Map<String, Object> row) {
+    private RepairViews.ReassignmentSnapshot reassignmentSnapshot(Map<String, Object> row) {
         long id = number(row, "id"), assetId = number(row, "asset_id");
         lock(row, null);
         var loan = loans.open(assetId);
@@ -2076,37 +2114,36 @@ public class RepairService {
                             .path("assetCode")
                             .asText());
         }
-        var snapshot = new LinkedHashMap<String, Object>();
-        snapshot.put("id", Long.toString(id));
-        snapshot.put("version", row.get("version"));
-        snapshot.put("ownershipVersion", row.get("ownership_version"));
-        snapshot.put("processorAccountId", row.get("processor_account_id").toString());
-        snapshot.put("assetVersion", row.get("asset_version"));
-        snapshot.put(
-                "lockVersion",
+        Long lockVersion =
                 db.queryForObject(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
                             + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
                         Long.class,
                         assetId,
-                        id));
-        snapshot.put("acceptedAt", wire(row.get("accepted_at")));
-        snapshot.put(
-                "physicalHandling",
-                wire(
+                        id);
+        var physicalHandling =
+                RepairViews.physicalHandlings(
                         db.queryForList(
                                 "SELECT * FROM fams_repair_physical_handling WHERE repair_id=?",
-                                id)));
-        snapshot.put("outstandingReturn", wire(outstandingReturn(id)));
-        snapshot.put("lastPhysicalTime", wire(latestPhysicalTime(row)));
+                                id));
+        var outstanding = outstandingReturn(id);
+        Instant lastPhysicalTime = factory.latestPhysicalTime(row);
         var approved = approvedTarget(row);
-        snapshot.put("approvedTargetId", approved == null ? null : approved.get("id").toString());
-        snapshot.put("loan", loanWire(loan));
         var factorySummary = factory.summary(id);
-        if (factorySummary != null) {
-            snapshot.put("factorySummary", wire(factorySummary));
-        }
-        return snapshot;
+        return new RepairViews.ReassignmentSnapshot(
+                Long.toString(id),
+                number(row, "version"),
+                number(row, "ownership_version"),
+                row.get("processor_account_id").toString(),
+                number(row, "asset_version"),
+                lockVersion,
+                RepairViews.timeValue(row.get("accepted_at")),
+                physicalHandling,
+                outstanding == null ? null : RepairViews.returnHandover(json, outstanding),
+                lastPhysicalTime,
+                approved == null ? null : approved.get("id").toString(),
+                loan == null ? null : RepairViews.loanRef(loan),
+                factorySummary == null ? null : RepairViews.factorySummary(factorySummary));
     }
 
     private Map<String, Object> loanWire(LoanRepairPort.Context loan) {
@@ -2319,7 +2356,7 @@ public class RepairService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = RepairConflict.class)
-    public Map<String, Object> registerPhoto(
+    public RepairViews.PhotoReceipt registerPhoto(
             Actor actor,
             long id,
             long version,
@@ -2346,7 +2383,8 @@ public class RepairService {
                                         attachment.format().mime(),
                                         "size",
                                         attachment.file().size()));
-        var prior = replay(actor, current, operation, key, fingerprint);
+        var prior = replay(
+                actor, current, operation, key, fingerprint, RepairViews.PhotoReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -2392,19 +2430,21 @@ public class RepairService {
                         attachment.file().sha256()),
                 role(current));
         var result =
-                Map.<String, Object>of(
-                        "repairId",
+                new RepairViews.PhotoReceipt(
                         Long.toString(id),
-                        "objectId",
                         attachment.file().id().toString(),
-                        "version",
                         version + 1);
         saveReceipt(current, operation, key, fingerprint, id, result);
         return result;
     }
 
-    private Map<String, Object> replay(
-            Actor actor, Current current, String operation, UUID key, String fingerprint) {
+    private <T> T replay(
+            Actor actor,
+            Current current,
+            String operation,
+            UUID key,
+            String fingerprint,
+            Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT repair_id,payload_sha256,response_json FROM fams_repair_receipt"
@@ -2422,18 +2462,16 @@ public class RepairService {
         if (!fingerprint.equals(prior.get("payload_sha256"))) {
             reject(actor, current, row, "REPAIR_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                prior.get("response_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(prior.get("response_json").toString(), type);
     }
 
-    private Map<String, Object> remember(
+    private RepairViews.RepairSummary remember(
             Current current,
             String operation,
             UUID key,
             String fingerprint,
             Map<String, Object> row) {
-        var result = view(row);
+        var result = RepairViews.summary(json, row);
         saveReceipt(current, operation, key, fingerprint, number(row, "id"), result);
         return result;
     }
@@ -2444,7 +2482,7 @@ public class RepairService {
             UUID key,
             String fingerprint,
             long id,
-            Map<String, Object> result) {
+            Object result) {
         db.update(
                 "INSERT INTO"
                     + " fams_repair_receipt(actor_account_id,operation,request_id,repair_id,payload_sha256,response_json,created_at)"
@@ -2638,38 +2676,6 @@ public class RepairService {
                 after,
                 time,
                 body);
-    }
-
-    private Map<String, Object> view(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        for (var field :
-                Map.ofEntries(
-                                Map.entry("id", "id"),
-                                Map.entry("asset_id", "assetId"),
-                                Map.entry("creator_account_id", "creatorAccountId"),
-                                Map.entry("version", "version"),
-                                Map.entry("asset_version", "assetVersion"),
-                                Map.entry("repair_status", "status"),
-                                Map.entry("fault", "fault"),
-                                Map.entry("impact", "impact"),
-                                Map.entry("occurred_at", "occurredAt"),
-                                Map.entry("allowed_method", "allowedMethod"),
-                                Map.entry("processor_account_id", "processorAccountId"),
-                                Map.entry("ownership_version", "ownershipVersion"),
-                                Map.entry("claimed_at", "claimedAt"),
-                                Map.entry("accepted_at", "acceptedAt"),
-                                Map.entry("completed_at", "completedAt"))
-                        .entrySet()) {
-            Object value = row.get(field.getKey());
-            result.put(
-                    field.getValue(),
-                    field.getKey().equals("id") || field.getKey().endsWith("_id")
-                            ? value == null ? null : value.toString()
-                            : wire(value));
-        }
-        result.put(
-                "source", json.readValue(row.get("source_snapshot_json").toString(), Object.class));
-        return result;
     }
 
     /**

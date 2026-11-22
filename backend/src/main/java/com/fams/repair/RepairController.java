@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -51,12 +50,12 @@ public class RepairController {
     }
 
     @GetMapping("/return-sources/{id}")
-    Map<String, Object> returnSource(@PathVariable @Positive long id) {
+    RepairViews.ReturnSourceDetail returnSource(@PathVariable @Positive long id) {
         return repairs.returnSource(actors.capture(), id);
     }
 
     @PostMapping("/return-sources/{id}")
-    Map<String, Object> submitReturned(
+    RepairViews.RepairSummary submitReturned(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -66,27 +65,27 @@ public class RepairController {
     }
 
     @GetMapping
-    Map<String, Object> list(
+    RepairViews.Page<RepairViews.RepairSummary> list(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return repairs.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> get(@PathVariable @Positive long id) {
-        return repairs.get(actors.capture(), id);
+    RepairViews.RepairDetail get(@PathVariable @Positive long id) {
+        return repairs.getDetail(actors.capture(), id);
     }
 
     @PostMapping
-    Map<String, Object> submit(
+    RepairViews.RepairSummary submit(
             @RequestHeader("Idempotency-Key") UUID key,
             @Valid @RequestBody RepairInput.Submission input) {
         var actor = actors.capture();
-        return retry(() -> repairs.submit(actor, key, input));
+        return retry(() -> repairs.submitSummary(actor, key, input));
     }
 
     @PostMapping("/{id}/decision")
-    Map<String, Object> decide(
+    RepairViews.RepairSummary decide(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -96,7 +95,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/cancel")
-    Map<String, Object> cancel(
+    RepairViews.RepairSummary cancel(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -106,7 +105,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/claim")
-    Map<String, Object> claim(
+    RepairViews.RepairSummary claim(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key) {
@@ -115,7 +114,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/accept-in-place")
-    Map<String, Object> accept(
+    RepairViews.RepairSummary accept(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -125,7 +124,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/complete-in-place")
-    Map<String, Object> complete(
+    RepairViews.RepairSummary complete(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -143,7 +142,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/accept-away")
-    Map<String, Object> acceptAway(
+    RepairViews.RepairSummary acceptAway(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -153,7 +152,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/close-inbound")
-    Map<String, Object> closeInbound(
+    RepairViews.RepairSummary closeInbound(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -168,7 +167,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/return-delivery")
-    Map<String, Object> deliverReturn(
+    RepairViews.RepairSummary deliverReturn(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -178,7 +177,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/return-receipt")
-    Map<String, Object> receiveReturn(
+    RepairViews.RepairSummary receiveReturn(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -188,7 +187,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/return-refusal")
-    Map<String, Object> refuseReturn(
+    RepairViews.RepairSummary refuseReturn(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -198,7 +197,7 @@ public class RepairController {
     }
 
     @PostMapping("/{id}/return-recollection")
-    Map<String, Object> recollectReturn(
+    RepairViews.RepairSummary recollectReturn(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -207,7 +206,7 @@ public class RepairController {
         return retry(() -> repairs.recollectReturn(actor, id, version, key, input));
     }
 
-    private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
+    private <T> T retry(Supplier<T> operation) {
         for (int attempt = 0; ; attempt++) {
             try {
                 return operation.get();

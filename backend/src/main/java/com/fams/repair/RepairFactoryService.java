@@ -140,7 +140,7 @@ public class RepairFactoryService {
                 Role.ASSET_ADMIN);
     }
 
-    public Map<String, Object> get(Actor actor, long id) {
+    public RepairViews.FactoryDetail get(Actor actor, long id) {
         var current = reader(actor);
         var row = header(id);
         readable(current, row);
@@ -149,66 +149,65 @@ public class RepairFactoryService {
         var active = factory.active(id);
         boolean owner = owner(current, row);
         boolean processing = "WAREHOUSE_PROCESSING".equals(row.get("repair_status"));
-        var result = reply(row, null, null);
-        result.put("pendingScope", pending == null ? null : scopeView(pending));
-        result.put("approvedScope", approved == null ? null : scopeView(approved));
-        result.put("activeRound", active == null ? null : roundView(active));
-        result.put("summary", wire(factory.summary(id)));
-        result.put("photosAvailable", evidence.getIfAvailable() != null);
-        result.put("costSummary", costs().summary(id));
-        result.put(
-                "actions",
-                Map.of(
-                        "requestScope",
-                                owner
-                                        && processing
-                                        && pending == null
-                                        && approved == null
-                                        && active == null
-                                        && handled(id)
-                                        && !outstanding(id),
-                        "decideScope",
-                                current.has(Role.ASSET_ADMIN) && processing && pending != null,
-                        "withdrawScope", processing && pending != null,
-                        "createRound",
-                                owner
-                                        && processing
-                                        && approved != null
-                                        && pending == null
-                                        && active == null
-                                        && handled(id)
-                                        && !outstanding(id),
-                        "dispatch",
-                                owner
-                                        && processing
-                                        && active != null
-                                        && "PENDING_DISPATCH".equals(active.get("round_status")),
-                        "cancelRound",
-                                owner
-                                        && processing
-                                        && active != null
-                                        && "PENDING_DISPATCH".equals(active.get("round_status")),
-                        "receive",
-                                owner
-                                        && processing
-                                        && active != null
-                                        && "DISPATCHED".equals(active.get("round_status"))
-                                        && !originalDestroyed(id, number(active, "id")),
-                        "uploadEvidence", owner && processing && active != null,
-                        "requestCostScope",
-                                owner
-                                        && processing
-                                        && pending == null
-                                        && handled(id)
-                                        && !outstanding(id)));
-        return result;
+        Long lockVersion = lockVersion(row);
+        var pendingScope = pending == null ? null : RepairViews.factoryScope(json, pending);
+        var approvedScope = approved == null ? null : RepairViews.factoryScope(json, approved);
+        var activeRound = active == null ? null : roundView(active);
+        var guardSummary = factory.summary(id);
+        var summary = guardSummary == null ? null : RepairViews.factorySummary(guardSummary);
+        var costSummary = costs().summary(id);
+        return RepairViews.factoryDetail(
+                row,
+                lockVersion,
+                pendingScope,
+                approvedScope,
+                activeRound,
+                summary,
+                evidence.getIfAvailable() != null,
+                costSummary,
+                new RepairViews.FactoryActions(
+                        owner
+                                && processing
+                                && pending == null
+                                && approved == null
+                                && active == null
+                                && handled(id)
+                                && !outstanding(id),
+                        current.has(Role.ASSET_ADMIN) && processing && pending != null,
+                        processing && pending != null,
+                        owner
+                                && processing
+                                && approved != null
+                                && pending == null
+                                && active == null
+                                && handled(id)
+                                && !outstanding(id),
+                        owner
+                                && processing
+                                && active != null
+                                && "PENDING_DISPATCH".equals(active.get("round_status")),
+                        owner
+                                && processing
+                                && active != null
+                                && "PENDING_DISPATCH".equals(active.get("round_status")),
+                        owner
+                                && processing
+                                && active != null
+                                && "DISPATCHED".equals(active.get("round_status"))
+                                && !originalDestroyed(id, number(active, "id")),
+                        owner && processing && active != null,
+                        owner
+                                && processing
+                                && pending == null
+                                && handled(id)
+                                && !outstanding(id)));
     }
 
-    public Map<String, Object> rounds(Actor actor, long id, int page, int size) {
+    public RepairViews.Page<RepairViews.FactoryRoundView> rounds(
+            Actor actor, long id, int page, int size) {
         var current = reader(actor);
         readable(current, header(id));
-        return Map.of(
-                "items",
+        return new RepairViews.Page<>(
                 db
                         .queryForList(
                                 "SELECT * FROM fams_repair_factory_round WHERE repair_id=?"
@@ -219,75 +218,69 @@ public class RepairFactoryService {
                         .stream()
                         .map(this::roundView)
                         .toList(),
-                "total",
                 count("fams_repair_factory_round", id),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> round(Actor actor, long id, long round) {
+    public RepairViews.FactoryRoundView round(Actor actor, long id, long round) {
         var current = reader(actor);
         var repair = header(id);
         readable(current, repair);
         var selected = round(id, round);
-        var result = new LinkedHashMap<>(roundView(selected));
+        var base = roundView(selected);
         boolean writable =
                 owner(current, repair)
                         && "WAREHOUSE_PROCESSING".equals(repair.get("repair_status"));
-        result.put(
-                "actions",
-                Map.of(
-                        "uploadFinancialEvidence",
+        var actions =
+                new RepairViews.FactoryRoundActions(
                         writable,
-                        "recordQuote",
                         writable && selected.get("actual_cost") == null,
-                        "recordCost",
-                        writable && selected.get("actual_cost") == null));
-        var port = evidence.getIfAvailable();
-        result.put(
-                "evidence",
-                wire(
+                        writable && selected.get("actual_cost") == null);
+        var evidenceRows =
+                RepairViews.factoryEvidences(
                         db.queryForList(
                                 "SELECT"
                                     + " object_id,purpose,content_sha256,uploader_account_id,recorded_at"
                                     + " FROM fams_repair_factory_evidence WHERE repair_id=? AND"
                                     + " round_id=? ORDER BY recorded_at,object_id",
                                 id,
-                                round)));
-        result.put("files", port == null ? List.of() : fileProjection(port.list("REPAIR_FACTORY", round)));
-        return result;
+                                round));
+        var port = evidence.getIfAvailable();
+        return base.withRoundDetail(
+                actions,
+                evidenceRows,
+                port == null
+                        ? List.of()
+                        : fileProjection(port.list("REPAIR_FACTORY", round)));
     }
 
-    public Map<String, Object> history(Actor actor, long id, int page, int size) {
+    public RepairViews.Page<RepairViews.FactoryEventRow> history(
+            Actor actor, long id, int page, int size) {
         var current = reader(actor);
         readable(current, header(id));
-        return Map.of(
-                "items",
-                wire(
+        return new RepairViews.Page<>(
+                RepairViews.factoryEvents(
+                        json,
                         db.queryForList(
                                 "SELECT * FROM fams_repair_factory_event WHERE repair_id=?"
                                         + " ORDER BY id DESC LIMIT ? OFFSET ?",
                                 id,
                                 size,
                                 ((long) page - 1) * size)),
-                "total",
                 count("fams_repair_factory_event", id),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> requestScope(
+    public RepairViews.FactoryReply requestScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeRequest input) {
         var current = warehouse(actor);
         var row = header(id);
         requireOwner(current, row);
         String operation = "FACTORY_SCOPE_REQUEST:" + id;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior = replay(actor, current, row, operation, key, fingerprint, RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -335,7 +328,7 @@ public class RepairFactoryService {
         return remember(current, operation, key, fingerprint, id, scope, null);
     }
 
-    public Map<String, Object> decideScope(
+    public RepairViews.FactoryReply decideScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeDecision input) {
         var current = reader(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
@@ -344,14 +337,14 @@ public class RepairFactoryService {
         var row = header(id);
         String operation = "FACTORY_SCOPE_DECIDE:" + id;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior = replay(actor, current, row, operation, key, fingerprint, RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
         return endScope(actor, current, row, version, key, operation, fingerprint, input, false);
     }
 
-    public Map<String, Object> withdrawScope(
+    public RepairViews.FactoryReply withdrawScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeDecision input) {
         var current = reader(actor);
         var row = header(id);
@@ -361,14 +354,14 @@ public class RepairFactoryService {
         }
         String operation = "FACTORY_SCOPE_WITHDRAW:" + id;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior = replay(actor, current, row, operation, key, fingerprint, RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
         return endScope(actor, current, row, version, key, operation, fingerprint, input, true);
     }
 
-    private Map<String, Object> endScope(
+    private RepairViews.FactoryReply endScope(
             Actor actor,
             Current current,
             Map<String, Object> row,
@@ -455,14 +448,22 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, number(row, "id"), input.scopeId(), null);
     }
 
-    public Map<String, Object> createRound(
+    public RepairViews.FactoryReply createRound(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.RoundCreation input) {
         var current = warehouse(actor);
         var row = header(id);
         requireOwner(current, row);
         String operation = "FACTORY_ROUND_CREATE:" + id;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -528,7 +529,7 @@ public class RepairFactoryService {
         return remember(current, operation, key, fingerprint, id, input.scopeId(), round);
     }
 
-    public Map<String, Object> cancelRound(
+    public RepairViews.FactoryReply cancelRound(
             Actor actor,
             long id,
             long roundId,
@@ -540,7 +541,15 @@ public class RepairFactoryService {
         requireOwner(current, row);
         String operation = "FACTORY_CANCEL:" + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -574,7 +583,7 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
-    public Map<String, Object> dispatch(
+    public RepairViews.FactoryReply dispatch(
             Actor actor,
             long id,
             long roundId,
@@ -586,7 +595,15 @@ public class RepairFactoryService {
         requireOwner(current, row);
         String operation = "FACTORY_DISPATCH:" + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -799,7 +816,7 @@ public class RepairFactoryService {
                 Map.of("reportId", Long.toString(reportId)), role);
     }
 
-    public Map<String, Object> receive(
+    public RepairViews.FactoryReply receive(
             Actor actor,
             long id,
             long roundId,
@@ -811,7 +828,15 @@ public class RepairFactoryService {
         requireOwner(current, row);
         String operation = "FACTORY_RECEIVE:" + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -918,7 +943,7 @@ public class RepairFactoryService {
         return !latest.isEmpty() && number(latest.getFirst(), "id") == number(round, "id");
     }
 
-    public Map<String, Object> replacements(Actor actor, long id, long roundId) {
+    public RepairViews.FactoryReplacementsPage replacements(Actor actor, long id, long roundId) {
         var current = reader(actor);
         var row = header(id);
         readable(current, row);
@@ -926,38 +951,37 @@ public class RepairFactoryService {
         var items = db.queryForList("SELECT * FROM fams_repair_factory_replacement"
                 + " WHERE repair_id=? AND round_id=?", id, roundId);
         boolean processing = owner(current, row) && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"));
-        return Map.of("items", items.stream().map(item -> replacementView(actor, item)).toList(),
-                "canRecord", processing && replacementPhase(id, round),
-                "canRequestScrap", processing && "DISPATCHED".equals(round.get("round_status"))
-                        && reply(row, null, null).get("lockVersion") != null
+        return new RepairViews.FactoryReplacementsPage(
+                items.stream().map(item -> replacementView(actor, item)).toList(),
+                processing && replacementPhase(id, round),
+                processing && "DISPATCHED".equals(round.get("round_status"))
+                        && lockVersion(row) != null
                         && items.stream().anyMatch(item -> List.of("FACTORY_RETAINED", "FACTORY_DESTROYED")
                                 .contains(item.get("original_disposition"))));
     }
 
-    private Map<String, Object> replacementView(Actor actor, Map<String, Object> item) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("id", item.get("id").toString());
-        result.put("sourceId", item.get("source_id"));
-        result.put("originalAssetId", item.get("original_asset_id").toString());
-        result.put("originalDisposition", item.get("original_disposition"));
-        result.put("observedAt", instant(item.get("observed_at")).toString());
-        result.put("recordedAt", instant(item.get("recorded_at")).toString());
-        result.put("evidenceIds", json.readTree(item.get("evidence_ids_json").toString()));
+    private RepairViews.FactoryReplacementRow replacementView(
+            Actor actor, Map<String, Object> item) {
         var inbound = replacementInbound.context(actor, item.get("source_id").toString());
-        result.put("inbound", inbound);
-        result.put("replacementAssetId", inbound == null ? null
-                : item.get("replacement_asset_id").toString());
-        return result;
+        return RepairViews.factoryReplacement(json, item, inbound);
     }
 
-    public Map<String, Object> recordReplacement(Actor actor, long id, long roundId, long version,
+    public RepairViews.FactoryReply recordReplacement(Actor actor, long id, long roundId, long version,
             UUID key, RepairFactoryInput.ReplacementFact input) {
         var current = warehouse(actor);
         var row = header(id);
         requireOwner(current, row);
         String operation = "FACTORY_REPLACEMENT:" + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) { return prior; }
         if (!Boolean.TRUE.equals(input.replacementPhysicalIdentityChecked())) {
             throw new RepairFailure(400, "REPAIR_FACTORY_REPLACEMENT_IDENTITY_REQUIRED");
@@ -997,16 +1021,23 @@ public class RepairFactoryService {
         advance(actor, current, row, "FACTORY_REPLACEMENT_RECORDED", number(round, "scope_id"), roundId,
                 Map.of("replacementId", Long.toString(replacement),
                         "originalDisposition", input.originalDisposition()), Role.WAREHOUSE_OPERATOR);
-        var result = reply(header(id), number(round, "scope_id"), roundId);
-        result.put("replacementId", Long.toString(replacement));
-        result.put("sourceId", source.toString());
-        result.put("replacementAssetId", created.id());
-        result.put("inboundReceiptId", inbound.id());
+        var result =
+                reply(
+                        header(id),
+                        number(round, "scope_id"),
+                        roundId,
+                        null,
+                        Long.toString(replacement),
+                        source.toString(),
+                        created.id(),
+                        inbound.id(),
+                        null);
         save(current, operation, key, fingerprint, id, result);
         return result;
     }
 
-    public Map<String, Object> parts(Actor actor, long id, long roundId, int page, int size) {
+    public RepairViews.FactoryPartsPage parts(
+            Actor actor, long id, long roundId, int page, int size) {
         var current = reader(actor);
         var row = header(id);
         readable(current, row);
@@ -1020,47 +1051,19 @@ public class RepairFactoryService {
                         size,
                         (page - 1L) * size);
         var views =
-                items.stream()
-                        .map(
-                                item ->
-                                        Map.<String, Object>of(
-                                                "id",
-                                                item.get("id").toString(),
-                                                "roundId",
-                                                Long.toString(roundId),
-                                                "assetId",
-                                                item.get("asset_id").toString(),
-                                                "partName",
-                                                item.get("part_name"),
-                                                "beforeInfo",
-                                                item.get("before_info"),
-                                                "afterInfo",
-                                                item.get("after_info"),
-                                                "observedAt",
-                                                instant(item.get("observed_at")).toString(),
-                                                "recordedAt",
-                                                instant(item.get("recorded_at")).toString(),
-                                                "evidenceIds",
-                                                json.readTree(
-                                                        item.get("evidence_ids_json").toString()),
-                                                "recordedBy",
-                                                item.get("recorded_by").toString()))
-                        .toList();
-        return Map.of(
-                "page",
+                items.stream().map(item -> RepairViews.factoryPart(json, item, roundId)).toList();
+        return new RepairViews.FactoryPartsPage(
                 page,
-                "pageSize",
                 size,
-                "total",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_repair_factory_parts_change WHERE repair_id=?"
-                                + " AND round_id=?",
-                        Long.class,
-                        id,
-                        roundId),
-                "items",
+                Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_repair_factory_parts_change WHERE"
+                                    + " repair_id=? AND round_id=?",
+                                Long.class,
+                                id,
+                                roundId),
+                        "PARTS_COUNT_MISSING"),
                 views,
-                "canRecord",
                 owner(current, row)
                         && "WAREHOUSE_PROCESSING".equals(row.get("repair_status"))
                         && partsPhase(id, round));
@@ -1090,7 +1093,7 @@ public class RepairFactoryService {
         return !latest.isEmpty() && number(round, "id") == number(latest.getFirst(), "id");
     }
 
-    public Map<String, Object> recordParts(
+    public RepairViews.FactoryReply recordParts(
             Actor actor,
             long id,
             long roundId,
@@ -1102,7 +1105,15 @@ public class RepairFactoryService {
         requireOwner(current, row);
         String operation = "FACTORY_PARTS:" + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -1186,13 +1197,22 @@ public class RepairFactoryService {
                 roundId,
                 Map.of("input", input, "partsChangeId", Long.toString(change)),
                 Role.WAREHOUSE_OPERATOR);
-        var result = reply(header(id), number(round, "scope_id"), roundId);
-        result.put("partsChangeId", Long.toString(change));
+        var result =
+                reply(
+                        header(id),
+                        number(round, "scope_id"),
+                        roundId,
+                        Long.toString(change),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null);
         save(current, operation, key, fingerprint, id, result);
         return result;
     }
 
-    public Map<String, Object> recordQuote(
+    public RepairViews.FactoryReply recordQuote(
             Actor actor,
             long id,
             long roundId,
@@ -1202,7 +1222,7 @@ public class RepairFactoryService {
         return recordMoney(actor, id, roundId, version, key, input, false);
     }
 
-    public Map<String, Object> recordCost(
+    public RepairViews.FactoryReply recordCost(
             Actor actor,
             long id,
             long roundId,
@@ -1212,7 +1232,7 @@ public class RepairFactoryService {
         return recordMoney(actor, id, roundId, version, key, input, true);
     }
 
-    private Map<String, Object> recordMoney(
+    private RepairViews.FactoryReply recordMoney(
             Actor actor,
             long id,
             long roundId,
@@ -1225,7 +1245,15 @@ public class RepairFactoryService {
         requireOwner(current, row);
         String operation = (actual ? "FACTORY_COST:" : "FACTORY_QUOTE:") + id + ":" + roundId;
         String fingerprint = hash(operation, version, input);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -1344,7 +1372,7 @@ public class RepairFactoryService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = RepairConflict.class)
-    public Map<String, Object> registerEvidence(
+    public RepairViews.FactoryReply registerEvidence(
             Actor actor,
             long id,
             long roundId,
@@ -1372,7 +1400,15 @@ public class RepairFactoryService {
         metadata.put("mime", attachment.format().mime());
         metadata.put("size", attachment.file().size());
         String fingerprint = hash(operation, version, metadata);
-        var prior = replay(actor, current, row, operation, key, fingerprint);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        row,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.FactoryReply.class);
         if (prior != null) {
             return prior;
         }
@@ -1431,8 +1467,17 @@ public class RepairFactoryService {
                 roundId,
                 metadata,
                 Role.WAREHOUSE_OPERATOR);
-        var result = reply(header(id), number(round, "scope_id"), roundId);
-        result.put("objectId", attachment.file().id().toString());
+        var result =
+                reply(
+                        header(id),
+                        number(round, "scope_id"),
+                        roundId,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        attachment.file().id().toString());
         save(current, operation, key, fingerprint, id, result);
         return result;
     }
@@ -1623,13 +1668,14 @@ public class RepairFactoryService {
         }
     }
 
-    private Map<String, Object> replay(
+    private <T> T replay(
             Actor actor,
             Current current,
             Map<String, Object> row,
             String operation,
             UUID key,
-            String fingerprint) {
+            String fingerprint,
+            Class<T> type) {
         var receipts =
                 db.queryForList(
                         "SELECT repair_id,payload_sha256,response_json FROM fams_repair_receipt"
@@ -1646,12 +1692,10 @@ public class RepairFactoryService {
                 || !fingerprint.equals(receipt.get("payload_sha256"))) {
             conflict(actor, current, row, "REPAIR_FACTORY_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                receipt.get("response_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(receipt.get("response_json").toString(), type);
     }
 
-    private Map<String, Object> remember(
+    private RepairViews.FactoryReply remember(
             Current current,
             String operation,
             UUID key,
@@ -1670,7 +1714,7 @@ public class RepairFactoryService {
             UUID key,
             String fingerprint,
             long id,
-            Map<String, Object> result) {
+            Object result) {
         db.update(
                 "INSERT INTO fams_repair_receipt(actor_account_id,operation,request_id,repair_id,"
                         + "payload_sha256,response_json,created_at) VALUES (?,?,?,?,?,?,?)",
@@ -1800,155 +1844,72 @@ public class RepairFactoryService {
         throw new RepairConflict(code, fields);
     }
 
-    private Map<String, Object> reply(Map<String, Object> row, Long scope, Long round) {
-        var result = new LinkedHashMap<String, Object>();
-        result.put("repairId", row.get("id").toString());
-        result.put("version", row.get("version"));
-        result.put("assetVersion", row.get("asset_version"));
-        result.put("ownershipVersion", row.get("ownership_version"));
-        result.put("status", row.get("repair_status"));
-        result.put(
-                "processorAccountId",
-                row.get("processor_account_id") == null
+    private RepairViews.FactoryReply reply(Map<String, Object> row, Long scope, Long round) {
+        return reply(row, scope, round, null, null, null, null, null, null);
+    }
+
+    private RepairViews.FactoryReply reply(
+            Map<String, Object> row,
+            Long scope,
+            Long round,
+            String partsChangeId,
+            String replacementId,
+            String sourceId,
+            String replacementAssetId,
+            String inboundReceiptId,
+            String objectId) {
+        Long lockVersion = lockVersion(row);
+        var scopeSegment =
+                scope == null
                         ? null
-                        : row.get("processor_account_id").toString());
+                        : scopeView(
+                                db.queryForMap(
+                                        "SELECT * FROM fams_repair_factory_scope WHERE id=? AND"
+                                                + " repair_id=?",
+                                        scope,
+                                        row.get("id")));
+        var roundSegment = round == null ? null : roundView(round(number(row, "id"), round));
+        return RepairViews.factoryReply(
+                row,
+                lockVersion,
+                scopeSegment,
+                roundSegment,
+                partsChangeId,
+                replacementId,
+                sourceId,
+                replacementAssetId,
+                inboundReceiptId,
+                objectId);
+    }
+
+    /** The frozen reply() lock chip: raw BIGINT lock_version of the single open repair lock. */
+    private Long lockVersion(Map<String, Object> row) {
         var locks =
                 db.queryForList(
                         "SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=? AND"
                             + " business_type='REPAIR' AND business_id=? AND released_at IS NULL",
                         row.get("asset_id"),
                         row.get("id"));
-        result.put("lockVersion", locks.isEmpty() ? null : locks.getFirst().get("lock_version"));
-        if (scope != null) {
-            result.put(
-                    "scope",
-                    scopeView(
-                            db.queryForMap(
-                                    "SELECT * FROM fams_repair_factory_scope WHERE id=? AND"
-                                            + " repair_id=?",
-                                    scope,
-                                    row.get("id"))));
-        }
-        if (round != null) {
-            result.put("round", roundView(round(number(row, "id"), round)));
-        }
-        return result;
+        return locks.isEmpty() ? null : number(locks.getFirst(), "lock_version");
     }
 
-    private Map<String, Object> scopeView(Map<String, Object> row) {
-        var result =
-                fields(
-                        row,
-                        "id",
-                        "repair_id",
-                        "scope_status",
-                        "allowed_method",
-                        "cost_policy",
-                        "cost_limit",
-                        "request_reason",
-                        "requested_by",
-                        "requested_at",
-                        "decision_reason",
-                        "decided_by",
-                        "decided_at",
-                        "version");
-        result.put("requestBasis", json.readTree(row.get("request_snapshot_json").toString()));
-        result.put(
-                "decisionBasis",
-                row.get("decision_snapshot_json") == null
-                        ? null
-                        : json.readTree(row.get("decision_snapshot_json").toString()));
-        return result;
+    private RepairViews.FactoryScopeView scopeView(Map<String, Object> row) {
+        return RepairViews.factoryScope(json, row);
     }
 
-    private Map<String, Object> roundView(Map<String, Object> row) {
-        var result =
-                fields(
-                        row,
-                        "id",
-                        "repair_id",
-                        "asset_id",
-                        "scope_id",
-                        "dispatch_scope_id",
-                        "round_number",
-                        "round_status",
-                        "provider_name",
-                        "service_contact",
-                        "service_phone",
-                        "expected_return_date",
-                        "fault",
-                        "created_by",
-                        "created_at",
-                        "dispatched_at",
-                        "dispatched_by",
-                        "dispatch_evidence",
-                        "received_at",
-                        "received_by",
-                        "receive_location_id",
-                        "receive_location_version",
-                        "condition_result",
-                        "treatment_result",
-                        "actual_cost",
-                        "cancel_reason",
-                        "version");
-        result.put(
-                "quotes",
-                db
-                        .queryForList(
-                                "SELECT * FROM fams_repair_factory_quote WHERE round_id=? ORDER BY"
-                                        + " id",
+    private RepairViews.FactoryRoundView roundView(Map<String, Object> row) {
+        return RepairViews.factoryRound(
+                json,
+                row,
+                db.queryForList(
+                        "SELECT * FROM fams_repair_factory_quote WHERE round_id=? ORDER BY" + " id",
+                        row.get("id")),
+                db.queryForList(
+                                "SELECT * FROM fams_repair_factory_cost WHERE round_id=?",
                                 row.get("id"))
                         .stream()
-                        .map(
-                                q -> {
-                                    var value =
-                                            fields(
-                                                    q,
-                                                    "id",
-                                                    "round_id",
-                                                    "amount",
-                                                    "created_by",
-                                                    "created_at");
-                                    value.put(
-                                            "evidenceIds",
-                                            json.readTree(q.get("evidence_ids_json").toString()));
-                                    return value;
-                                })
-                        .toList());
-        var facts =
-                db.queryForList(
-                        "SELECT * FROM fams_repair_factory_cost WHERE round_id=?", row.get("id"));
-        Map<String, Object> fact = null;
-        if (!facts.isEmpty()) {
-            var value = facts.getFirst();
-            fact = fields(value, "round_id", "amount", "recorded_by", "recorded_at");
-            fact.put("evidenceIds", json.readTree(value.get("evidence_ids_json").toString()));
-        }
-        result.put("costFact", fact);
-        result.put("originalIdentity", json.readTree(row.get("original_identity_json").toString()));
-        return result;
-    }
-
-    private Map<String, Object> fields(Map<String, Object> row, String... names) {
-        var result = new LinkedHashMap<String, Object>();
-        for (var name : names) {
-            String[] words = name.split("_");
-            var label = new StringBuilder(words[0]);
-            for (int i = 1; i < words.length; i++) {
-                label.append(Character.toUpperCase(words[i].charAt(0)))
-                        .append(words[i].substring(1));
-            }
-            Object value = row.get(name);
-            result.put(
-                    label.toString(),
-                    value instanceof Number
-                                    && (name.equals("id")
-                                            || name.endsWith("_id")
-                                            || name.endsWith("_by"))
-                            ? value.toString()
-                            : wire(value));
-        }
-        return result;
+                        .findFirst()
+                        .orElse(null));
     }
 
     /**

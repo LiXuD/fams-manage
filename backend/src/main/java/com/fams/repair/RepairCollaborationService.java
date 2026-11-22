@@ -58,35 +58,29 @@ public class RepairCollaborationService {
         this.attachments = attachments;
     }
 
-    public Map<String, Object> staffBoard(Actor actor, long repair) {
+    public RepairViews.CollaborationBoard staffBoard(Actor actor, long repair) {
         var current = actors.revalidateLocked(actor);
-        repairs.get(actor, repair);
+        repairs.getDetail(actor, repair);
         var row = header(repair);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("repairId", Long.toString(repair));
-        result.put("requestVersion", n(row, "version"));
-        result.put("canInvite", mayInvite(current, row));
-        result.put(
-                "invitations",
-                wire(
+        return new RepairViews.CollaborationBoard(
+                Long.toString(repair),
+                n(row, "version"),
+                mayInvite(current, row),
+                RepairViews.collaborationInvitations(
                         db.queryForList(
                                 "SELECT i.id,i.technician_account_id,a.username AS"
                                     + " technician_username,i.inviter_account_id,i.invitation_status,i.reason,i.version,i.invited_at,i.ended_at,i.end_reason"
                                     + " FROM fams_repair_invitation i JOIN fams_system_account a ON"
                                     + " a.id=i.technician_account_id WHERE i.repair_id=? ORDER BY"
                                     + " i.id DESC LIMIT 100",
-                                repair)));
-        result.put(
-                "invitationTotal",
-                count("SELECT COUNT(*) FROM fams_repair_invitation WHERE repair_id=?", repair));
-        result.put("opinions", opinions(repair));
-        result.put(
-                "opinionTotal",
+                                repair)),
+                count("SELECT COUNT(*) FROM fams_repair_invitation WHERE repair_id=?", repair),
+                opinions(repair),
                 count("SELECT COUNT(*) FROM fams_repair_opinion WHERE repair_id=?", repair));
-        return result;
     }
 
-    public Map<String, Object> technicians(Actor actor, long repair, int page, int size) {
+    public RepairViews.Page<RepairViews.CollaborationTechnician> technicians(
+            Actor actor, long repair, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var row = header(repair);
         requireInviter(current, row);
@@ -101,18 +95,14 @@ public class RepairCollaborationService {
                         "SELECT a.id,a.username,e.name" + where + " ORDER BY a.id LIMIT ? OFFSET ?",
                         size,
                         ((long) page - 1) * size);
-        return Map.of(
-                "items",
-                wire(rows),
-                "total",
+        return new RepairViews.Page<>(
+                RepairViews.collaborationTechnicians(rows),
                 count("SELECT COUNT(*)" + where),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> invite(
+    public RepairViews.CollaborationRequestReceipt invite(
             Actor actor,
             long repair,
             long version,
@@ -122,7 +112,13 @@ public class RepairCollaborationService {
         var row = header(repair);
         requireInviter(current, row);
         String operation = "TECH_INVITE:" + repair, fingerprint = hash(operation, version, input);
-        var prior = replay(current, operation, key, fingerprint);
+        var prior =
+                replay(
+                        current,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.CollaborationRequestReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -187,16 +183,11 @@ public class RepairCollaborationService {
                 key,
                 fingerprint,
                 repair,
-                Map.of(
-                        "repairId",
-                        Long.toString(repair),
-                        "invitationId",
-                        Long.toString(id),
-                        "requestVersion",
-                        version + 1));
+                new RepairViews.CollaborationRequestReceipt(
+                        Long.toString(repair), Long.toString(id), version + 1));
     }
 
-    public Map<String, Object> revoke(
+    public RepairViews.CollaborationRequestReceipt revoke(
             Actor actor, long invitation, long version, UUID key, RepairInput.Reason input) {
         var current = actors.revalidateLocked(actor);
         var pair = aggregate(invitation);
@@ -205,7 +196,13 @@ public class RepairCollaborationService {
         requireInviter(current, row);
         String operation = "TECH_REVOKE:" + invitation,
                 fingerprint = hash(operation, version, input);
-        var prior = replay(current, operation, key, fingerprint);
+        var prior =
+                replay(
+                        current,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.CollaborationRequestReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -237,16 +234,12 @@ public class RepairCollaborationService {
                 key,
                 fingerprint,
                 n(row, "id"),
-                Map.of(
-                        "repairId",
-                        row.get("id").toString(),
-                        "invitationId",
-                        Long.toString(invitation),
-                        "requestVersion",
-                        version + 1));
+                new RepairViews.CollaborationRequestReceipt(
+                        row.get("id").toString(), Long.toString(invitation), version + 1));
     }
 
-    public Map<String, Object> mine(Actor actor, int page, int size) {
+    public RepairViews.Page<RepairViews.CollaborationBrief> mine(
+            Actor actor, int page, int size) {
         var current = participant(actor);
         String where =
                 " FROM fams_repair_invitation i JOIN fams_repair_request r ON r.id=i.repair_id"
@@ -262,39 +255,38 @@ public class RepairCollaborationService {
                         current.id(),
                         size,
                         ((long) page - 1) * size);
-        return Map.of(
-                "items",
+        return new RepairViews.Page<>(
                 rows.stream().map(this::minimal).toList(),
-                "total",
                 count("SELECT COUNT(*)" + where, current.id()),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
-    public Map<String, Object> get(Actor actor, long invitation) {
+    public RepairViews.CollaborationInvitationDetail get(Actor actor, long invitation) {
         var current = participant(actor);
         var pair = aggregate(invitation);
         requireParticipant(current, pair);
-        var result = new LinkedHashMap<>(minimalJoined(pair));
+        var brief = minimalJoined(pair);
         long repair = n(pair.repair(), "id");
-        result.put("opinions", opinions(repair));
-        result.put(
-                "opinionTotal",
-                count("SELECT COUNT(*) FROM fams_repair_opinion WHERE repair_id=?", repair));
         var port = evidence.getIfAvailable();
-        result.put("photosAvailable", port != null);
-        result.put(
-                "faultPhotos",
-                port == null ? List.of() : photoProjection(port.list("REPAIR", repair)));
-        result.put(
-                "attachments",
+        return new RepairViews.CollaborationInvitationDetail(
+                brief.invitationId(),
+                brief.repairId(),
+                brief.version(),
+                brief.invitedAt(),
+                brief.asset(),
+                brief.fault(),
+                brief.impact(),
+                brief.faultOccurredAt(),
+                brief.status(),
+                opinions(repair),
+                count("SELECT COUNT(*) FROM fams_repair_opinion WHERE repair_id=?", repair),
+                port != null,
+                port == null ? List.of() : photoProjection(port.list("REPAIR", repair)),
                 port == null ? List.of() : photoProjection(port.list("REPAIR_TECH", invitation)));
-        return result;
     }
 
-    public Map<String, Object> opinion(
+    public RepairViews.CollaborationOpinionReceipt opinion(
             Actor actor,
             long invitation,
             long version,
@@ -307,7 +299,13 @@ public class RepairCollaborationService {
         var invite = pair.invitation();
         String operation = "TECH_OPINION:" + invitation,
                 fingerprint = hash(operation, version, input);
-        var prior = replay(current, operation, key, fingerprint);
+        var prior =
+                replay(
+                        current,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.CollaborationOpinionReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -385,14 +383,10 @@ public class RepairCollaborationService {
                 key,
                 fingerprint,
                 n(row, "id"),
-                Map.of(
-                        "repairId",
+                new RepairViews.CollaborationOpinionReceipt(
                         row.get("id").toString(),
-                        "invitationId",
                         Long.toString(invitation),
-                        "opinionId",
                         Long.toString(id),
-                        "invitationVersion",
                         version + 1));
     }
 
@@ -402,7 +396,7 @@ public class RepairCollaborationService {
     }
 
     @Transactional(propagation = Propagation.MANDATORY, noRollbackFor = RepairConflict.class)
-    public Map<String, Object> registerAttachment(
+    public RepairViews.CollaborationAttachmentReceipt registerAttachment(
             Actor actor,
             long invitation,
             long version,
@@ -427,7 +421,13 @@ public class RepairCollaborationService {
                                         attachment.format().mime(),
                                         "size",
                                         attachment.file().size()));
-        var prior = replay(current, operation, key, fingerprint);
+        var prior =
+                replay(
+                        current,
+                        operation,
+                        key,
+                        fingerprint,
+                        RepairViews.CollaborationAttachmentReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -474,14 +474,10 @@ public class RepairCollaborationService {
                 key,
                 fingerprint,
                 n(row, "id"),
-                Map.of(
-                        "repairId",
+                new RepairViews.CollaborationAttachmentReceipt(
                         row.get("id").toString(),
-                        "invitationId",
                         Long.toString(invitation),
-                        "objectId",
                         attachment.file().id().toString(),
-                        "invitationVersion",
                         version + 1));
     }
 
@@ -497,7 +493,7 @@ public class RepairCollaborationService {
     public long staffAttachmentScope(Actor actor, long invitation, UUID object) {
         actors.revalidateLocked(actor);
         var pair = aggregate(invitation);
-        repairs.get(actor, n(pair.repair(), "id"));
+        repairs.getDetail(actor, n(pair.repair(), "id"));
         if (count(
                         "SELECT COUNT(*) FROM fams_repair_opinion WHERE invitation_id=? AND"
                             + " JSON_CONTAINS(attachment_ids_json,JSON_QUOTE(?))",
@@ -594,7 +590,7 @@ public class RepairCollaborationService {
         return rows.getFirst();
     }
 
-    private Map<String, Object> minimalJoined(Pair pair) {
+    private RepairViews.CollaborationBrief minimalJoined(Pair pair) {
         var row = new LinkedHashMap<>(pair.repair());
         row.put("repair_id", row.get("id"));
         row.put("id", pair.invitation().get("id"));
@@ -603,35 +599,24 @@ public class RepairCollaborationService {
         return minimal(row);
     }
 
-    private Map<String, Object> minimal(Map<String, Object> row) {
+    private RepairViews.CollaborationBrief minimal(Map<String, Object> row) {
         var source = json.readTree(row.get("source_snapshot_json").toString());
-        return Map.of(
-                "invitationId",
+        return new RepairViews.CollaborationBrief(
                 row.get("id").toString(),
-                "repairId",
                 row.get("repair_id").toString(),
-                "version",
-                row.get("version"),
-                "invitedAt",
-                wire(row.get("invited_at")),
-                "asset",
-                Map.of(
-                        "assetCode",
-                        source.path("assetCode").asText(),
-                        "name",
-                        source.path("name").asText()),
-                "fault",
-                row.get("fault"),
-                "impact",
-                row.get("impact"),
-                "faultOccurredAt",
-                wire(row.get("occurred_at")),
-                "status",
-                row.get("repair_status"));
+                ((Number) row.get("version")).longValue(),
+                RepairViews.timeValue(row.get("invited_at")),
+                new RepairViews.CollaborationAsset(
+                        source.path("assetCode").asText(), source.path("name").asText()),
+                (String) row.get("fault"),
+                (String) row.get("impact"),
+                RepairViews.timeValue(row.get("occurred_at")),
+                (String) row.get("repair_status"));
     }
 
-    private Object opinions(long repair) {
-        return wire(
+    private List<RepairViews.CollaborationOpinionRow> opinions(long repair) {
+        return RepairViews.collaborationOpinions(
+                json,
                 db.queryForList(
                         "SELECT"
                             + " id,invitation_id,judgement,method,opinion_result,occurred_at,attachment_ids_json,actor_username,recorded_at"
@@ -705,8 +690,8 @@ public class RepairCollaborationService {
         throw new RepairConflict(code, fields);
     }
 
-    private Map<String, Object> replay(
-            Current current, String operation, UUID key, String fingerprint) {
+    private <T> T replay(
+            Current current, String operation, UUID key, String fingerprint, Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT payload_sha256,response_json FROM fams_repair_receipt WHERE"
@@ -720,18 +705,16 @@ public class RepairCollaborationService {
         if (!fingerprint.equals(rows.getFirst().get("payload_sha256"))) {
             throw new RepairFailure(409, "REPAIR_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                rows.getFirst().get("response_json").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(rows.getFirst().get("response_json").toString(), type);
     }
 
-    private Map<String, Object> remember(
+    private <T> T remember(
             Current current,
             String operation,
             UUID key,
             String fingerprint,
             long repair,
-            Map<String, Object> result) {
+            T result) {
         db.update(
                 "INSERT INTO"
                     + " fams_repair_receipt(actor_account_id,operation,request_id,repair_id,payload_sha256,response_json,created_at)"
@@ -802,33 +785,6 @@ public class RepairCollaborationService {
         } catch (java.security.NoSuchAlgorithmException error) {
             throw new IllegalStateException(error);
         }
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            var result = new LinkedHashMap<String, Object>();
-            map.forEach(
-                    (k, v) ->
-                            result.put(
-                                    k.toString(),
-                                    k.toString().equals("id") || k.toString().endsWith("_id")
-                                            ? v == null ? null : v.toString()
-                                            : k.toString().endsWith("_json")
-                                                            && v instanceof String text
-                                                    ? json.readValue(text, Object.class)
-                                                    : wire(v)));
-            return result;
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(this::wire).toList();
-        }
-        if (value instanceof java.sql.Timestamp time) {
-            return time.toInstant().toString();
-        }
-        if (value instanceof java.time.LocalDateTime time) {
-            return time.toInstant(java.time.ZoneOffset.UTC).toString();
-        }
-        return value;
     }
 
     private Instant now() {

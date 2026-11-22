@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -37,12 +36,12 @@ public class RepairCollaborationController {
     }
 
     @GetMapping("/repairs/{repair}/collaborations")
-    Map<String, Object> board(@PathVariable @Positive long repair) {
+    RepairViews.CollaborationBoard board(@PathVariable @Positive long repair) {
         return collaboration.staffBoard(actors.capture(), repair);
     }
 
     @GetMapping("/repairs/{repair}/eligible-technicians")
-    Map<String, Object> technicians(
+    RepairViews.Page<RepairViews.CollaborationTechnician> technicians(
             @PathVariable @Positive long repair,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
@@ -50,7 +49,7 @@ public class RepairCollaborationController {
     }
 
     @PostMapping("/repairs/{repair}/collaborations")
-    Map<String, Object> invite(
+    RepairViews.CollaborationRequestReceipt invite(
             @PathVariable @Positive long repair,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -60,7 +59,7 @@ public class RepairCollaborationController {
     }
 
     @PostMapping("/repair-collaborations/{invitation}/revoke")
-    Map<String, Object> revoke(
+    RepairViews.CollaborationRequestReceipt revoke(
             @PathVariable @Positive long invitation,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -70,19 +69,19 @@ public class RepairCollaborationController {
     }
 
     @GetMapping("/repair-collaborations")
-    Map<String, Object> mine(
+    RepairViews.Page<RepairViews.CollaborationBrief> mine(
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Positive @Max(100) int pageSize) {
         return collaboration.mine(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/repair-collaborations/{invitation}")
-    Map<String, Object> get(@PathVariable @Positive long invitation) {
+    RepairViews.CollaborationInvitationDetail get(@PathVariable @Positive long invitation) {
         return collaboration.get(actors.capture(), invitation);
     }
 
     @PostMapping("/repair-collaborations/{invitation}/opinions")
-    Map<String, Object> opinion(
+    RepairViews.CollaborationOpinionReceipt opinion(
             @PathVariable @Positive long invitation,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -91,7 +90,7 @@ public class RepairCollaborationController {
         return retry(() -> collaboration.opinion(actor, invitation, version, key, input));
     }
 
-    private Map<String, Object> retry(Supplier<Map<String, Object>> operation) {
+    private <T> T retry(Supplier<T> operation) {
         for (int attempt = 0; ; attempt++) {
             try {
                 return operation.get();

@@ -1,5 +1,6 @@
 package com.fams.repair;
 
+import com.fams.attachment.AttachmentGrantSigner;
 import com.fams.auth.RequisitionActorContext;
 
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +26,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.UUID;
 
 @Profile("fams-product")
@@ -46,7 +46,7 @@ public class RepairFactoryEvidenceController {
     }
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    Map<String, Object> upload(
+    RepairViews.FactoryReply upload(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -105,7 +105,7 @@ public class RepairFactoryEvidenceController {
     }
 
     @GetMapping("/{object}/grant")
-    Object grant(
+    AttachmentGrantSigner.Grant grant(
             @PathVariable @Positive long id,
             @PathVariable @Positive long round,
             @PathVariable UUID object) {

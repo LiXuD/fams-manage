@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import tools.jackson.databind.JsonNode;
 
-import java.util.Map;
 import java.util.UUID;
 
 /** One administrator transfers procedural ownership, never physical custody. */
@@ -50,12 +49,12 @@ public class RepairReassignmentController {
     }
 
     @GetMapping("/{id}/reassignment")
-    Map<String, Object> inspect(@PathVariable @Positive long id) {
+    RepairViews.ReassignmentView inspect(@PathVariable @Positive long id) {
         return repairs.reassignment(actors.capture(), id);
     }
 
     @PostMapping("/{id}/processor-unavailability")
-    Map<String, Object> declareUnavailable(
+    RepairViews.UnavailabilityReceipt declareUnavailable(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -64,7 +63,7 @@ public class RepairReassignmentController {
     }
 
     @PostMapping("/{id}/reassignment")
-    Map<String, Object> reassign(
+    RepairViews.RepairDetail reassign(
             @PathVariable @Positive long id,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
             @RequestHeader("Idempotency-Key") UUID key,

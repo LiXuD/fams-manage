@@ -85,14 +85,18 @@ final class RepairFactoryCosts {
         return result;
     }
 
-    Map<String, Object> summary(long repair) {
+    RepairViews.FactoryCostSummary summary(long repair) {
         var policy = policy(approved(repair));
-        var result = new LinkedHashMap<String, Object>(basis(repair));
-        result.put("costPolicy", policy.mode());
-        result.put("costLimit", policy.limit() == null ? null : policy.limit().toPlainString());
-        result.put("overrun", !policy.covers(total(repair)));
-        result.put("followupOpen", blocked(repair));
-        return result;
+        var result = basis(repair);
+        return new RepairViews.FactoryCostSummary(
+                (String) result.get("confirmedTotal"),
+                ((Number) result.get("unassessedCount")).longValue(),
+                ((Number) result.get("confirmedRoundCount")).longValue(),
+                (String) result.get("latestQuoteId"),
+                policy.mode(),
+                policy.limit() == null ? null : policy.limit().toPlainString(),
+                !policy.covers(total(repair)),
+                blocked(repair));
     }
 
     Map<String, Object> dispatchScope(long repair, Map<String, Object> round) {

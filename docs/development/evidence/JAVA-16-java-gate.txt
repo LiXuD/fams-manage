@@ -1,0 +1,26 @@
+JAVA-16a/16b/16c repair HTTP wave-5 gate evidence (2026-11-23)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Tree: rsync snapshot of the wave-5 combined main tree (16a+16b+16c delivered+audited, plus the
+  main-agent RepairService.get javadoc correction and the post-run-2 requireNonNull fix),
+  EXCLUDING parallel-session WIP backend/src/test/java/com/fams/local, .worktrees, target,
+  node_modules. Snapshot content-verified: RepairFactoryService carries PARTS_COUNT_MISSING,
+  three repair wire-shape suites present.
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+Run 1: process died silently at startup twice (0-byte log, no notification) — relaunched detached
+  via nohup; not a tree problem.
+Run 2 (detached): FAIL — 1 real SpotBugs finding, NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE on
+  RepairFactoryService.parts (COUNT(*) queryForObject unboxed into long). Fixed with
+  Objects.requireNonNull(..., "PARTS_COUNT_MISSING") per the JAVA-09 precedent;
+  RepairFactoryWireShapeTest 14/14 green after fix.
+Run 3 (after fix, fresh copy):
+[Java blocking quality] exit=0
+[Java quality reports] tests=555, Checkstyle=0, SpotBugs=0
+[JAVA01 coverage] LINE: 28054/30049 (93.36%)
+[JAVA01 coverage] BRANCH: 9937/13145 (75.60%)
+JAVA01_VERIFY_PASS
+steps exit=0: 83
+surefire per-phase result summaries in captured log: 74 phases, 401 tests, 0 failures, 0 errors
+  (phase-summary aggregate, same basis as waves 2-4; the new suites were additionally executed
+  inside the exact gate copy: Repair Core/Factory/Collaboration 18+14+10 = 42/42 green)
+combined-tree unit criteria (main tree, 29 wire-shape classes incl. TransferCalendar): 260/260

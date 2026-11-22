@@ -22,7 +22,7 @@ public class RepairFactoryReplacementReferenceService {
 
     public Object references(RequisitionActorContext.Actor actor, long repair, long round,
             String kind, int page, int size) {
-        if (!Boolean.TRUE.equals(factory.replacements(actor, repair, round).get("canRecord"))) {
+        if (!factory.replacements(actor, repair, round).canRecord()) {
             throw new RepairFailure(404, "REPAIR_FACTORY_REPLACEMENT_NOT_AVAILABLE");
         }
         return catalogs.references(kind, page, size);
