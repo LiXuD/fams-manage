@@ -35,7 +35,7 @@ class BusinessResultNoticeService {
         this.clock = clock;
     }
 
-    Map<String, Object> list(
+    NoticeViews.NoticePage list(
             RequisitionActorContext.Actor actor, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT id,business_type,business_id,item_id,content_json,"
@@ -45,24 +45,17 @@ class BusinessResultNoticeService {
                 + " FROM fams_business_result_notice n WHERE recipient_employee_id=?"
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", current.employeeId(), pageSize,
                 (page - 1) * pageSize);
-        var items = rows.stream().map(row -> Map.of(
-                "id", row.get("id").toString(), "businessType", row.get("business_type"),
-                "businessId", row.get("business_id").toString(), "itemId", row.get("item_id").toString(),
-                "content", json.readTree(row.get("content_json").toString()),
-                "createdAt", row.get("created_at").toString(),
-                "read", row.get("read_at") != null, "reviewRequested",
-                "1".equals(String.valueOf(row.get("review_requested")))
-                        || Boolean.TRUE.equals(row.get("review_requested")))).toList();
+        var items = rows.stream().map(row -> NoticeViews.noticeItem(json, row)).toList();
         Long total = db.queryForObject("SELECT COUNT(*) FROM fams_business_result_notice"
                 + " WHERE recipient_employee_id=?", Long.class, current.employeeId());
         Long unread = db.queryForObject("SELECT COUNT(*) FROM fams_business_result_notice"
                 + " WHERE recipient_employee_id=? AND read_at IS NULL", Long.class,
                 current.employeeId());
-        return Map.of("items", items, "page", page, "pageSize", pageSize,
-                "total", java.util.Objects.requireNonNull(total), "unread", java.util.Objects.requireNonNull(unread));
+        return new NoticeViews.NoticePage(items, page, pageSize,
+                java.util.Objects.requireNonNull(total), java.util.Objects.requireNonNull(unread));
     }
 
-    Map<String, Object> reviewRequests(RequisitionActorContext.Actor actor, int page, int pageSize) {
+    NoticeViews.ReviewRequestPage reviewRequests(RequisitionActorContext.Actor actor, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
             throw RequisitionFailure.forbidden();
@@ -80,20 +73,12 @@ class BusinessResultNoticeService {
         var rows = db.queryForList("SELECT n.id,n.execution_id,n.business_id,n.business_type,r.name AS recipient,"
                 + "a.detail_json,a.occurred_at" + from + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
                 pageSize, (page - 1) * pageSize);
-        var items = rows.stream().map(row -> Map.of(
-                "noticeId", row.get("id").toString(),
-                "executionId", row.get("execution_id").toString(),
-                "businessId", row.get("business_id").toString(),
-                "businessType", row.get("business_type"),
-                "recipient", row.get("recipient"),
-                "reason", json.readTree(row.get("detail_json").toString()).path("reason").asText(),
-                "createdAt", row.get("occurred_at").toString())).toList();
+        var items = rows.stream().map(row -> NoticeViews.reviewRequestItem(json, row)).toList();
         Long total = db.queryForObject("SELECT COUNT(*)" + from, Long.class);
-        return Map.of("items", items, "total", java.util.Objects.requireNonNull(total),
-                "page", page, "pageSize", pageSize);
+        return new NoticeViews.ReviewRequestPage(items, java.util.Objects.requireNonNull(total), page, pageSize);
     }
 
-    Map<String, Object> read(RequisitionActorContext.Actor actor, long id) {
+    NoticeViews.ReadReceipt read(RequisitionActorContext.Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT id FROM fams_business_result_notice"
                 + " WHERE id=? AND recipient_employee_id=? FOR UPDATE", id, current.employeeId());
@@ -103,10 +88,10 @@ class BusinessResultNoticeService {
         db.update("UPDATE fams_business_result_notice SET read_at=COALESCE(read_at,"
                 + "CURRENT_TIMESTAMP(3)) WHERE id=? AND recipient_employee_id=?", id,
                 current.employeeId());
-        return Map.of("id", Long.toString(id), "read", true);
+        return new NoticeViews.ReadReceipt(Long.toString(id), true);
     }
-    @SuppressWarnings("unchecked")
-    Map<String, Object> objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
+
+    NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT * FROM fams_business_result_notice"
                 + " WHERE id=? AND recipient_employee_id=? FOR UPDATE", id, current.employeeId());
@@ -130,11 +115,12 @@ class BusinessResultNoticeService {
             if (!hash.equals(prior.getFirst().get("payload_sha256"))) {
                 throw RequisitionFailure.conflict("RESULT_NOTICE_IDEMPOTENCY_CONFLICT");
             }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(),
+                    NoticeViews.ObjectionReceipt.class);
         }
         var notice = rows.getFirst();
-        var result = Map.of("noticeId", Long.toString(id), "status", "ADMIN_REVIEW_REQUESTED",
-                "businessType", notice.get("business_type"), "businessId", notice.get("business_id").toString());
+        var result = new NoticeViews.ObjectionReceipt(Long.toString(id), "ADMIN_REVIEW_REQUESTED",
+                (String) notice.get("business_type"), notice.get("business_id").toString());
         db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,"
                 + "todo_type,todo_status,opened_at) VALUES ('ASSET_ADMIN',NULL,?,?,'PROXY_RECEIPT_REVIEW','OPEN',?)"
                 + " ON DUPLICATE KEY UPDATE id=id", notice.get("business_type"), notice.get("business_id"), clock.instant());
