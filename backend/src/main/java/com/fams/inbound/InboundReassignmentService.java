@@ -7,7 +7,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +40,7 @@ class InboundReassignmentService {
         this.clock = authClock;
     }
 
-    Map<String, Object> inspect(Actor actor, long id) {
+    InboundViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
         var owner = owner(id);
@@ -51,19 +50,20 @@ class InboundReassignmentService {
                 + "WHERE a.status='ENABLED' AND a.initial_password_required=FALSE "
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
-        var result = new HashMap<String, Object>(Map.of("id", Long.toString(id), "version", row.get("version"),
-                "ownershipVersion", owner.get("ownership_version"),
-                "processorAccountId", owner.get("processor_account_id").toString(),
-                "items", checks(id), "operators", operators.stream().map(o -> Map.of(
-                        "id", o.get("id").toString(), "name", o.get("name"))).toList()));
-        if (unavailabilityDeclared(owner)) {
-            result.put("unavailableReason", owner.get("unavailable_reason"));
-        }
-        return result;
+        // Evaluation order frozen: checks() takes the item/asset/lock FOR UPDATE sequence after
+        // the operators read, exactly as the pre-JAVA-15 Map.of argument position did.
+        var items = checks(id).stream().map(InboundViews::reassignmentItem).toList();
+        return new InboundViews.ReassignmentSnapshot(
+                Long.toString(id),
+                number(row, "version"),
+                number(owner, "ownership_version"),
+                owner.get("processor_account_id").toString(),
+                items,
+                operators.stream().map(InboundViews::operator).toList(),
+                unavailabilityDeclared(owner) ? (String) owner.get("unavailable_reason") : null);
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> reassign(Actor actor, long id, long version, String key,
+    InboundViews.Receipt reassign(Actor actor, long id, long version, String key,
             InboundReassignmentController.Reassignment input) {
         var current = admin(actor);
         String digest = digest(id, version, input);
@@ -73,7 +73,8 @@ class InboundReassignmentService {
         if (!prior.isEmpty()) {
             if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
                 throw InboundFailure.conflict("INBOUND_IDEMPOTENCY_CONFLICT"); }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(),
+                    InboundViews.Receipt.class);
         }
         // Account locks precede receipt/ownership/item/asset locks, matching execution.
         var target = db.queryForList("SELECT id,employee_id,status,initial_password_required "
@@ -127,7 +128,7 @@ class InboundReassignmentService {
                 + "VALUES (?,?,'ASSET_ADMIN','INBOUND_CONTROLLED_REASSIGNMENT','INBOUND',?,?,?,?,?)",
                 actor.requestId().toString(), actor.id(), id, version, version + 1, now,
                 json.writeValueAsString(details));
-        var result = inbound.get(new InboundActorContext.Actor(actor.id(), current.username(),
+        var result = inbound.getDetail(new InboundActorContext.Actor(actor.id(), current.username(),
                 "ASSET_ADMIN", actor.requestId().toString()), id);
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,"
                 + "payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,"
@@ -138,8 +139,7 @@ class InboundReassignmentService {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
-    Map<String, Object> declareUnavailable(Actor actor, long id, long version, String key,
+    InboundViews.UnavailabilityResult declareUnavailable(Actor actor, long id, long version, String key,
             InboundReassignmentController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) {
@@ -161,7 +161,8 @@ class InboundReassignmentService {
             if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
                 throw InboundFailure.conflict("INBOUND_IDEMPOTENCY_CONFLICT");
             }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), Map.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(),
+                    InboundViews.UnavailabilityResult.class);
         }
         if (number(row, "version") != version) {
             throw InboundFailure.conflict("INBOUND_VERSION_CONFLICT");
@@ -192,7 +193,7 @@ class InboundReassignmentService {
                 VALUES ('ASSET_ADMIN','INBOUND',?,'REASSIGNMENT_REQUIRED','OPEN',?)
                 ON DUPLICATE KEY UPDATE id=fams_todo.id
                 """, id, now);
-        var result = Map.<String, Object>of("receiptId", Long.toString(id), "recorded", true);
+        var result = new InboundViews.UnavailabilityResult(Long.toString(id), true);
         db.update("""
                 INSERT INTO fams_idempotency_record (actor_account_id,operation_id,idempotency_key,payload_sha256,
                     result_status,http_status,response_body_json,resource_type,resource_id,

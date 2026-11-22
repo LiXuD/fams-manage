@@ -2,8 +2,6 @@ package com.fams.inbound;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import com.fams.attachment.AttachmentReadService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,11 +24,16 @@ public final class InboundAttachmentReadController {
     private final AttachmentReadService service;
     public InboundAttachmentReadController(AttachmentReadService service) { this.service = service; }
     @GetMapping("/api/v1/inbound-receipts/{receiptId}/attachments")
-    Map<String, List<Map<String, Object>>> list(@PathVariable long receiptId) {
-        return Map.of("items", service.list(receiptId));
+    InboundViews.AttachmentListPage list(@PathVariable long receiptId) {
+        return new InboundViews.AttachmentListPage(service.list(receiptId).stream()
+                .map(InboundViews::attachmentEvidence).toList());
     }
     @PostMapping("/api/v1/attachments/{objectId}/download-grant")
-    Map<String, Object> grant(@PathVariable UUID objectId) { return service.grant(objectId); }
+    InboundViews.DownloadGrant grant(@PathVariable UUID objectId) {
+        var issued = service.grant(objectId);
+        return new InboundViews.DownloadGrant((String) issued.get("url"),
+                ((Number) issued.get("expiresAtEpochSecond")).longValue());
+    }
     @GetMapping("/api/v1/attachments/{objectId}/content")
     ResponseEntity<byte[]> content(@PathVariable UUID objectId, @RequestParam("grant") String grant) throws IOException {
         var content = service.read(objectId, grant);

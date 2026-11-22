@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Date;
-import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,12 +25,15 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Profile("fams-product")
 @Service
 class InboundService {
+    private static final TypeReference<Map<String, Object>> WIRE_MAP = new TypeReference<>() { };
+
     private final JdbcTemplate db;
     private final InboundNumberPort numbers;
     private final ObjectMapper json;
@@ -44,7 +46,7 @@ class InboundService {
         this.clock = authClock;
     }
 
-    Map<String, Object> list(Actor actor, int page, int size, String status, String number) {
+    InboundViews.Page<InboundViews.Receipt> list(Actor actor, int page, int size, String status, String number) {
         if (status != null && !List.of("DRAFT", "PENDING_ADMIN_DECISION", "REJECTED",
                 "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "COMPLETED", "CANCELLED")
                 .contains(status)) { throw InboundFailure.invalid("INBOUND_FILTER_INVALID"); }
@@ -67,14 +69,26 @@ class InboundService {
         paged.add((page - 1) * size);
         List<Map<String, Object>> rows = db.queryForList("SELECT id" + sql
                 + " ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?", paged.toArray());
-        return Map.of("page", page, "pageSize", size, "total", total,
-                "items", rows.stream().map(row -> receipt(id(row))).toList());
+        return new InboundViews.Page<>(rows.stream().map(row -> receipt(id(row))).toList(),
+                total, page, size);
+    }
+
+    /**
+     * JAVA-10c frozen consumption: {@code FactoryReplacementInboundPort.createOwned} projects this
+     * document through {@code Receipt.fromView}/{@code Context.fromView}, which keep Map inputs by
+     * ruling. The typed {@link #createDetail} is the single assembly source; this wire Map is a
+     * convertValue mirror frozen equivalent by InboundWireShapeTest.
+     */
+    @Transactional
+    Map<String, Object> create(Actor actor, String key, Map<String, Object> body) {
+        return json.convertValue(createDetail(actor, key, body), WIRE_MAP);
     }
 
     @Transactional
-    Map<String, Object> create(Actor actor, String key, Map<String, Object> body) {
+    InboundViews.Receipt createDetail(Actor actor, String key, Map<String, Object> body) {
         String digest = digest("create", body);
-        Map<String, Object> prior = replay(actor, "createInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "createInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         LocalDate date = date(body.get("businessDate"));
         List<Map<String, Object>> inputs = items(body);
@@ -114,16 +128,17 @@ class InboundService {
         }
         numbers.markUsed(allocation.id());
         audit(actor, "INBOUND_DRAFT_CREATED", receiptId, null, 0L, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "createInboundReceipt", key, digest, 201, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> update(Actor actor, long receiptId, long version, String key,
+    InboundViews.Receipt update(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("update:" + receiptId + ":" + version, body);
-        Map<String, Object> prior = replay(actor, "updateInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "updateInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         creatorDraft(actor, header, version);
@@ -152,15 +167,16 @@ class InboundService {
         db.update("UPDATE fams_inbound_receipt SET business_date=?,notes=?,version=version+1,"
                 + "updated_at=?,updated_by=? WHERE id=?", date, notes, now, actor.id(), receiptId);
         audit(actor, "INBOUND_DRAFT_UPDATED", receiptId, version, version + 1, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "updateInboundReceipt", key, digest, 200, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> submit(Actor actor, long receiptId, long version, String key) {
+    InboundViews.Receipt submit(Actor actor, long receiptId, long version, String key) {
         String digest = digest("submit:" + receiptId + ":" + version, Map.of());
-        Map<String, Object> prior = replay(actor, "submitInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "submitInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         creatorDraft(actor, header, version);
@@ -194,16 +210,17 @@ class InboundService {
                 "submitted_at=?,admin_decision_due_at=?", now, due);
         todo(receiptId, "ASSET_ADMIN", "ADMIN_DECISION", now);
         audit(actor, "INBOUND_SUBMITTED", receiptId, version, version + 1, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "submitInboundReceipt", key, digest, 200, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> cancel(Actor actor, long receiptId, long version, String key,
+    InboundViews.Receipt cancel(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("cancel:" + receiptId + ":" + version, body);
-        Map<String, Object> prior = replay(actor, "cancelInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "cancelInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         if (number(header, "creator_account_id") != actor.id()) {
@@ -221,16 +238,17 @@ class InboundService {
         transition(receiptId, version, "CANCELLED", now, actor,
                 "cancelled_at=?,cancellation_reason=?", now, reason);
         audit(actor, "INBOUND_CANCELLED_BEFORE_DECISION", receiptId, version, version + 1, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "cancelInboundReceipt", key, digest, 200, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> decide(Actor actor, long receiptId, long version, String key,
+    InboundViews.Receipt decide(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("decision:" + receiptId + ":" + version, body);
-        Map<String, Object> prior = replay(actor, "decideInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "decideInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         checkVersion(header, version);
@@ -269,15 +287,16 @@ class InboundService {
             transition(receiptId, version, "REJECTED", now, actor, null);
         }
         audit(actor, "INBOUND_ADMIN_DECIDED", receiptId, version, version + 1, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "decideInboundReceipt", key, digest, 200, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> claim(Actor actor, long receiptId, long version, String key) {
+    InboundViews.Receipt claim(Actor actor, long receiptId, long version, String key) {
         String digest = digest("claim:" + receiptId + ":" + version, Map.of());
-        Map<String, Object> prior = replay(actor, "claimInboundReceipt", key, digest);
+        InboundViews.Receipt prior = replay(actor, "claimInboundReceipt", key, digest,
+                InboundViews.Receipt.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         checkVersion(header, version);
@@ -294,16 +313,17 @@ class InboundService {
                         number(header, "warehouse_first_execution_deadline_workdays")));
         todo(receiptId, "WAREHOUSE_OPERATOR", "WAREHOUSE_EXECUTION", now);
         audit(actor, "INBOUND_WAREHOUSE_CLAIMED", receiptId, version, version + 1, now);
-        Map<String, Object> result = receipt(receiptId);
+        InboundViews.Receipt result = receipt(receiptId);
         record(actor, "claimInboundReceipt", key, digest, 200, result, receiptId);
         return result;
     }
 
     @Transactional
-    Map<String, Object> accept(Actor actor, long receiptId, long itemId, long version,
+    InboundViews.AcceptResult accept(Actor actor, long receiptId, long itemId, long version,
             String key, Map<String, Object> body) {
         String digest = digest("accept:" + receiptId + ":" + itemId + ":" + version, body);
-        Map<String, Object> prior = replay(actor, "acceptInboundReceiptItem", key, digest);
+        InboundViews.AcceptResult prior = replay(actor, "acceptInboundReceiptItem", key, digest,
+                InboundViews.AcceptResult.class);
         if (prior != null) { return prior; }
         Map<String, Object> header = lockedReceipt(receiptId);
         checkVersion(header, version);
@@ -380,15 +400,25 @@ class InboundService {
                     + "archive_reason='COMPLETED' WHERE id=?", now, id(owner));
             closeTodo(receiptId, "WAREHOUSE_EXECUTION", now);
         } else { transition(receiptId, version, "WAREHOUSE_PROCESSING", now, actor, null); }
-        Map<String, Object> result = new HashMap<>();
-        result.put("receipt", receipt(receiptId));
-        result.put("item", item(itemId));
-        result.put("asset", acceptedAsset(number(line, "asset_id")));
+        // Constructor argument order frozen: receipt document (with its sub-reads) is assembled
+        // before the item and the accepted asset row, exactly as the pre-batch HashMap puts did.
+        InboundViews.AcceptResult result = new InboundViews.AcceptResult(
+                receipt(receiptId), item(itemId), acceptedAsset(number(line, "asset_id")));
         record(actor, "acceptInboundReceiptItem", key, digest, 200, result, receiptId);
         return result;
     }
 
+    /**
+     * JAVA-10c frozen consumption: {@code FactoryReplacementInboundPort.context} projects this
+     * document through {@code Context.fromView}/{@code Receipt.fromView}, which keep Map inputs
+     * by ruling. The typed {@link #getDetail} is the single assembly source; this wire Map is a
+     * convertValue mirror frozen equivalent by InboundWireShapeTest.
+     */
     Map<String, Object> get(Actor actor, long receiptId) {
+        return json.convertValue(getDetail(actor, receiptId), WIRE_MAP);
+    }
+
+    InboundViews.Receipt getDetail(Actor actor, long receiptId) {
         Map<String, Object> header = one("SELECT * FROM fams_inbound_receipt WHERE id=?", receiptId);
         if (header == null) { throw InboundFailure.missing(); }
         String status = text(header, "receipt_status");
@@ -400,158 +430,46 @@ class InboundService {
         return receipt(receiptId);
     }
 
-    private Map<String, Object> receipt(long receiptId) {
+    /**
+     * Pre-batch read order frozen: receipt row, item lines with each item's lock and acceptance
+     * reads, replacement origin, decision, decision scope rows (only when a decision exists),
+     * then the latest processing ownership.
+     */
+    private InboundViews.Receipt receipt(long receiptId) {
         Map<String, Object> row = one("SELECT * FROM fams_inbound_receipt WHERE id=?", receiptId);
         if (row == null) { throw InboundFailure.missing(); }
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", Long.toString(id(row)));
-        result.put("receiptNumber", text(row, "receipt_no"));
-        result.put("status", text(row, "receipt_status"));
-        result.put("businessDate", localDate(row.get("business_date")).toString());
-        result.put("createdBy", identity(number(row, "creator_account_id"),
-                text(row, "creator_username_snapshot")));
-        result.put("createdAt", instant(row.get("created_at")).toString());
-        result.put("version", number(row, "version"));
-        result.put("parameterVersionId", Long.toString(number(row, "parameter_version_id")));
-        result.put("snapshot", Map.of("parameterVersionId", result.get("parameterVersionId"),
-                "businessDate", result.get("businessDate"), "timezone", text(row, "timezone_snapshot"),
-                "adminDecisionDeadlineWorkdays", number(row, "admin_decision_deadline_workdays"),
-                "warehouseClaimDeadlineWorkdays", number(row, "warehouse_claim_deadline_workdays"),
-                "warehouseFirstExecutionDeadlineWorkdays",
-                number(row, "warehouse_first_execution_deadline_workdays")));
-        result.put("items", lines(receiptId).stream().map(this::item).toList());
+        List<InboundViews.Item> items = lines(receiptId).stream().map(this::item).toList();
         Map<String, Object> origin = one("SELECT source_id,original_asset_id,asset_id,repair_id,round_id"
                 + " FROM fams_inbound_factory_replacement_origin WHERE receipt_id=?", receiptId);
-        if (origin != null) {
-            result.put("factoryReplacement", Map.of("sourceId", origin.get("source_id"),
-                    "originalAssetId", origin.get("original_asset_id").toString(),
-                    "replacementAssetId", origin.get("asset_id").toString(),
-                    "repairId", origin.get("repair_id").toString(),
-                    "roundId", origin.get("round_id").toString()));
-        }
-        putTime(result, row, "submittedAt", "submitted_at");
-        putTime(result, row, "adminDecisionDueAt", "admin_decision_due_at");
-        putTime(result, row, "warehouseClaimDueAt", "warehouse_claim_due_at");
-        putTime(result, row, "warehouseFirstExecutionDueAt", "warehouse_first_execution_due_at");
-        putTime(result, row, "cancelledAt", "cancelled_at");
-        putTime(result, row, "completedAt", "completed_at");
-        putOptional(result, row, "notes", "notes");
-        putOptional(result, row, "cancellationReason", "cancellation_reason");
         Map<String, Object> decision = one("SELECT * FROM fams_inbound_decision WHERE receipt_id=?", receiptId);
-        if (decision != null) {
-            List<Map<String, Object>> scope = db.queryForList("SELECT * FROM fams_inbound_approval_scope_item "
-                    + "WHERE decision_id=? ORDER BY receipt_item_id", id(decision));
-            Map<String, Object> decisionView = new HashMap<>();
-            decisionView.put("id", Long.toString(id(decision)));
-            decisionView.put("result", text(decision, "decision_result"));
-            decisionView.put("decidedReceiptVersion", number(decision, "receipt_version_before"));
-            decisionView.put("decidedBy", identity(number(decision, "decided_by_account_id"),
-                    text(decision, "decided_by_username_snapshot")));
-            decisionView.put("decidedAt", instant(decision.get("decided_at")).toString());
-            putOptional(decisionView, decision, "comment", "comment_text");
-            decisionView.put("scope", Map.of("receiptVersion", number(decision, "receipt_version_before"),
-                    "items", scope.stream().map(this::scope).toList()));
-            result.put("decision", decisionView);
-        }
+        List<Map<String, Object>> scope = decision == null ? List.of()
+                : db.queryForList("SELECT * FROM fams_inbound_approval_scope_item "
+                        + "WHERE decision_id=? ORDER BY receipt_item_id", id(decision));
         Map<String, Object> owner = one("SELECT * FROM fams_inbound_processing_ownership "
                 + "WHERE receipt_id=? ORDER BY id DESC LIMIT 1", receiptId);
-        if (owner != null) {
-            Map<String, Object> view = new HashMap<>();
-            view.put("processor", identity(number(owner, "processor_account_id"),
-                    text(owner, "processor_username_snapshot")));
-            view.put("claimedAt", instant(owner.get("acquired_at")).toString());
-            view.put("ownershipVersion", number(owner, "ownership_version"));
-            putTime(view, owner, "archivedAt", "archived_at");
-            result.put("currentProcessor", view);
-        }
-        return result;
+        return InboundViews.receipt(row, items, origin, decision, scope, owner);
     }
 
-    private Map<String, Object> item(long itemId) {
+    private InboundViews.Item item(long itemId) {
         Map<String, Object> row = one("SELECT * FROM fams_inbound_receipt_item WHERE id=?", itemId);
         return item(row);
     }
 
-    private Map<String, Object> item(Map<String, Object> row) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", Long.toString(id(row)));
-        result.put("executionStatus", text(row, "execution_status"));
-        result.put("asset", ref(number(row, "asset_id"), number(row, "asset_version_snapshot")));
-        result.put("assetSnapshot", Map.of("assetCode", text(row, "asset_code_snapshot"),
-                "assetName", text(row, "asset_name_snapshot")));
-        result.put("targetWarehouse", ref(number(row, "target_warehouse_id"),
-                number(row, "warehouse_version_snapshot")));
-        result.put("targetLocation", ref(number(row, "target_location_id"),
-                number(row, "location_version_snapshot")));
-        result.put("warehouseSnapshot", Map.of("code", text(row, "warehouse_code_snapshot"),
-                "name", text(row, "warehouse_name_snapshot")));
-        result.put("locationSnapshot", Map.of("code", text(row, "location_code_snapshot"),
-                "name", text(row, "location_name_snapshot")));
+    private InboundViews.Item item(Map<String, Object> row) {
         Map<String, Object> lock = one("SELECT * FROM fams_asset_business_lock "
                 + "WHERE business_type='INBOUND' AND business_item_id=? ORDER BY id DESC LIMIT 1", id(row));
-        if (lock != null) {
-            result.put("businessLock", Map.of("assetId", Long.toString(number(lock, "asset_id")),
-                    "businessType", "INBOUND", "businessId", Long.toString(number(lock, "business_id")),
-                    "businessItemId", Long.toString(number(lock, "business_item_id")),
-                    "lockVersion", number(lock, "lock_version"),
-                    "acquiredAt", instant(lock.get("acquired_at")).toString()));
-        }
         Map<String, Object> acceptance = one("SELECT * FROM fams_inbound_acceptance "
                 + "WHERE receipt_item_id=?", id(row));
-        if (acceptance != null) { result.put("acceptance", acceptance(acceptance)); }
-        return result;
+        return InboundViews.item(row, lock, acceptance);
     }
 
-    private Map<String, Object> scope(Map<String, Object> row) {
-        return Map.of("receiptItemId", Long.toString(number(row, "receipt_item_id")),
-                "asset", ref(number(row, "approved_asset_id"), number(row, "approved_asset_version")),
-                "targetWarehouse", ref(number(row, "approved_warehouse_id"),
-                        number(row, "approved_warehouse_version")),
-                "targetLocation", ref(number(row, "approved_location_id"),
-                        number(row, "approved_location_version")));
-    }
-
-    private Map<String, Object> acceptance(Map<String, Object> row) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("id", Long.toString(id(row)));
-        result.put("receiptItemId", Long.toString(number(row, "receipt_item_id")));
-        result.put("assetId", Long.toString(number(row, "asset_id")));
-        result.put("acceptedBy", identity(number(row, "accepted_by_account_id"),
-                text(row, "accepted_by_username_snapshot")));
-        result.put("acceptedAt", instant(row.get("accepted_at")).toString());
-        result.put("businessDate", localDate(row.get("business_date")).toString());
-        for (String field : List.of("receiptVersionBefore", "assetVersionBefore",
-                "assetVersionAfter", "lockVersion")) {
-            result.put(field, number(row, field.replaceAll("([A-Z])", "_$1").toLowerCase()));
-        }
-        result.put("observedAssetCode", text(row, "observed_asset_code"));
-        result.put("storageCustody", storage(number(row, "storage_warehouse_id"),
-                number(row, "warehouse_version_at_acceptance"),
-                number(row, "storage_location_id"), number(row, "location_version_at_acceptance")));
-        putOptional(result, row, "notes", "notes");
-        return result;
-    }
-
-    private Map<String, Object> acceptedAsset(long assetId) {
+    private InboundViews.AcceptedAsset acceptedAsset(long assetId) {
         Map<String, Object> asset = asset(assetId, false);
         Map<String, Object> warehouse = one("SELECT version FROM fams_warehouse WHERE id=?",
                 number(asset, "storage_warehouse_id"));
         Map<String, Object> location = one("SELECT version FROM fams_location WHERE id=?",
                 number(asset, "current_location_id"));
-        return Map.of("id", Long.toString(assetId), "assetCode", text(asset, "asset_code"),
-                "lifecycle", text(asset, "lifecycle_status"),
-                "exception", text(asset, "exception_status"),
-                "cardStage", text(asset, "card_stage"), "version", number(asset, "version"),
-                "currentCustody", storage(number(asset, "storage_warehouse_id"),
-                        number(warehouse, "version"), number(asset, "current_location_id"),
-                        number(location, "version")),
-                "inboundBusinessDate", localDate(asset.get("inbound_business_date")).toString());
-    }
-
-    private Map<String, Object> storage(long warehouse, long warehouseVersion,
-            long location, long locationVersion) {
-        return Map.of("custodyType", "STORAGE", "warehouse", ref(warehouse, warehouseVersion),
-                "location", ref(location, locationVersion));
+        return InboundViews.acceptedAsset(asset, warehouse, location, assetId);
     }
 
     private Map<String, Object> replacementOrigin(List<Map<String, Object>> resolved) {
@@ -691,8 +609,8 @@ class InboundService {
         return lastId();
     }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> replay(Actor actor, String operation, String key, String digest) {
+    private <T extends InboundViews.Reply> T replay(Actor actor, String operation, String key,
+            String digest, Class<T> type) {
         // Serialize this actor's inbound mutations through commit, including absent replay keys.
         db.queryForObject("SELECT id FROM fams_system_account WHERE id=? FOR UPDATE",
                 Long.class, actor.id());
@@ -702,11 +620,11 @@ class InboundService {
         if (prior == null) { return null; }
         if (!digest.equals(text(prior, "payload_sha256"))) {
             throw InboundFailure.conflict("INBOUND_IDEMPOTENCY_CONFLICT"); }
-        return json.readValue(text(prior, "response_body_json"), Map.class);
+        return json.readValue(text(prior, "response_body_json"), type);
     }
 
     private void record(Actor actor, String operation, String key, String digest,
-            int status, Map<String, Object> response, long receiptId) {
+            int status, Object response, long receiptId) {
         Instant now = now();
         db.update("INSERT INTO fams_idempotency_record (actor_account_id,operation_id,"
                 + "idempotency_key,payload_sha256,result_status,http_status,response_body_json,"
@@ -808,14 +726,6 @@ class InboundService {
         return LocalDate.parse(value.toString());
     }
 
-    private Instant instant(Object value) {
-        if (value instanceof Timestamp stamp) { return stamp.toInstant(); }
-        if (value instanceof Instant instant) { return instant; }
-        if (value instanceof java.time.LocalDateTime dateTime) {
-            return dateTime.toInstant(java.time.ZoneOffset.UTC); }
-        return Instant.parse(value.toString());
-    }
-
     private long longValue(Object value) {
         try {
             long result = Long.parseLong(value.toString());
@@ -844,23 +754,5 @@ class InboundService {
         if (!(value instanceof String text) || text.length() > max) {
             throw InboundFailure.invalid("INBOUND_FIELD_INVALID"); }
         return text.strip();
-    }
-
-    private Map<String, Object> identity(long accountId, String username) {
-        return Map.of("id", Long.toString(accountId), "username", username);
-    }
-
-    private Map<String, Object> ref(long id, long version) {
-        return Map.of("id", Long.toString(id), "version", version);
-    }
-
-    private void putTime(Map<String, Object> target, Map<String, Object> row,
-            String jsonKey, String column) {
-        if (row.get(column) != null) { target.put(jsonKey, instant(row.get(column)).toString()); }
-    }
-
-    private void putOptional(Map<String, Object> target, Map<String, Object> row,
-            String jsonKey, String column) {
-        if (row.get(column) != null) { target.put(jsonKey, text(row, column)); }
     }
 }

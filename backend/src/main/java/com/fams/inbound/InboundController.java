@@ -34,7 +34,7 @@ class InboundController {
     }
 
     @GetMapping
-    Map<String, Object> list(@RequestParam(defaultValue = "1") @Min(1) int page,
+    InboundViews.Page<InboundViews.Receipt> list(@RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int pageSize,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String receiptNumber) {
@@ -42,19 +42,19 @@ class InboundController {
     }
 
     @PostMapping
-    ResponseEntity<Map<String, Object>> create(
+    ResponseEntity<InboundViews.Receipt> create(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestBody Map<String, Object> body) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(actors.requireWarehouse(), key, body));
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.createDetail(actors.requireWarehouse(), key, body));
     }
 
     @GetMapping("/{receiptId}")
-    Map<String, Object> get(@PathVariable long receiptId) {
-        return service.get(actors.requireReader(), receiptId);
+    InboundViews.Receipt get(@PathVariable long receiptId) {
+        return service.getDetail(actors.requireReader(), receiptId);
     }
 
     @PatchMapping("/{receiptId}")
-    Map<String, Object> update(@PathVariable long receiptId,
+    InboundViews.Receipt update(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestBody Map<String, Object> body) {
@@ -62,14 +62,14 @@ class InboundController {
     }
 
     @PostMapping("/{receiptId}/submit")
-    Map<String, Object> submit(@PathVariable long receiptId,
+    InboundViews.Receipt submit(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version) {
         return service.submit(actors.requireWarehouse(), receiptId, version, key);
     }
 
     @PostMapping("/{receiptId}/cancel")
-    Map<String, Object> cancel(@PathVariable long receiptId,
+    InboundViews.Receipt cancel(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestBody Map<String, Object> body) {
@@ -77,7 +77,7 @@ class InboundController {
     }
 
     @PostMapping("/{receiptId}/decision")
-    Map<String, Object> decision(@PathVariable long receiptId,
+    InboundViews.Receipt decision(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestBody Map<String, Object> body) {
@@ -85,14 +85,14 @@ class InboundController {
     }
 
     @PostMapping("/{receiptId}/claim")
-    Map<String, Object> claim(@PathVariable long receiptId,
+    InboundViews.Receipt claim(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version) {
         return service.claim(actors.requireWarehouse(), receiptId, version, key);
     }
 
     @PostMapping("/{receiptId}/items/{itemId}/accept")
-    Map<String, Object> accept(@PathVariable long receiptId, @PathVariable long itemId,
+    InboundViews.AcceptResult accept(@PathVariable long receiptId, @PathVariable long itemId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestBody Map<String, Object> body) {

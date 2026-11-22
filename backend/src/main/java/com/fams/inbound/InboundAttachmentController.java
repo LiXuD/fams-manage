@@ -1,7 +1,6 @@
 package com.fams.inbound;
 
 import java.io.IOException;
-import java.util.Map;
 import com.fams.attachment.AttachmentUploadKeys;
 import com.fams.attachment.AttachmentUploadService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,32 +26,28 @@ public final class InboundAttachmentController {
     }
 
     @PostMapping(value = "/api/v1/inbound-receipts/{receiptId}/attachments", consumes = "multipart/form-data")
-    ResponseEntity<Map<String, Object>> upload(@PathVariable long receiptId,
+    ResponseEntity<InboundViews.AttachmentReceipt> upload(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") String key,
             @RequestHeader("If-Match-Version") long version, @RequestPart("file") MultipartFile file)
             throws IOException {
         try (var source = file.getInputStream()) {
             var result = uploads.uploadIdempotent(keys, key, receiptId, version,
                     file.getOriginalFilename(), file.getContentType(), source);
-            return ResponseEntity.status(201).body(Map.of("objectId", result.file().id().toString(),
-                    "filename", file.getOriginalFilename(), "contentType", result.format().mime(),
-                    "sizeBytes", result.file().size(), "scanStatus", result.scanResult().name(),
-                    "businessVersion", version + 1));
+            return ResponseEntity.status(201)
+                    .body(InboundViews.attachmentReceipt(result, file.getOriginalFilename(), version));
         }
     }
 
     @PostMapping(value = "/api/v1/inbound-receipts/{receiptId}/attachments/{objectId}/corrections",
             consumes = "multipart/form-data")
-    ResponseEntity<Map<String, Object>> correct(@PathVariable long receiptId, @PathVariable java.util.UUID objectId,
+    ResponseEntity<InboundViews.AttachmentReceipt> correct(@PathVariable long receiptId, @PathVariable java.util.UUID objectId,
             @RequestHeader("Idempotency-Key") String key, @RequestHeader("If-Match-Version") long version,
             @RequestParam("reason") String reason, @RequestPart("file") MultipartFile file) throws IOException {
         try (var source = file.getInputStream()) {
             var result = uploads.correctIdempotent(keys, key, receiptId, version, objectId, reason,
                     file.getOriginalFilename(), file.getContentType(), source);
-            return ResponseEntity.status(201).body(Map.of("objectId", result.file().id().toString(),
-                    "filename", file.getOriginalFilename(), "contentType", result.format().mime(),
-                    "sizeBytes", result.file().size(), "scanStatus", result.scanResult().name(),
-                    "businessVersion", version + 1));
+            return ResponseEntity.status(201)
+                    .body(InboundViews.attachmentReceipt(result, file.getOriginalFilename(), version));
         }
     }
 

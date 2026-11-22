@@ -1,7 +1,6 @@
 package com.fams.inbound;
 
 import java.util.List;
-import java.util.Map;
 
 import com.fams.auth.RequisitionActorContext;
 import jakarta.validation.Valid;
@@ -43,12 +42,12 @@ class InboundReassignmentController {
     }
 
     @GetMapping
-    Map<String, Object> inspect(@PathVariable long receiptId) {
+    InboundViews.ReassignmentSnapshot inspect(@PathVariable long receiptId) {
         return service.inspect(actors.capture(), receiptId);
     }
 
     @PostMapping("/unavailable")
-    Map<String, Object> declareUnavailable(@PathVariable @Min(1) long receiptId,
+    InboundViews.UnavailabilityResult declareUnavailable(@PathVariable @Min(1) long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @Valid @RequestBody Unavailability input) {
@@ -56,7 +55,7 @@ class InboundReassignmentController {
     }
 
     @PostMapping
-    Map<String, Object> reassign(@PathVariable long receiptId,
+    InboundViews.Receipt reassign(@PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @Valid @RequestBody Reassignment input) {

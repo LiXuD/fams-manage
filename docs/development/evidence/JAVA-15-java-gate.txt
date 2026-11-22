@@ -1,0 +1,19 @@
+JAVA-15 inbound HTTP wave-4 gate evidence (2026-11-22)
+Environment: JDK 21.0.7 GraalVM, Node v24.18.0, MySQL 8.4.11 pinned digest, isolated compose
+Tree: rsync snapshot of the wave-4 combined main tree (JAVA-15 delivered, pre-closeout),
+  EXCLUDING parallel-session WIP backend/src/test/java/com/fams/local, .worktrees, target,
+  node_modules. Snapshot predates the concurrently dispatched JAVA-16a agent (repair files),
+  which touches no inbound file.
+Driver: scripts/verify-d6-03a.py verify_java_quality (full product-gate Java sequence)
+
+[Java blocking quality] exit=0
+[Java quality reports] tests=555, Checkstyle=0, SpotBugs=0
+[JAVA01 coverage] LINE: 27742/29753 (93.24%)
+[JAVA01 coverage] BRANCH: 9914/13113 (75.60%)
+JAVA01_VERIFY_PASS
+steps exit=0: 83
+surefire per-phase result summaries in captured log: 74 phases, 401 tests, 0 failures, 0 errors
+  (phase-summary aggregate, same basis as waves 2-3; gate's own tests=555 report-path count is
+  unchanged across waves, so the new suite was additionally executed inside the exact gate copy:
+  InboundWireShapeTest 16/16 green)
+combined-tree unit criteria (main tree, 26 wire-shape classes incl. TransferCalendar): 218/218
