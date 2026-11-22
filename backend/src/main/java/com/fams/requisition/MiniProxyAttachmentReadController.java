@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -28,10 +27,11 @@ class MiniProxyAttachmentReadController {
     MiniProxyAttachmentReadController(AttachmentReadService reads) { this.reads = reads; }
 
     @PostMapping("/api/v1/mini/attachments/{objectId}/download-grant")
-    Map<String, Object> grant(@PathVariable UUID objectId) {
+    ProxyConfirmationViews.DownloadGrant grant(@PathVariable UUID objectId) {
         var result = reads.grant(objectId);
-        return Map.of("url", result.get("url").toString().replace("/api/v1/attachments/", "/api/v1/mini/attachments/"),
-                "expiresAtEpochSecond", result.get("expiresAtEpochSecond"));
+        return new ProxyConfirmationViews.DownloadGrant(
+                result.get("url").toString().replace("/api/v1/attachments/", "/api/v1/mini/attachments/"),
+                ((Number) result.get("expiresAtEpochSecond")).longValue());
     }
 
     @GetMapping("/api/v1/mini/attachments/{objectId}/content")

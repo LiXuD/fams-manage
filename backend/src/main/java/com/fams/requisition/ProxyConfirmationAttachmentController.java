@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 
 @RestController
 @Profile("fams-product")
@@ -42,14 +41,17 @@ public final class ProxyConfirmationAttachmentController {
 
     @org.springframework.web.bind.annotation.GetMapping(
             {"/api/v1/proxy-confirmations/{receiptId}/attachments", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments"})
-    Map<String, Object> list(@PathVariable long receiptId) {
-        return Map.of("items", reads.list("PROXY_CONFIRMATION", receiptId));
+    ProxyConfirmationViews.AttachmentListPage list(@PathVariable long receiptId) {
+        return new ProxyConfirmationViews.AttachmentListPage(
+                reads.list("PROXY_CONFIRMATION", receiptId).stream()
+                        .map(ProxyConfirmationViews::attachmentEvidence)
+                        .toList());
     }
 
     @PostMapping(
             value = {"/api/v1/proxy-confirmations/{receiptId}/attachments", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments"},
             consumes = "multipart/form-data")
-    ResponseEntity<Map<String, Object>> upload(
+    ResponseEntity<ProxyConfirmationViews.EvidenceReceipt> upload(
             @PathVariable long receiptId,
             @RequestHeader("Idempotency-Key") String key,
             @RequestHeader("If-Match-Version") long version,
@@ -66,27 +68,14 @@ public final class ProxyConfirmationAttachmentController {
                             file.getContentType(),
                             source);
             return ResponseEntity.status(201)
-                    .body(
-                            Map.of(
-                                    "objectId",
-                                    result.file().id().toString(),
-                                    "filename",
-                                    file.getOriginalFilename(),
-                                    "contentType",
-                                    result.format().mime(),
-                                    "sizeBytes",
-                                    result.file().size(),
-                                    "scanStatus",
-                                    result.scanResult().name(),
-                                    "businessVersion",
-                                    version + 1));
+                    .body(ProxyConfirmationViews.receipt(result, file.getOriginalFilename(), version));
         }
     }
 
     @PostMapping(
             value = {"/api/v1/proxy-confirmations/{receiptId}/attachments/{objectId}/corrections", "/api/v1/mini/proxy-confirmations/{receiptId}/attachments/{objectId}/corrections"},
             consumes = "multipart/form-data")
-    ResponseEntity<Map<String, Object>> correct(
+    ResponseEntity<ProxyConfirmationViews.EvidenceReceipt> correct(
             @PathVariable long receiptId,
             @PathVariable java.util.UUID objectId,
             @RequestHeader("Idempotency-Key") String key,
@@ -107,20 +96,7 @@ public final class ProxyConfirmationAttachmentController {
                             file.getContentType(),
                             source);
             return ResponseEntity.status(201)
-                    .body(
-                            Map.of(
-                                    "objectId",
-                                    result.file().id().toString(),
-                                    "filename",
-                                    file.getOriginalFilename(),
-                                    "contentType",
-                                    result.format().mime(),
-                                    "sizeBytes",
-                                    result.file().size(),
-                                    "scanStatus",
-                                    result.scanResult().name(),
-                                    "businessVersion",
-                                    version + 1));
+                    .body(ProxyConfirmationViews.receipt(result, file.getOriginalFilename(), version));
         }
     }
 }
