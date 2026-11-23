@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -37,7 +36,7 @@ class InventoryFindingController {
     }
 
     @GetMapping("/tasks/{task}/finding-targets")
-    Map<String, Object> targets(
+    FindingViews.FindingTargets targets(
             @PathVariable @Positive long task,
             @RequestParam @NotBlank @Size(max = 128) String assetCode,
             @RequestParam(required = false) @Size(max = 128) String receiptNumber) {
@@ -45,13 +44,13 @@ class InventoryFindingController {
     }
 
     @GetMapping("/tasks/{task}/findings/{observation}")
-    Map<String, Object> detail(
+    FindingViews.FindingDetail detail(
             @PathVariable @Positive long task, @PathVariable @Positive long observation) {
         return findings.detail(actors.capture(), task, observation);
     }
 
     @GetMapping("/tasks/{task}/findings/{observation}/recollection-targets")
-    Map<String, Object> recollectionTargets(
+    FindingViews.ObservationPage recollectionTargets(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestParam(defaultValue = "1") @Positive @Max(1000000) int page,
@@ -60,7 +59,7 @@ class InventoryFindingController {
     }
 
     @PostMapping("/tasks/{task}/findings/{observation}/time-decisions")
-    Map<String, Object> recollect(
+    FindingViews.RecollectionReceipt recollect(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -70,7 +69,7 @@ class InventoryFindingController {
     }
 
     @PostMapping("/tasks/{task}/findings/{observation}/decisions")
-    Map<String, Object> decide(
+    FindingViews.DecisionReceipt decide(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestHeader("Idempotency-Key") UUID key,

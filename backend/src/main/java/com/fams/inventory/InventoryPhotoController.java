@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -40,16 +39,16 @@ class InventoryPhotoController {
     }
 
     @GetMapping("/tasks/{taskId}/events/{eventId}/photos")
-    Map<String, Object> list(@PathVariable @Positive long taskId, @PathVariable UUID eventId) {
+    FindingViews.PhotoList list(@PathVariable @Positive long taskId, @PathVariable UUID eventId) {
         var items =
                 reads.list(actors.capture(), taskId, eventId).stream()
                         .map(InventoryPhotoReadService::photo)
                         .toList();
-        return Map.of("items", items);
+        return new FindingViews.PhotoList(items);
     }
 
     @PostMapping("/tasks/{taskId}/events/{eventId}/photos/{objectId}/download-grant")
-    Map<String, Object> grant(
+    FindingViews.DownloadGrant grant(
             @PathVariable @Positive long taskId,
             @PathVariable UUID eventId,
             @PathVariable UUID objectId,
@@ -57,8 +56,7 @@ class InventoryPhotoController {
         var grant = reads.grant(actors.capture(), taskId, eventId, objectId);
         String prefix =
                 request.getRequestURI().startsWith("/api/v1/mini/") ? "/api/v1/mini" : "/api/v1";
-        return Map.of(
-                "url",
+        return new FindingViews.DownloadGrant(
                 prefix
                         + "/inventory-observations/tasks/"
                         + taskId
@@ -68,7 +66,6 @@ class InventoryPhotoController {
                         + objectId
                         + "/content?grant="
                         + grant.token(),
-                "expiresAtEpochSecond",
                 grant.expiresAtEpochSecond());
     }
 
@@ -96,7 +93,7 @@ class InventoryPhotoController {
     }
 
     @PostMapping("/tasks/{taskId}/events/{eventId}/photos")
-    Map<String, Object> upload(
+    FindingViews.PhotoReceipt upload(
             @PathVariable @Positive long taskId,
             @PathVariable UUID eventId,
             @RequestHeader("Idempotency-Key") UUID photoId,

@@ -45,38 +45,39 @@ public class InventoryReviewService {
         this.clock = clock;
     }
 
-    public Map<String, Object> detail(Actor actor, long taskId, int page, int size) {
+    public FindingViews.ReviewTaskDetail detail(Actor actor, long taskId, int page, int size) {
         admin(actor);
         var task = task(taskId);
         var rows = db.queryForList("SELECT * FROM fams_inventory_item WHERE task_id=?"
                 + " ORDER BY asset_id LIMIT ? OFFSET ? FOR SHARE", taskId, size, (page - 1) * size);
         var contexts = assets.contexts(rows.stream().map(row -> number(row, "asset_id")).toList(),
                 instant(task.get("published_at")));
-        var items = new ArrayList<Map<String, Object>>();
+        var items = new ArrayList<FindingViews.ReviewTaskItem>();
         for (var item : rows) {
             var candidate = candidate(item);
             var review = review(item);
             var context = contexts.get(number(item, "asset_id"));
-            var result = new LinkedHashMap<String, Object>();
-            result.put("item", wire(item));
-            result.put("current", context == null ? null : wire(json.readValue(context.snapshotJson(), Object.class)));
-            result.put("movementEvents", context == null ? List.of() : context.movements());
-            result.put("candidate", candidate == null ? null : wire(candidate));
-            result.put("review", review == null ? Map.of("version", 0) : wire(review));
             String problem = normalProblem(item, candidate, context);
             if (review != null) {
                 problem = "ALREADY_REVIEWED";
             }
-            result.put("canAcceptNormal", problem == null
-                    && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status")));
-            result.put("blockedReason", problem);
-            items.add(result);
+            items.add(new FindingViews.ReviewTaskItem(
+                    FindingViews.item(json, item),
+                    context == null ? null
+                            : FindingViews.wiredTree(json,
+                                    json.readValue(context.snapshotJson(), Object.class)),
+                    context == null ? List.of() : context.movements(),
+                    candidate == null ? null : FindingViews.reviewObservation(json, candidate),
+                    FindingViews.reviewState(json, review),
+                    problem == null
+                            && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status")),
+                    problem));
         }
-        return Map.of("task", wire(task), "items", items, "total", countItems(taskId), "page", page,
-                "pageSize", size, "reviewedCount", reviewedCount(taskId));
+        return new FindingViews.ReviewTaskDetail(FindingViews.task(json, task), items,
+                countItems(taskId), page, size, reviewedCount(taskId));
     }
 
-    public Map<String, Object> observations(Actor actor, long taskId, Long itemId, int page, int size) {
+    public FindingViews.ObservationPage observations(Actor actor, long taskId, Long itemId, int page, int size) {
         admin(actor);
         task(taskId);
         if (itemId != null) {
@@ -96,11 +97,12 @@ public class InventoryReviewService {
         args.add((page - 1) * size);
         var rows = db.queryForList("SELECT * FROM fams_inventory_observation WHERE " + where
                 + " ORDER BY id LIMIT ? OFFSET ? FOR SHARE", args.toArray());
-        return Map.of("items", rows.stream().map(row -> wire(row)).toList(), "total", Objects.requireNonNull(total),
-                "page", page, "pageSize", size);
+        return new FindingViews.ObservationPage(
+                rows.stream().map(row -> FindingViews.reviewObservation(json, row)).toList(),
+                Objects.requireNonNull(total), page, size);
     }
 
-    public Map<String, Object> acceptNormal(Actor actor, long taskId, long expectedVersion, UUID key,
+    public FindingViews.NormalBatchReceipt acceptNormal(Actor actor, long taskId, long expectedVersion, UUID key,
             InventoryReviewInput.NormalBatch input) {
         var current = admin(actor);
         var task = task(taskId);
@@ -112,8 +114,7 @@ public class InventoryReviewService {
             if (!fingerprint.equals(prior.getFirst().get("payload_sha256"))) {
                 reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of("requestId", key.toString()));
             }
-            return json.readValue(prior.getFirst().get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return replay(prior.getFirst(), FindingViews.NormalBatchReceipt.class);
         }
         if (number(task, "version") != expectedVersion
                 || !List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
@@ -135,7 +136,7 @@ public class InventoryReviewService {
             order.put(number(orderedRows.get(index), "id"), index);
         }
         ordered.sort(java.util.Comparator.comparingInt(item -> order.getOrDefault(item.itemId(), Integer.MAX_VALUE)));
-        var outcomes = new ArrayList<Map<String, Object>>();
+        var outcomes = new ArrayList<FindingViews.NormalBatchItem>();
         int accepted = 0;
         for (var entry : ordered) {
             var rows = db.queryForList("SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR UPDATE", taskId, entry.itemId());
@@ -177,15 +178,15 @@ public class InventoryReviewService {
                     observation, taskId, entry.itemId(), entry.recheckGeneration(), input.reason(), evidence,
                     current.id(), current.username(), now());
             accepted++;
-            outcomes.add(Map.of("itemId", Long.toString(entry.itemId()), "status", "ACCEPTED", "review", wire(Objects.requireNonNull(review(item)))));
+            outcomes.add(new FindingViews.NormalBatchItem(Long.toString(entry.itemId()), "ACCEPTED",
+                    FindingViews.reviewNode(json, Objects.requireNonNull(review(item))), null, null));
         }
         long afterVersion = expectedVersion + (accepted > 0 ? 1 : 0);
         if (accepted > 0) {
             db.update("UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?", now(), taskId);
         }
-        var response = Map.<String, Object>of("taskId", Long.toString(taskId), "version", afterVersion,
-                "accepted", accepted, "conflicts", outcomes.size() - accepted, "items", outcomes,
-                "reviewedCount", reviewedCount(taskId));
+        var response = new FindingViews.NormalBatchReceipt(Long.toString(taskId), afterVersion, accepted,
+                outcomes.size() - accepted, outcomes, reviewedCount(taskId));
         audit(actor, current, taskId, "INVENTORY_NORMAL_REVIEWED", expectedVersion, afterVersion, response);
         db.update("INSERT INTO fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,"
                 + "payload_sha256,response_json,created_at) VALUES (?,?,'ACCEPT_NORMAL',?,?,?,?)",
@@ -248,9 +249,9 @@ public class InventoryReviewService {
         return rows.isEmpty() ? null : rows.getFirst();
     }
 
-    private Map<String, Object> conflict(long id, String code, Map<String, Object> current) {
-        return Map.of("itemId", Long.toString(id), "status", "CONFLICT", "code", code,
-                "current", current == null ? Map.of("version", 0) : wire(current));
+    private FindingViews.NormalBatchItem conflict(long id, String code, Map<String, Object> current) {
+        return new FindingViews.NormalBatchItem(Long.toString(id), "CONFLICT", null, code,
+                FindingViews.reviewNode(json, current));
     }
 
     private long countItems(long task) {
@@ -310,28 +311,13 @@ public class InventoryReviewService {
         }
     }
 
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> row) {
-            Map<String, Object> result = new LinkedHashMap<>();
-            row.forEach((key, child) -> {
-                String name = key.toString();
-                Object data = name.endsWith("_json") && child instanceof String text
-                        ? json.readValue(text, Object.class) : child;
-                result.put(name, data instanceof Number && (name.equals("id") || name.endsWith("_id") || name.endsWith("Id"))
-                        ? data.toString() : wire(data));
-            });
-            return result;
-        }
-        if (value instanceof List<?> list) {
-            return list.stream().map(this::wire).toList();
-        }
-        if (value instanceof Timestamp timestamp) {
-            return timestamp.toInstant().toString();
-        }
-        if (value instanceof java.time.LocalDateTime time) {
-            return time.toInstant(java.time.ZoneOffset.UTC).toString();
-        }
-        return value;
+    /**
+     * Replay of one stored fams_inventory_review_receipt.response_json through the typed exit shape
+     * (JAVA-17c blueprint). The lookup, FOR UPDATE lock and payload comparison stay in the calling
+     * flow untouched.
+     */
+    private <T> T replay(Map<String, Object> prior, Class<T> type) {
+        return json.readValue(prior.get("response").toString(), type);
     }
 
     private long number(Map<String, Object> row, String field) {

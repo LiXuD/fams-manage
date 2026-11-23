@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -36,28 +35,28 @@ class InventoryReviewController {
     }
 
     @GetMapping("/tasks/{task}")
-    Map<String, Object> detail(@PathVariable @Positive long task,
+    FindingViews.ReviewTaskDetail detail(@PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return reviews.detail(actors.capture(), task, page, pageSize);
     }
 
     @GetMapping("/tasks/{task}/items/{item}/observations")
-    Map<String, Object> observations(@PathVariable @Positive long task, @PathVariable @Positive long item,
+    FindingViews.ObservationPage observations(@PathVariable @Positive long task, @PathVariable @Positive long item,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return reviews.observations(actors.capture(), task, item, page, pageSize);
     }
 
     @GetMapping("/tasks/{task}/findings")
-    Map<String, Object> findings(@PathVariable @Positive long task,
+    FindingViews.ObservationPage findings(@PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return reviews.observations(actors.capture(), task, null, page, pageSize);
     }
 
     @PostMapping("/tasks/{task}/normal-acceptance")
-    Map<String, Object> accept(@PathVariable @Positive long task,
+    FindingViews.NormalBatchReceipt accept(@PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long taskVersion,
             @Valid @RequestBody InventoryReviewInput.NormalBatch input) {

@@ -61,60 +61,44 @@ public class InventoryFindingService {
         this.clock = clock;
     }
 
-    public Map<String, Object> targets(
+    public FindingViews.FindingTargets targets(
             Actor actor, long taskId, String assetCode, String receiptNumber) {
         admin(actor);
         task(taskId);
         if (receiptNumber != null && !receiptNumber.isBlank()) {
             var row = inbounds.find(actor, receiptNumber.strip(), assetCode.strip());
-            return Map.of(
-                    "items",
+            return new FindingViews.FindingTargets(
                     row == null
                             ? List.of()
                             : List.of(
-                                    Map.of(
-                                            "kind",
-                                            "FORMAL_INBOUND",
-                                            "assetId",
+                                    FindingViews.formalInboundTarget(
                                             row.assetId(),
-                                            "assetCode",
                                             row.assetCode(),
-                                            "ownerVersion",
                                             row.version(),
-                                            "inboundReceiptId",
                                             row.receiptId(),
-                                            "receiptNumber",
                                             receiptNumber.strip(),
-                                            "status",
                                             row.status())));
         }
         var rows = cards.identify("CODE", assetCode.strip());
         if (rows.isEmpty()) {
-            return Map.of("items", List.of());
+            return new FindingViews.FindingTargets(List.of());
         }
         String id = rows.getFirst().id();
         String snapshot = cards.currentSnapshot(Long.parseLong(id));
         if (snapshot == null) {
-            return Map.of("items", List.of());
+            return new FindingViews.FindingTargets(List.of());
         }
         var row = json.readTree(snapshot);
-        return Map.of(
-                "items",
+        return new FindingViews.FindingTargets(
                 List.of(
-                        Map.of(
-                                "kind",
-                                "DUPLICATE_ASSET",
-                                "assetId",
+                        FindingViews.duplicateAssetTarget(
                                 id,
-                                "assetCode",
                                 row.path("assetCode").asText(),
-                                "assetName",
                                 row.path("name").asText(),
-                                "ownerVersion",
                                 row.path("version").asLong())));
     }
 
-    public Map<String, Object> detail(Actor actor, long taskId, long observationId) {
+    public FindingViews.FindingDetail detail(Actor actor, long taskId, long observationId) {
         admin(actor);
         var task = task(taskId);
         var observation = observation(taskId, observationId);
@@ -133,48 +117,45 @@ public class InventoryFindingService {
                             + " WHERE d.observation_id=? AND d.dimension='FINDING' ORDER BY"
                             + " d.after_version DESC LIMIT 100",
                         observationId);
-        return Map.of(
-                "timeSubject",
-                db
-                        .queryForList(
-                                "SELECT * FROM fams_inventory_review_subject WHERE observation_id=?"
-                                        + " AND dimension='TIME'",
-                                observationId)
-                        .stream()
-                        .map(this::wire)
+        // Read order stays frozen: subject, history, TIME subjects, recollections, history count.
+        var timeSubject =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_review_subject WHERE observation_id=?"
+                                + " AND dimension='TIME'",
+                        observationId);
+        var recollections =
+                db.queryForList(
+                        "SELECT d.*,CAST(l.counter_observation_id AS CHAR) AS"
+                            + " counterObservationId,l.counter_observed_at FROM"
+                            + " fams_inventory_finding_recollection l JOIN"
+                            + " fams_inventory_review_decision d ON"
+                            + " d.observation_id=l.observation_id AND"
+                            + " d.dimension=l.dimension AND"
+                            + " d.after_version=l.decision_version WHERE l.observation_id=?"
+                            + " ORDER BY l.decision_version DESC LIMIT 100",
+                        observationId);
+        var historyTotal =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_inventory_review_decision WHERE"
+                                        + " observation_id=? AND dimension='FINDING'",
+                                Long.class,
+                                observationId));
+        return new FindingViews.FindingDetail(
+                timeSubject.stream().map(row -> FindingViews.subject(json, row)).toList(),
+                recollections.stream()
+                        .map(row -> FindingViews.decisionRecollection(json, row))
                         .toList(),
-                "recollections",
-                db
-                        .queryForList(
-                                "SELECT d.*,CAST(l.counter_observation_id AS CHAR) AS"
-                                    + " counterObservationId,l.counter_observed_at FROM"
-                                    + " fams_inventory_finding_recollection l JOIN"
-                                    + " fams_inventory_review_decision d ON"
-                                    + " d.observation_id=l.observation_id AND"
-                                    + " d.dimension=l.dimension AND"
-                                    + " d.after_version=l.decision_version WHERE l.observation_id=?"
-                                    + " ORDER BY l.decision_version DESC LIMIT 100",
-                                observationId)
-                        .stream()
-                        .map(this::wire)
-                        .toList(),
-                "taskVersion",
-                task.get("version"),
-                "observation",
-                wire(observation),
-                "subject",
-                subject.isEmpty() ? Map.of() : wire(subject.getFirst()),
-                "history",
-                history.stream().map(this::wire).toList(),
-                "historyTotal",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_inventory_review_decision WHERE"
-                                + " observation_id=? AND dimension='FINDING'",
-                        Long.class,
-                        observationId));
+                number(task, "version"),
+                FindingViews.observation(json, observation),
+                subject.isEmpty()
+                        ? FindingViews.noSubject()
+                        : FindingViews.subject(json, subject.getFirst()),
+                history.stream().map(row -> FindingViews.decisionHistory(json, row)).toList(),
+                historyTotal);
     }
 
-    public Map<String, Object> decide(
+    public FindingViews.DecisionReceipt decide(
             Actor actor,
             long taskId,
             long observationId,
@@ -199,9 +180,7 @@ public class InventoryFindingService {
             if (!hash.equals(prior.getFirst().get("payload_sha256"))) {
                 reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
             }
-            return json.readValue(
-                    prior.getFirst().get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return replay(prior.getFirst(), FindingViews.DecisionReceipt.class);
         }
         var subjects =
                 db.queryForList(
@@ -344,12 +323,13 @@ public class InventoryFindingService {
                 "UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?",
                 now,
                 taskId);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("taskId", Long.toString(taskId));
-        result.put("observationId", Long.toString(observationId));
-        result.put("version", version + 1);
-        result.put("subjectVersion", after);
-        result.put("status", status);
+        var result =
+                new FindingViews.DecisionReceipt(
+                        Long.toString(taskId),
+                        Long.toString(observationId),
+                        version + 1,
+                        after,
+                        status);
         audit(actor, current, task, "INVENTORY_FINDING_DECIDED", result);
         db.update(
                 "INSERT INTO fams_inventory_review_receipt(task_id,actor_account_id,operation,"
@@ -364,7 +344,7 @@ public class InventoryFindingService {
         return result;
     }
 
-    public Map<String, Object> recollectionTargets(
+    public FindingViews.ObservationPage recollectionTargets(
             Actor actor, long taskId, long observationId, int page, int size) {
         admin(actor);
         task(taskId);
@@ -376,8 +356,7 @@ public class InventoryFindingService {
                 " FROM fams_inventory_observation WHERE task_id=? AND item_id IS NULL AND id>? AND"
                     + " outcome='FINDING_REVIEW' AND calibrated_observed_at IS NOT NULL AND"
                     + " calibrated_persisted_at IS NOT NULL AND calibrated_observed_at>=?";
-        return Map.of(
-                "items",
+        return new FindingViews.ObservationPage(
                 db
                         .queryForList(
                                 "SELECT *" + where + " ORDER BY id LIMIT ? OFFSET ? FOR SHARE",
@@ -387,9 +366,8 @@ public class InventoryFindingService {
                                 size,
                                 ((long) page - 1) * size)
                         .stream()
-                        .map(this::wire)
+                        .map(row -> FindingViews.observation(json, row))
                         .toList(),
-                "total",
                 java.util.Objects.requireNonNull(
                         db.queryForObject(
                                 "SELECT COUNT(*)" + where,
@@ -397,14 +375,12 @@ public class InventoryFindingService {
                                 taskId,
                                 observationId,
                                 original.get("received_at"))),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
     /** Recollection resolves uncertainty without assigning a new timestamp to the original fact. */
-    public Map<String, Object> recollect(
+    public FindingViews.RecollectionReceipt recollect(
             Actor actor,
             long taskId,
             long observationId,
@@ -429,9 +405,7 @@ public class InventoryFindingService {
             if (!fingerprint.equals(prior.getFirst().get("payload_sha256"))) {
                 reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
             }
-            return json.readValue(
-                    prior.getFirst().get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            return replay(prior.getFirst(), FindingViews.RecollectionReceipt.class);
         }
         if (!"TIME_REVIEW".equals(observation.get("outcome"))) {
             throw new InventoryFailure(409, "INVENTORY_FINDING_TIME_REQUIRED");
@@ -525,22 +499,14 @@ public class InventoryFindingService {
                 now,
                 taskId);
         var result =
-                Map.<String, Object>of(
-                        "taskId",
+                new FindingViews.RecollectionReceipt(
                         Long.toString(taskId),
-                        "observationId",
                         Long.toString(observationId),
-                        "version",
                         version + 1,
-                        "subjectVersion",
                         after,
-                        "status",
                         "CLOSED",
-                        "method",
                         "RECOLLECTED",
-                        "counterObservationId",
                         Long.toString(input.counterObservationId()),
-                        "originalTimeConfidence",
                         "UNVERIFIED");
         audit(actor, current, task, "INVENTORY_FINDING_TIME_RECOLLECTED", result);
         db.update(
@@ -607,7 +573,11 @@ public class InventoryFindingService {
                 subject.getOrDefault("subject_status", task.get("task_status")).toString());
         if (subject.get("reviewer_username") != null) {
             fields.put("processedBy", subject.get("reviewer_username").toString());
-            fields.put("processedAt", wire(subject).get("reviewed_at").toString());
+            // The legacy assembly stringified the wired value, so a reviewed_at without a
+            // reviewer would fail the same way here.
+            fields.put(
+                    "processedAt",
+                    FindingViews.subject(json, subject).reviewedAt().toString());
         }
         fields.put(
                 "readOnlyUrl", InventoryReviewLinks.task(actor, number(task, "id")) + "/findings");
@@ -666,27 +636,13 @@ public class InventoryFindingService {
         return ((Number) row.get(key)).longValue();
     }
 
-    private Map<String, Object> wire(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        row.forEach(
-                (key, value) ->
-                        result.put(
-                                key,
-                                value != null
-                                                && (key.equals("facts_json")
-                                                        || key.equals("receipt_json"))
-                                        ? json.readValue(value.toString(), Object.class)
-                                        : value instanceof java.time.LocalDateTime time
-                                                ? time.toInstant(java.time.ZoneOffset.UTC)
-                                                        .toString()
-                                                : value instanceof java.sql.Timestamp time
-                                                        ? time.toInstant().toString()
-                                                        : value instanceof Number
-                                                                        && (key.equals("id")
-                                                                                || key.endsWith(
-                                                                                        "_id"))
-                                                                ? value.toString()
-                                                                : value));
-        return result;
+    /**
+     * Replay of one stored fams_inventory_review_receipt.response_json through the typed exit shape
+     * (JAVA-17c blueprint: the pre-batch read used an untyped {@code Map} TypeReference, so old
+     * stored rows are re-read through the record that now produces the response). The row lookup,
+     * FOR UPDATE lock and payload comparison stay in the calling flow untouched.
+     */
+    private <T> T replay(Map<String, Object> prior, Class<T> type) {
+        return json.readValue(prior.get("response").toString(), type);
     }
 }

@@ -22,7 +22,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -41,7 +40,7 @@ class InventoryRepairPhotoController {
     }
 
     @PostMapping("/{repair}/observations/{observation}/photos/{object}/download-grant")
-    Map<String, Object> grant(
+    FindingViews.DownloadGrant grant(
             @PathVariable @Positive long repair,
             @PathVariable @Positive long observation,
             @PathVariable UUID object,
@@ -49,8 +48,7 @@ class InventoryRepairPhotoController {
         var grant = reads.grant(actors.capture(), repair, observation, object);
         String prefix =
                 request.getRequestURI().startsWith("/api/v1/mini/") ? "/api/v1/mini" : "/api/v1";
-        return Map.of(
-                "url",
+        return new FindingViews.DownloadGrant(
                 prefix
                         + "/inventory-repair-evidence/"
                         + repair
@@ -60,14 +58,13 @@ class InventoryRepairPhotoController {
                         + object
                         + "/content?grant="
                         + grant.token(),
-                "expiresAtEpochSecond",
                 grant.expiresAtEpochSecond());
     }
 
     @GetMapping("/{repair}/observations/{observation}/photos")
-    Map<String, Object> list(
+    FindingViews.RepairPhotoList list(
             @PathVariable @Positive long repair, @PathVariable @Positive long observation) {
-        return Map.of("items", reads.list(actors.capture(), repair, observation));
+        return new FindingViews.RepairPhotoList(reads.list(actors.capture(), repair, observation));
     }
 
     @GetMapping("/{repair}/observations/{observation}/photos/{object}/content")

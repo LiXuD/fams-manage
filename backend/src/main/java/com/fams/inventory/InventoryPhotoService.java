@@ -56,7 +56,7 @@ public class InventoryPhotoService {
         this.json = json;
     }
 
-    public Map<String, Object> upload(
+    public FindingViews.PhotoReceipt upload(
             RequisitionActorContext.Actor actor,
             long taskId,
             UUID eventId,
@@ -166,10 +166,8 @@ public class InventoryPhotoService {
                                                 prior.getFirst().get("original_filename"))) {
                                     throw new InventoryFailure(409, "INVENTORY_PHOTO_KEY_CONFLICT");
                                 }
-                                return Map.<String, Object>of(
-                                        "objectId",
-                                        prior.getFirst().get("object_id"),
-                                        "photoId",
+                                return new FindingViews.PhotoReceipt(
+                                        prior.getFirst().get("object_id").toString(),
                                         photoId.toString());
                             }
                             if (!db.queryForList(
@@ -216,15 +214,12 @@ public class InventoryPhotoService {
                                                     attachment.file().id().toString(),
                                                     "sha256",
                                                     attachment.file().sha256())));
-                            return Map.<String, Object>of(
-                                    "objectId",
-                                    attachment.file().id().toString(),
-                                    "photoId",
-                                    photoId.toString());
+                            return new FindingViews.PhotoReceipt(
+                                    attachment.file().id().toString(), photoId.toString());
                         });
         // An exact replay registered no new metadata; delete only this attempt's new quarantined
         // bytes.
-        if (!newlyReceived.get().toString().equals(result.get("objectId"))) {
+        if (!newlyReceived.get().toString().equals(result.objectId())) {
             storage.delete(newlyReceived.get());
         }
         return result;
