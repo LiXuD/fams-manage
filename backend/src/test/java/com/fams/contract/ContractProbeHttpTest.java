@@ -148,7 +148,8 @@ class ContractProbeHttpTest {
     }
 
     @SpringBootConfiguration
-    @SpringBootApplication(scanBasePackages = "com.fams.contract.probe")
+    @SpringBootApplication(
+            scanBasePackages = {"com.fams.contract.probe", "com.fams.security"})
     static class TestApplication {
     }
 }

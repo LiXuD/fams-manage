@@ -1755,7 +1755,7 @@ def verify_runtime_recovery(
         write_runtime_probe(context, probe_key)
         first_log = stop_application(application)
         application = None
-        if "Started ContractProbeApplication" not in first_log:
+        if "Started FamsApplication" not in first_log:
             raise VerificationFailure("first application start was not observed in its log")
 
         application = start_application(context)

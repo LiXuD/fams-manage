@@ -11,7 +11,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Map;
 
-import com.fams.contract.probe.ContractProbeApplication;
+import com.fams.FamsApplication;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -66,7 +66,7 @@ class AuthSessionRestartTest {
     }
 
     private ConfigurableApplicationContext start(AuthHttpTest.DatabaseSettings database) {
-        return new SpringApplicationBuilder(ContractProbeApplication.class)
+        return new SpringApplicationBuilder(FamsApplication.class)
                 .profiles("fams-product")
                 .properties(Map.of(
                         "server.port", "0",
