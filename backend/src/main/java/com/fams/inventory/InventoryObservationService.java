@@ -19,7 +19,6 @@ import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -64,7 +63,7 @@ public class InventoryObservationService {
         this.attachments = attachments;
     }
 
-    public Map<String, Object> calibrate(
+    public SealViews.CalibrationResult calibrate(
             RequisitionActorContext.Actor actor, InventoryObservationInput.Calibration input) {
         var current = actors.revalidateLocked(actor);
         Long binding = identities.bindingId(actor);
@@ -81,26 +80,20 @@ public class InventoryObservationService {
                 input.deviceId().toString(),
                 Timestamp.from(input.clientTime()),
                 Timestamp.from(now));
-        return Map.of(
-                "calibrationId",
-                id,
-                "serverTime",
-                now.toString(),
-                "clientTime",
-                input.clientTime().toString());
+        return new SealViews.CalibrationResult(id, now.toString(), input.clientTime().toString());
     }
 
-    public Map<String, Object> identify(
+    public SealViews.Identification identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
         return identify(actor, taskId, source, value, false);
     }
 
-    public Map<String, Object> identifyAndRecord(
+    public SealViews.Identification identifyAndRecord(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
         return identify(actor, taskId, source, value, true);
     }
 
-    private Map<String, Object> identify(
+    private SealViews.Identification identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value, boolean recordScan) {
         var current = actors.revalidateLocked(actor);
         var task = task(current, taskId);
@@ -108,11 +101,15 @@ public class InventoryObservationService {
             throw new InventoryFailure(400, "INVENTORY_LOOKUP_INVALID");
         }
         if ("SCAN".equals(source) && !value.matches("[A-Za-z0-9_-]{43}")) {
-            return Map.of("kind", "INVALID_TAG", "message", "无效标签，请按资产编码或名称查询并填写手工原因；不认定盘盈。");
+            return new SealViews.Identification(
+                    "INVALID_TAG", "无效标签，请按资产编码或名称查询并填写手工原因；不认定盘盈。", null, null, null, null,
+                    null, null, null);
         }
         var found = assets.identify(source, value);
         if (found.isEmpty()) {
-            return Map.of("kind", "UNVERIFIED", "message", "未核实标签或编码；可记录待核实线索，不自动判盘盈。");
+            return new SealViews.Identification(
+                    "UNVERIFIED", "未核实标签或编码；可记录待核实线索，不自动判盘盈。", null, null, null, null, null,
+                    null, null);
         }
         var asset = found.getFirst();
         var rows =
@@ -124,18 +121,15 @@ public class InventoryObservationService {
                         taskId,
                         asset.id());
         if (rows.isEmpty()) {
-            return Map.of(
-                    "kind",
-                    "TASK_OUTSIDE",
-                    "assetCode",
-                    asset.assetCode(),
-                    "name",
-                    asset.name());
+            return new SealViews.Identification(
+                    "TASK_OUTSIDE", null, asset.assetCode(), asset.name(), null, null, null, null,
+                    null);
         }
         var item = rows.getFirst();
         if (item.get("executor_account_id") == null
                 || number(item, "executor_account_id") != current.id()) {
-            return Map.of("kind", "NOT_ASSIGNED", "message", "该资产未分配给当前执行人。");
+            return new SealViews.Identification(
+                    "NOT_ASSIGNED", "该资产未分配给当前执行人。", null, null, null, null, null, null, null);
         }
         if (recordScan && "SCAN".equals(source)
                 && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))) {
@@ -148,22 +142,21 @@ public class InventoryObservationService {
                     """, item.get("id"), item.get("recheck_generation"), current.id(), timestamp(clock.instant()),
                     asset.id(), asset.tagVersion(), asset.issuedAt());
         }
-        return Map.of(
-                "kind",
+        // The three version components stay Long: the legacy Map.of passed the BIGINT column
+        // through by value and the JSON text of the number is unchanged (JAVA-14b1 wording).
+        return new SealViews.Identification(
                 "ASSIGNED",
-                "itemId",
-                item.get("id"),
-                "assignmentVersion",
-                item.get("assignment_version"),
-                "recheckGeneration",
-                item.get("recheck_generation"),
-                "assetVersion",
-                item.get("asset_version"),
-                "snapshot",
+                null,
+                null,
+                null,
+                item.get("id").toString(),
+                nullable(item, "assignment_version"),
+                nullable(item, "recheck_generation"),
+                nullable(item, "asset_version"),
                 json.readTree(item.get("snapshot").toString()));
     }
 
-    public Map<String, Object> submit(
+    public SealViews.ObservationReceipt submit(
             RequisitionActorContext.Actor actor,
             long taskId,
             InventoryObservationInput.Observation input) {
@@ -182,23 +175,16 @@ public class InventoryObservationService {
             throw new InventoryFailure(403, "INVENTORY_PARTICIPATION_REQUIRED");
         }
         String payload = sha(json.writeValueAsString(input));
-        var prior =
-                db.queryForList(
-                        "SELECT actor_account_id,binding_id,payload_sha256,CAST(receipt_json AS"
-                            + " CHAR) AS receipt FROM fams_inventory_observation WHERE task_id=?"
-                            + " AND client_event_id=?",
+        var replay =
+                replay(
                         taskId,
-                        input.eventId().toString());
-        if (!prior.isEmpty()) {
-            var row = prior.getFirst();
-            if (number(row, "actor_account_id") != current.id()
-                    || !Objects.equals(nullable(row, "binding_id"), binding)
-                    || !payload.equals(row.get("payload_sha256"))) {
-                throw new InventoryFailure(409, "INVENTORY_EVENT_CONFLICT");
-            }
-            return json.readValue(
-                    row.get("receipt").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                        input.eventId().toString(),
+                        payload,
+                        current,
+                        binding,
+                        SealViews.ObservationReceipt.class);
+        if (replay != null) {
+            return replay;
         }
         Instant received = clock.instant().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
         requireTime(input.rawObservedAt());
@@ -260,13 +246,14 @@ public class InventoryObservationService {
                 outcome = differences.isEmpty() ? "ACCEPTED" : "DIFFERENCE_REVIEW";
             }
         }
-        var receipt = new LinkedHashMap<String, Object>();
-        receipt.put("eventId", input.eventId().toString());
-        receipt.put("outcome", outcome);
-        receipt.put("counted", List.of("ACCEPTED", "DIFFERENCE_REVIEW").contains(outcome));
-        receipt.put("differences", differences);
-        receipt.put("receivedAt", received.toString());
-        receipt.put("recollectionRequired", "EXPIRED".equals(outcome));
+        var receipt =
+                new SealViews.ObservationReceipt(
+                        input.eventId().toString(),
+                        outcome,
+                        List.of("ACCEPTED", "DIFFERENCE_REVIEW").contains(outcome),
+                        differences,
+                        received.toString(),
+                        "EXPIRED".equals(outcome));
         // Expiry retains only minimal refusal metadata, never a new late-evidence body.
         String facts = "EXPIRED".equals(outcome) ? "{}" : json.writeValueAsString(input);
         if ("EXPIRED".equals(outcome)) {
@@ -339,7 +326,7 @@ public class InventoryObservationService {
                     """, observation, outcome.equals("CONFLICT_REVIEW") ? "INVENTORY_CONFLICT" : "INVENTORY_DIFFERENCE",
                     timestamp(received));
         }
-        if (Boolean.TRUE.equals(receipt.get("counted"))) {
+        if (receipt.counted()) {
             db.update(
                     "INSERT INTO"
                         + " fams_inventory_round_result(item_id,recheck_generation,observation_id,fact_sha256)"
@@ -401,6 +388,37 @@ public class InventoryObservationService {
             throw new InventoryFailure(403, "INVENTORY_PARTICIPATION_REQUIRED");
         }
         return rows.getFirst();
+    }
+
+    /**
+     * Replays the stored fams_inventory_observation.receipt_json of an already accepted client
+     * event. The query text, the three identity/payload checks and their evaluation order are the
+     * pre-refactor inline block verbatim; only the reply projection became typed.
+     */
+    private <T> T replay(
+            long taskId,
+            String clientEventId,
+            String payload,
+            RequisitionActorContext.Current current,
+            Long binding,
+            Class<T> type) {
+        var prior =
+                db.queryForList(
+                        "SELECT actor_account_id,binding_id,payload_sha256,CAST(receipt_json AS"
+                            + " CHAR) AS receipt FROM fams_inventory_observation WHERE task_id=?"
+                            + " AND client_event_id=?",
+                        taskId,
+                        clientEventId);
+        if (prior.isEmpty()) {
+            return null;
+        }
+        var row = prior.getFirst();
+        if (number(row, "actor_account_id") != current.id()
+                || !Objects.equals(nullable(row, "binding_id"), binding)
+                || !payload.equals(row.get("payload_sha256"))) {
+            throw new InventoryFailure(409, "INVENTORY_EVENT_CONFLICT");
+        }
+        return json.readValue(row.get("receipt").toString(), type);
     }
 
     private InventoryObservationTime.Result time(

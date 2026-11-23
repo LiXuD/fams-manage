@@ -22,7 +22,6 @@ import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -55,7 +54,7 @@ public class InventorySynchronizationService {
         this.clock = clock;
     }
 
-    public Map<String, Object> own(Actor actor, long taskId, UUID device) {
+    public SealViews.OwnDeviceState own(Actor actor, long taskId, UUID device) {
         var current = actors.revalidateLocked(actor);
         Long binding = identities.bindingId(actor);
         if (binding == null) {
@@ -64,21 +63,18 @@ public class InventorySynchronizationService {
         var task = task(taskId);
         participant(taskId, current.id());
         var state = states.states(List.of(current.id())).get(current.id());
-        var result = new LinkedHashMap<String, Object>();
-        result.put("taskId", Long.toString(taskId));
-        result.put("taskVersion", number(task, "version"));
-        result.put("taskStatus", task.get("task_status"));
-        result.put("assignmentVersion", number(task, "assignment_version"));
-        result.put("deviceId", device.toString());
-        result.put(
-                "observationWatermark",
-                Long.toString(watermark(taskId, current.id(), binding, device.toString())));
-        result.put("device", device(taskId, current.id(), binding, device.toString(), task, state));
-        result.put("declarationOnly", true);
-        return result;
+        return new SealViews.OwnDeviceState(
+                Long.toString(taskId),
+                number(task, "version"),
+                (String) task.get("task_status"),
+                number(task, "assignment_version"),
+                device.toString(),
+                Long.toString(watermark(taskId, current.id(), binding, device.toString())),
+                device(taskId, current.id(), binding, device.toString(), task, state),
+                true);
     }
 
-    public Map<String, Object> declare(
+    public SealViews.SyncDeclarationReceipt declare(
             Actor actor,
             long taskId,
             long version,
@@ -92,23 +88,10 @@ public class InventorySynchronizationService {
         var task = task(taskId);
         participant(taskId, current.id());
         String payload = sha(version + ":" + json.writeValueAsString(input));
-        var prior =
-                db.queryForList(
-                        "SELECT actor_account_id,binding_id,payload_sha256,CAST(response_json AS"
-                            + " CHAR) AS response FROM fams_inventory_sync_receipt WHERE task_id=?"
-                            + " AND request_id=?",
-                        taskId,
-                        key.toString());
-        if (!prior.isEmpty()) {
-            var row = prior.getFirst();
-            if (number(row, "actor_account_id") != current.id()
-                    || number(row, "binding_id") != binding
-                    || !payload.equals(row.get("payload_sha256"))) {
-                throw new InventoryFailure(409, "INVENTORY_SYNC_REQUEST_CONFLICT");
-            }
-            return json.readValue(
-                    row.get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        var replay = replay(taskId, key, payload, current, binding,
+                SealViews.SyncDeclarationReceipt.class);
+        if (replay != null) {
+            return replay;
         }
         if (!List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))
                 || number(task, "version") != version
@@ -141,13 +124,14 @@ public class InventorySynchronizationService {
                 "UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?",
                 Timestamp.from(now),
                 taskId);
-        var response = new LinkedHashMap<String, Object>();
-        response.put("declarationId", Long.toString(id));
-        response.put("taskId", Long.toString(taskId));
-        response.put("taskVersion", version + 1);
-        response.put("deviceId", input.deviceId().toString());
-        response.put("declaredAt", now.toString());
-        response.put("declarationOnly", true);
+        var response =
+                new SealViews.SyncDeclarationReceipt(
+                        Long.toString(id),
+                        Long.toString(taskId),
+                        version + 1,
+                        input.deviceId().toString(),
+                        now.toString(),
+                        true);
         db.update(
                 "INSERT INTO"
                     + " fams_inventory_task_event(task_id,actor_account_id,action,detail_json,occurred_at)"
@@ -184,7 +168,8 @@ public class InventorySynchronizationService {
         return response;
     }
 
-    public Map<String, Object> status(Actor actor, long taskId, int page, int size) {
+    public SealViews.SynchronizationStatus status(
+            Actor actor, long taskId, int page, int size) {
         if (!actors.revalidateLocked(actor).has(Role.ASSET_ADMIN)) {
             throw new InventoryFailure(403, "INVENTORY_ADMIN_REQUIRED");
         }
@@ -198,7 +183,7 @@ public class InventorySynchronizationService {
                         (page - 1) * size);
         var identityStates =
                 states.states(participants.stream().map(row -> number(row, "account_id")).toList());
-        var rows = new ArrayList<Map<String, Object>>();
+        var rows = new ArrayList<SealViews.SyncParticipant>();
         for (var participant : participants) {
             long account = number(participant, "account_id");
             var state = identityStates.get(account);
@@ -212,7 +197,7 @@ public class InventorySynchronizationService {
                             account,
                             taskId,
                             account);
-            var declaredDevices = new ArrayList<Map<String, Object>>();
+            var declaredDevices = new ArrayList<SealViews.DeviceRow>();
             for (var row : devices) {
                 declaredDevices.add(
                         device(
@@ -234,21 +219,17 @@ public class InventorySynchronizationService {
                                                     ? "NO_DEVICE_DECLARATION"
                                                     : declaredDevices.stream()
                                                                     .allMatch(
-                                                                            row ->
-                                                                                    Boolean.TRUE
-                                                                                            .equals(
-                                                                                                    row
-                                                                                                            .get(
-                                                                                                                    "current")))
+                                                                            SealViews.DeviceRow
+                                                                                    ::current)
                                                             ? "DECLARED"
                                                             : "DEVICE_CONFIRMATION_MISSING";
-            var row = new LinkedHashMap<String, Object>();
-            row.put("accountId", Long.toString(account));
-            row.put("name", state == null ? "身份待核实" : state.name());
-            row.put("current", "DECLARED".equals(reason));
-            row.put("reason", reason);
-            row.put("devices", declaredDevices);
-            rows.add(row);
+            rows.add(
+                    new SealViews.SyncParticipant(
+                            Long.toString(account),
+                            state == null ? "身份待核实" : state.name(),
+                            "DECLARED".equals(reason),
+                            reason,
+                            declaredDevices));
         }
         long total =
                 Objects.requireNonNull(
@@ -256,22 +237,11 @@ public class InventorySynchronizationService {
                                 "SELECT COUNT(*) FROM fams_inventory_participant WHERE task_id=?",
                                 Long.class,
                                 taskId));
-        return Map.of(
-                "items",
-                rows,
-                "total",
-                total,
-                "page",
-                page,
-                "pageSize",
-                size,
-                "taskVersion",
-                number(task, "version"),
-                "declarationOnly",
-                true);
+        return new SealViews.SynchronizationStatus(
+                rows, total, page, size, number(task, "version"), true);
     }
 
-    private Map<String, Object> device(
+    private SealViews.DeviceRow device(
             long task,
             long actor,
             Long binding,
@@ -327,24 +297,8 @@ public class InventorySynchronizationService {
                                                                                         > 0
                                                                                 ? "LOCAL_EVIDENCE_MISSING"
                                                                                 : "DECLARED";
-        var result = new LinkedHashMap<String, Object>();
-        result.put("deviceId", device);
-        result.put("bindingId", binding == null ? null : binding.toString());
-        result.put("current", "DECLARED".equals(reason));
-        result.put("reason", reason);
-        if (!rows.isEmpty()) {
-            result.put("declarationId", rows.getFirst().get("id").toString());
-            Object time = rows.getFirst().get("declared_at");
-            result.put(
-                    "declaredAt",
-                    time instanceof Timestamp timestamp
-                            ? timestamp.toInstant().toString()
-                            : ((java.time.LocalDateTime) time)
-                                    .toInstant(java.time.ZoneOffset.UTC)
-                                    .toString());
-            result.put("unresolvedCount", number(rows.getFirst(), "unresolved_count"));
-        }
-        return result;
+        return SealViews.device(
+                device, binding, reason, rows.isEmpty() ? null : rows.getFirst());
     }
 
     private long watermark(long task, long actor, Long binding, String device) {
@@ -368,6 +322,37 @@ public class InventorySynchronizationService {
                 .isEmpty()) {
             throw new InventoryFailure(403, "INVENTORY_PARTICIPATION_REQUIRED");
         }
+    }
+
+    /**
+     * Replays the stored fams_inventory_sync_receipt reply of an already accepted declaration.
+     * The query text, the three identity/payload checks and their evaluation order are the
+     * pre-refactor inline block verbatim; only the reply projection became typed.
+     */
+    private <T> T replay(
+            long taskId,
+            UUID key,
+            String payload,
+            RequisitionActorContext.Current current,
+            Long binding,
+            Class<T> type) {
+        var prior =
+                db.queryForList(
+                        "SELECT actor_account_id,binding_id,payload_sha256,CAST(response_json AS"
+                            + " CHAR) AS response FROM fams_inventory_sync_receipt WHERE task_id=?"
+                            + " AND request_id=?",
+                        taskId,
+                        key.toString());
+        if (prior.isEmpty()) {
+            return null;
+        }
+        var row = prior.getFirst();
+        if (number(row, "actor_account_id") != current.id()
+                || number(row, "binding_id") != binding
+                || !payload.equals(row.get("payload_sha256"))) {
+            throw new InventoryFailure(409, "INVENTORY_SYNC_REQUEST_CONFLICT");
+        }
+        return json.readValue(row.get("response").toString(), type);
     }
 
     private Map<String, Object> task(long id) {

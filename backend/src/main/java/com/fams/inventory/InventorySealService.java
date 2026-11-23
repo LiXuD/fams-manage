@@ -41,10 +41,10 @@ public class InventorySealService {
             List<Map<String, Object>> reviews,
             Map<Long, AssetInventoryReviewPort.Context> contexts,
             List<Map<String, Object>> observations,
-            List<Map<String, Object>> synchronization,
+            List<SealViews.SyncParticipant> synchronization,
             Map<Long, InventoryLossPort.Progress> lossProgress,
             String synchronizationDigest,
-            List<Map<String, String>> blockers) {}
+            List<SealViews.Blocker> blockers) {}
 
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -76,58 +76,46 @@ public class InventorySealService {
         this.losses = losses;
     }
 
-    public Map<String, Object> preflight(Actor actor, long taskId) {
+    public SealViews.Preflight preflight(Actor actor, long taskId) {
         admin(actor);
         var task = task(taskId);
         if ("COMPLETED".equals(task.get("task_status"))) {
-            return Map.of("task", wire(task), "sealed", true, "report", report(actor, taskId));
+            return new SealViews.Preflight(
+                    SealViews.taskRow(json, task),
+                    true,
+                    report(actor, taskId),
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null);
         }
         var evaluation = evaluate(actor, task);
         long missing =
-                evaluation.synchronization().stream()
-                        .filter(row -> !Boolean.TRUE.equals(row.get("current")))
-                        .count();
-        return Map.of(
-                "task",
-                wire(task),
-                "sealed",
+                evaluation.synchronization().stream().filter(row -> !row.current()).count();
+        return new SealViews.Preflight(
+                SealViews.taskRow(json, task),
                 false,
-                "blockers",
+                null,
                 evaluation.blockers().stream().limit(200).toList(),
-                "blockerCount",
                 evaluation.blockers().size(),
-                "synchronization",
                 evaluation.synchronization(),
-                "synchronizationDigest",
                 evaluation.synchronizationDigest(),
-                "missingSynchronizationCount",
                 missing,
-                "declarationOnly",
                 true,
-                "canSealWithoutWaiver",
                 evaluation.blockers().isEmpty() && missing == 0);
     }
 
-    public Map<String, Object> seal(
+    public SealViews.SealReceipt seal(
             Actor actor, long taskId, long version, UUID key, InventorySealInput input) {
         var current = admin(actor);
         var task = task(taskId);
         String payload = hash(version + "\n" + json.writeValueAsString(input));
-        var prior =
-                db.queryForList(
-                        "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
-                                + " fams_inventory_review_receipt WHERE task_id=? AND"
-                                + " actor_account_id=? AND operation='SEAL' AND request_id=?",
-                        taskId,
-                        current.id(),
-                        key.toString());
-        if (!prior.isEmpty()) {
-            if (!payload.equals(prior.getFirst().get("payload_sha256"))) {
-                conflict(actor, current, task, "INVENTORY_SEAL_IDEMPOTENCY_CONFLICT");
-            }
-            return json.readValue(
-                    prior.getFirst().get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        var replay = replay(actor, current, taskId, task, key, payload, SealViews.SealReceipt.class);
+        if (replay != null) {
+            return replay;
         }
         if (number(task, "version") != version
                 || !"WAITING_REVIEW".equals(task.get("task_status"))) {
@@ -138,15 +126,13 @@ public class InventorySealService {
         }
         var evaluation = evaluate(actor, task);
         if (!evaluation.blockers().isEmpty()) {
-            throw new InventoryFailure(409, evaluation.blockers().getFirst().get("code"));
+            throw new InventoryFailure(409, evaluation.blockers().getFirst().code());
         }
         if (!evaluation.synchronizationDigest().equals(input.synchronizationDigest())) {
             conflict(actor, current, task, "INVENTORY_SEAL_SYNCHRONIZATION_CHANGED");
         }
         long missing =
-                evaluation.synchronization().stream()
-                        .filter(row -> !Boolean.TRUE.equals(row.get("current")))
-                        .count();
+                evaluation.synchronization().stream().filter(row -> !row.current()).count();
         String waiver =
                 input.missingSynchronizationReason() == null
                         ? ""
@@ -298,7 +284,7 @@ public class InventorySealService {
                         + " fams_inventory_sealed_sync(task_id,account_id,snapshot_json,snapshot_sha256)"
                         + " VALUES (?,?,?,?)",
                     taskId,
-                    evaluation.synchronization().get(index).get("accountId"),
+                    evaluation.synchronization().get(index).accountId(),
                     syncTexts.get(index),
                     hash(syncTexts.get(index)));
         }
@@ -308,20 +294,13 @@ public class InventorySealService {
                 now,
                 taskId);
         var response =
-                Map.<String, Object>of(
-                        "taskId",
+                new SealViews.SealReceipt(
                         Long.toString(taskId),
-                        "version",
                         version + 1,
-                        "status",
                         "COMPLETED",
-                        "reportSha256",
                         checksum,
-                        "acceptedCount",
                         accepted.size(),
-                        "notObservedCount",
                         evaluation.items().size() - accepted.size(),
-                        "missingSynchronizationCount",
                         missing);
         audit(actor, current, task, "INVENTORY_SEALED", version + 1, response);
         db.update(
@@ -337,7 +316,37 @@ public class InventorySealService {
         return response;
     }
 
-    public Map<String, Object> report(Actor actor, long taskId) {
+    /**
+     * Replays the stored fams_inventory_review_receipt SEAL reply of an already accepted seal. The
+     * query text, the payload comparison and its conflict side effects are the pre-refactor inline
+     * block verbatim; only the reply projection became typed.
+     */
+    private <T> T replay(
+            Actor actor,
+            Current current,
+            long taskId,
+            Map<String, Object> task,
+            UUID key,
+            String payload,
+            Class<T> type) {
+        var prior =
+                db.queryForList(
+                        "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
+                                + " fams_inventory_review_receipt WHERE task_id=? AND"
+                                + " actor_account_id=? AND operation='SEAL' AND request_id=?",
+                        taskId,
+                        current.id(),
+                        key.toString());
+        if (prior.isEmpty()) {
+            return null;
+        }
+        if (!payload.equals(prior.getFirst().get("payload_sha256"))) {
+            conflict(actor, current, task, "INVENTORY_SEAL_IDEMPOTENCY_CONFLICT");
+        }
+        return json.readValue(prior.getFirst().get("response").toString(), type);
+    }
+
+    public SealViews.SealedReportRow report(Actor actor, long taskId) {
         admin(actor);
         task(taskId);
         var rows =
@@ -347,10 +356,10 @@ public class InventorySealService {
         if (rows.isEmpty()) {
             throw new InventoryFailure(404, "INVENTORY_SEALED_REPORT_NOT_FOUND");
         }
-        return cast(wire(rows.getFirst()));
+        return SealViews.sealedReportRow(json, rows.getFirst());
     }
 
-    public Map<String, Object> reportRows(
+    public SealViews.Page<SealViews.SnapshotRow> reportRows(
             Actor actor, long taskId, String section, int page, int size) {
         report(actor, taskId);
         String table =
@@ -376,25 +385,22 @@ public class InventorySealService {
                         taskId,
                         size,
                         (page - 1) * size);
-        return Map.of(
-                "items",
-                wire(rows),
-                "total",
+        return new SealViews.Page<>(
+                rows.stream().map(row -> SealViews.snapshotRow(json, row)).toList(),
                 Objects.requireNonNull(
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM " + table + " WHERE task_id=? FOR SHARE",
                                 Long.class,
                                 taskId)),
-                "page",
                 page,
-                "pageSize",
                 size);
     }
 
     private Evaluation evaluate(Actor actor, Map<String, Object> task) {
-        var blockers = new ArrayList<Map<String, String>>();
+        var blockers = new ArrayList<SealViews.Blocker>();
         if (!"WAITING_REVIEW".equals(task.get("task_status"))) {
-            blockers.add(Map.of("code", "INVENTORY_SEAL_WAITING_REVIEW_REQUIRED"));
+            blockers.add(
+                    new SealViews.Blocker("INVENTORY_SEAL_WAITING_REVIEW_REQUIRED", null, null));
         }
         var missingReasons = db.queryForList(
                 "SELECT id FROM fams_inventory_unobserved_reason WHERE task_id=? AND reason_kind='ASSET_NOT_FOUND'",
@@ -404,7 +410,8 @@ public class InventorySealService {
             var report = lossProgress.get(id);
             return report == null || !report.transferred();
         })) {
-            blockers.add(Map.of("code", "INVENTORY_SEAL_PHYSICAL_MISSING_OPEN"));
+            blockers.add(
+                    new SealViews.Blocker("INVENTORY_SEAL_PHYSICAL_MISSING_OPEN", null, null));
         }
         var items =
                 db.queryForList(
@@ -412,7 +419,8 @@ public class InventorySealService {
                                 + " SHARE",
                         task.get("id"));
         if (items.isEmpty() || items.size() != number(task, "expected_count")) {
-            blockers.add(Map.of("code", "INVENTORY_SEAL_FROZEN_RANGE_MISMATCH"));
+            blockers.add(
+                    new SealViews.Blocker("INVENTORY_SEAL_FROZEN_RANGE_MISMATCH", null, null));
         }
         var contexts = new LinkedHashMap<Long, AssetInventoryReviewPort.Context>();
         for (int offset = 0; offset < items.size(); offset += 200) {
@@ -423,7 +431,8 @@ public class InventorySealService {
             if (dates.lock(ids)) {
                 contexts.putAll(assets.contexts(ids, instant(task.get("published_at"))));
             } else {
-                blockers.add(Map.of("code", "INVENTORY_SEAL_ASSET_UNAVAILABLE"));
+                blockers.add(
+                        new SealViews.Blocker("INVENTORY_SEAL_ASSET_UNAVAILABLE", null, null));
             }
         }
         var reviews = new ArrayList<Map<String, Object>>();
@@ -448,7 +457,8 @@ public class InventorySealService {
                         contexts.get(number(item, "asset_id")));
             } catch (InventoryFailure failure) {
                 blockers.add(
-                        Map.of("code", failure.getMessage(), "itemId", item.get("id").toString()));
+                        new SealViews.Blocker(
+                                failure.getMessage(), item.get("id").toString(), null));
             }
         }
         var observations =
@@ -461,28 +471,19 @@ public class InventorySealService {
                 evidence.subjects(task, raw);
             } catch (InventoryFailure failure) {
                 blockers.add(
-                        Map.of(
-                                "code",
-                                failure.getMessage(),
-                                "observationId",
-                                raw.get("id").toString()));
+                        new SealViews.Blocker(
+                                failure.getMessage(), null, raw.get("id").toString()));
             }
         }
-        var roster = new ArrayList<Map<String, Object>>();
+        var roster = new ArrayList<SealViews.SyncParticipant>();
         int page = 1;
         while (true) {
             var result = synchronization.status(actor, number(task, "id"), page++, 100);
-            Object rows = result.get("items");
-            if (!(rows instanceof List<?> list)) {
-                throw new IllegalStateException("Inventory synchronization result invalid");
-            }
-            for (Object row : list) {
-                roster.add(cast(row));
-            }
-            if (roster.size() >= number(result, "total")) {
+            roster.addAll(result.items());
+            if (roster.size() >= result.total()) {
                 break;
             }
-            if (list.isEmpty()) {
+            if (result.items().isEmpty()) {
                 throw new IllegalStateException("Inventory synchronization page incomplete");
             }
         }
@@ -644,15 +645,6 @@ public class InventorySealService {
             return instant(value).toString();
         }
         return value;
-    }
-
-    private Map<String, Object> cast(Object value) {
-        if (!(value instanceof Map<?, ?> source)) {
-            throw new IllegalStateException("Inventory seal map expected");
-        }
-        var result = new LinkedHashMap<String, Object>();
-        source.forEach((key, item) -> result.put(key.toString(), item));
-        return result;
     }
 
     private long number(Map<String, Object> row, String field) {

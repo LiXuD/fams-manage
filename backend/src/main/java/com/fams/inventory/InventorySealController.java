@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -36,12 +35,12 @@ class InventorySealController {
     }
 
     @GetMapping("/tasks/{task}")
-    Map<String, Object> preflight(@PathVariable @Positive long task) {
+    SealViews.Preflight preflight(@PathVariable @Positive long task) {
         return sealing.preflight(actors.capture(), task);
     }
 
     @PostMapping("/tasks/{task}/seal")
-    Map<String, Object> seal(
+    SealViews.SealReceipt seal(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -61,12 +60,12 @@ class InventorySealController {
     }
 
     @GetMapping("/tasks/{task}/report")
-    Map<String, Object> report(@PathVariable @Positive long task) {
+    SealViews.SealedReportRow report(@PathVariable @Positive long task) {
         return sealing.report(actors.capture(), task);
     }
 
     @GetMapping("/tasks/{task}/report/{section}")
-    Map<String, Object> rows(
+    SealViews.Page<SealViews.SnapshotRow> rows(
             @PathVariable @Positive long task,
             @PathVariable String section,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,

@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -43,7 +42,7 @@ class InventorySynchronizationController {
         "/api/v1/inventory-synchronization/tasks/{task}",
         "/api/v1/mini/inventory-synchronization/tasks/{task}"
     })
-    Map<String, Object> status(
+    SealViews.SynchronizationStatus status(
             @PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
@@ -51,12 +50,12 @@ class InventorySynchronizationController {
     }
 
     @GetMapping("/api/v1/mini/inventory-synchronization/tasks/{task}/devices/{device}")
-    Map<String, Object> own(@PathVariable @Positive long task, @PathVariable UUID device) {
+    SealViews.OwnDeviceState own(@PathVariable @Positive long task, @PathVariable UUID device) {
         return synchronization.own(actors.capture(), task, device);
     }
 
     @PostMapping("/api/v1/mini/inventory-synchronization/tasks/{task}/declarations")
-    Map<String, Object> declare(
+    SealViews.SyncDeclarationReceipt declare(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
