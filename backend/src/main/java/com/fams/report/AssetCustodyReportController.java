@@ -52,14 +52,9 @@ class AssetCustodyReportController {
     @GetMapping("/assets.csv")
     ResponseEntity<String> export(@jakarta.validation.Valid @ModelAttribute Filters filters) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=asset-custody-report.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, filters.toFilter()));
-        } catch (AssetCustodyReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("asset-custody-report.csv",
+                () -> reports.export(actor, filters.toFilter()),
+                AssetCustodyReportService.ExportLimit.class::isInstance);
     }
 
     public record Filters(@PositiveOrZero Long organizationId, @PositiveOrZero Long categoryId, @Positive Long responsibleId, @Positive Long warehouseId,

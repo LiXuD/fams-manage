@@ -50,13 +50,8 @@ class AssetTimelineReportController {
     ResponseEntity<String> export(@RequestParam @Positive long assetId,
             @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,79}") String eventType) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=asset-timeline.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new AssetTimelineReportService.Filter(assetId, eventType)));
-        } catch (AssetTimelineReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("asset-timeline.csv",
+                () -> reports.export(actor, new AssetTimelineReportService.Filter(assetId, eventType)),
+                AssetTimelineReportService.ExportLimit.class::isInstance);
     }
 }

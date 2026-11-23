@@ -51,13 +51,8 @@ class InventoryLateReportController {
             @RequestParam(required = false) @Positive Long taskId,
             @RequestParam(required = false) InventoryLateReportService.Result result) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-late.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new InventoryLateReportService.Filter(taskId, result)));
-        } catch (InventoryLateReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("inventory-late.csv",
+                () -> reports.export(actor, new InventoryLateReportService.Filter(taskId, result)),
+                InventoryLateReportService.ExportLimit.class::isInstance);
     }
 }

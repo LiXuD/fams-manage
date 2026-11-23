@@ -46,17 +46,10 @@ class OperationsReportController {
         if (!validWindow(from, toExclusive)) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-report.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.exportInventory(actor, from, toExclusive));
-        } catch (IllegalArgumentException limit) {
-            if ("REPORT_EXPORT_LIMIT".equals(limit.getMessage())) {
-                return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-            }
-            throw limit;
-        }
+        return ReportCsvExport.csv("inventory-report.csv",
+                () -> reports.exportInventory(actor, from, toExclusive),
+                failure -> failure instanceof IllegalArgumentException
+                        && "REPORT_EXPORT_LIMIT".equals(failure.getMessage()));
     }
 
     private static boolean validWindow(LocalDate from, LocalDate toExclusive) {

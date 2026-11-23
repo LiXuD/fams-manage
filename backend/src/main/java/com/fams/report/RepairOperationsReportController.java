@@ -54,13 +54,9 @@ class RepairOperationsReportController {
         if (!filter.valid()) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=repair-operations.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8").body(reports.export(actor, filter));
-        } catch (RepairOperationsReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("repair-operations.csv",
+                () -> reports.export(actor, filter),
+                RepairOperationsReportService.ExportLimit.class::isInstance);
     }
 
     public record Filters(@NotNull RepairOperationsReportService.Kind kind,

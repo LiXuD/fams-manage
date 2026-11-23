@@ -54,13 +54,8 @@ class InboundTimingReportController {
             @RequestParam(required = false) @Positive Long receiptId,
             @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,39}") String status) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inbound-timing.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new InboundTimingReportService.Filter(kind, receiptId, status)));
-        } catch (InboundTimingReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("inbound-timing.csv",
+                () -> reports.export(actor, new InboundTimingReportService.Filter(kind, receiptId, status)),
+                InboundTimingReportService.ExportLimit.class::isInstance);
     }
 }

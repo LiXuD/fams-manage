@@ -44,13 +44,8 @@ class OverdueLoanReportController {
             @RequestParam(required = false) @Positive Long organizationId,
             @RequestParam(required = false) @Positive Long borrowerId) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=overdue-loans.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new OverdueLoanReportService.Filter(organizationId, borrowerId)));
-        } catch (OverdueLoanReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("overdue-loans.csv",
+                () -> reports.export(actor, new OverdueLoanReportService.Filter(organizationId, borrowerId)),
+                OverdueLoanReportService.ExportLimit.class::isInstance);
     }
 }

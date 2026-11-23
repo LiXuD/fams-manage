@@ -43,14 +43,9 @@ class ExceptionDiscoveryReportController {
         if (!validWindow(from, toExclusive)) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=exception-discovery.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(report.export(actor, from, toExclusive));
-        } catch (ExceptionDiscoveryReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("exception-discovery.csv",
+                () -> report.export(actor, from, toExclusive),
+                ExceptionDiscoveryReportService.ExportLimit.class::isInstance);
     }
 
     private static boolean validWindow(LocalDate from, LocalDate until) {

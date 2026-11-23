@@ -51,13 +51,8 @@ class LossReportController {
             @RequestParam(required = false) @Positive Long organizationId,
             @RequestParam(required = false) LossReportService.State state) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=loss.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new LossReportService.Filter(organizationId, state)));
-        } catch (LossReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("loss.csv",
+                () -> reports.export(actor, new LossReportService.Filter(organizationId, state)),
+                LossReportService.ExportLimit.class::isInstance);
     }
 }

@@ -51,13 +51,8 @@ class ScrapDispositionReportController {
             @RequestParam(required = false) @Positive Long processorId,
             @RequestParam(required = false) ScrapDispositionReportService.State state) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=scrap-dispositions.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new ScrapDispositionReportService.Filter(processorId, state)));
-        } catch (ScrapDispositionReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("scrap-dispositions.csv",
+                () -> reports.export(actor, new ScrapDispositionReportService.Filter(processorId, state)),
+                ScrapDispositionReportService.ExportLimit.class::isInstance);
     }
 }

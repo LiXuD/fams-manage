@@ -61,13 +61,9 @@ class AssetMovementReportController {
         if (!filter.valid()) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=asset-movement-report.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8").body(reports.export(actor, filter));
-        } catch (AssetMovementReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("asset-movement-report.csv",
+                () -> reports.export(actor, filter),
+                AssetMovementReportService.ExportLimit.class::isInstance);
     }
 
     public record Filters(@NotNull AssetMovementReportService.Kind kind,

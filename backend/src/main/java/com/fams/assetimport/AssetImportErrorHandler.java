@@ -2,6 +2,7 @@ package com.fams.assetimport;
 
 import com.fams.product.contract.model.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
@@ -18,6 +19,11 @@ class AssetImportErrorHandler {
     ResponseEntity<ErrorResponse> invalid(IllegalArgumentException failure, HttpServletRequest request) {
         String code = known(failure.getMessage()) ? failure.getMessage() : "ASSET_IMPORT_REQUEST_INVALID";
         return response(400, code, request);
+    }
+
+    @ExceptionHandler(IOException.class)
+    ResponseEntity<ErrorResponse> unreadableUpload(IOException failure, HttpServletRequest request) {
+        return response(400, "ASSET_IMPORT_INVALID_XLSX", request);
     }
 
     @ExceptionHandler(IllegalStateException.class)

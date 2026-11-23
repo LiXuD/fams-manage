@@ -51,15 +51,11 @@ class AssetImportController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<AssetImportBatchService.Ticket> upload(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
-            @RequestPart("file") MultipartFile file) {
-        try {
-            var ticket = batches.upload(actors.requireWarehouseOperator().id(), key, file.getBytes());
-            return ResponseEntity.status(HttpStatus.CREATED)
-                    .header(HttpHeaders.LOCATION, "/api/v1/asset-import-batches/" + ticket.id())
-                    .body(ticket);
-        } catch (IOException failure) {
-            throw new IllegalArgumentException("ASSET_IMPORT_INVALID_XLSX", failure);
-        }
+            @RequestPart("file") MultipartFile file) throws IOException {
+        var ticket = batches.upload(actors.requireWarehouseOperator().id(), key, file.getBytes());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .header(HttpHeaders.LOCATION, "/api/v1/asset-import-batches/" + ticket.id())
+                .body(ticket);
     }
 
     @PostMapping("/{batchId}/preview")

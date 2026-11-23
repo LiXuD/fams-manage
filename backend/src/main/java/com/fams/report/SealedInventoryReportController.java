@@ -62,14 +62,9 @@ class SealedInventoryReportController {
         if (!validWindow(from, toExclusive)) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-detail.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, from, toExclusive));
-        } catch (SealedInventoryReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("inventory-detail.csv",
+                () -> reports.export(actor, from, toExclusive),
+                SealedInventoryReportService.ExportLimit.class::isInstance);
     }
 
     @GetMapping("/api/v1/operations-reports/inventory/{taskId}/executors")
@@ -112,14 +107,9 @@ class SealedInventoryReportController {
         if (!validWindow(from, toExclusive)) {
             return ResponseEntity.badRequest().build();
         }
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=inventory-traceability.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.exportTraceability(actor, from, toExclusive));
-        } catch (SealedInventoryReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("inventory-traceability.csv",
+                () -> reports.exportTraceability(actor, from, toExclusive),
+                SealedInventoryReportService.ExportLimit.class::isInstance);
     }
 
     private static boolean validWindow(LocalDate from, LocalDate until) {

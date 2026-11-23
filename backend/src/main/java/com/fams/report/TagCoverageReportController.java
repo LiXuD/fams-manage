@@ -29,12 +29,8 @@ class TagCoverageReportController {
     @GetMapping("/tag-coverage.csv")
     ResponseEntity<String> export() {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=tag-coverage.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8").body(report.export(actor));
-        } catch (TagCoverageReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("tag-coverage.csv",
+                () -> report.export(actor),
+                TagCoverageReportService.ExportLimit.class::isInstance);
     }
 }

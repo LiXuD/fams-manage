@@ -54,13 +54,8 @@ class BusinessExceptionReportController {
             @RequestParam(required = false) @Positive Long businessId,
             @RequestParam(required = false) @Pattern(regexp = "[A-Z][A-Z0-9_]{0,39}") String status) {
         var actor = actors.requireAssetAdmin();
-        try {
-            return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=business-exceptions.csv")
-                    .header(HttpHeaders.CONTENT_TYPE, "text/csv;charset=UTF-8")
-                    .body(reports.export(actor, new BusinessExceptionReportService.Filter(kind, businessId, status)));
-        } catch (BusinessExceptionReportService.ExportLimit failure) {
-            return ResponseEntity.unprocessableContent().body("REPORT_EXPORT_LIMIT");
-        }
+        return ReportCsvExport.csv("business-exceptions.csv",
+                () -> reports.export(actor, new BusinessExceptionReportService.Filter(kind, businessId, status)),
+                BusinessExceptionReportService.ExportLimit.class::isInstance);
     }
 }
