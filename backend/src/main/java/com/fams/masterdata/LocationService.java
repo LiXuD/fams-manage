@@ -27,35 +27,37 @@ import tools.jackson.databind.ObjectMapper;
 class LocationService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final LocationMapper mapper;
-    private final WarehouseMapper warehouses;
-    private final IdentityMasterDataMapper records;
+    private final LocationRepository locationRepository;
+    private final WarehouseRepository warehouseRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    LocationService(LocationMapper mapper, WarehouseMapper warehouses,
-            IdentityMasterDataMapper records, MasterDataFingerprint fingerprint,
+    LocationService(LocationRepository locationRepository,
+            WarehouseRepository warehouseRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
+            MasterDataFingerprint fingerprint,
             ObjectMapper objectMapper, Clock authClock) {
-        this.mapper = mapper;
-        this.warehouses = warehouses;
-        this.records = records;
+        this.locationRepository = locationRepository;
+        this.warehouseRepository = warehouseRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageLocation list(int page, int pageSize) {
-        List<Location> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<Location> items = locationRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toLocation).toList();
-        return new PageLocation(page, pageSize, mapper.count(), items);
+        return new PageLocation(page, pageSize, locationRepository.count(), items);
     }
 
     MasterdataViews.Page<MasterdataViews.LocationActiveReference> listActive(int page, int pageSize) {
-        List<MasterdataViews.LocationActiveReference> items = mapper
+        List<MasterdataViews.LocationActiveReference> items = locationRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(MasterdataViews::locationActiveReference).toList();
-        return new MasterdataViews.Page<>(items, mapper.countActive(), page, pageSize);
+        return new MasterdataViews.Page<>(items, locationRepository.countActive(), page, pageSize);
     }
 
     Location get(long id) {
@@ -79,7 +81,7 @@ class LocationService {
         Instant now = clock.instant();
         NewLocationRow row = new NewLocationRow(code, normalizeCode(code), name,
                 type.name(), parentId, warehouseId, optional(request.getDescription()), actorId, now);
-        requireOne(mapper.insert(row));
+        requireOne(locationRepository.insert(row));
         Location result = get(row.getId());
         audit(actorId, requestId, "LOCATION_CREATED", row.getId(), now);
         record(actorId, operation, key, digest, 201, result);
@@ -108,7 +110,7 @@ class LocationService {
         Long warehouseId = request.getWarehouse() == null ? current.warehouseId()
                 : validateWarehouse(request.getWarehouse());
         if (!java.util.Objects.equals(current.warehouseId(), warehouseId)
-                && mapper.countChildren(id) != 0) {
+                && locationRepository.countChildren(id) != 0) {
             throw new MasterDataOperationException("LOCATION_WAREHOUSE_MISMATCH",
                     "A parent location with children cannot move to another warehouse.", 409);
         }
@@ -119,7 +121,7 @@ class LocationService {
         }
         assertCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireOne(mapper.update(id, expectedVersion, code, normalizeCode(code), name,
+        requireOne(locationRepository.update(id, expectedVersion, code, normalizeCode(code), name,
                 type.name(), parentId, warehouseId, description, actorId, now));
         Location result = get(id);
         audit(actorId, requestId, "LOCATION_UPDATED", id, now);
@@ -147,21 +149,21 @@ class LocationService {
         if (enabled) {
             assertActiveParentChain(current.parentId(), id);
             assertWarehouseActive(current.warehouseId());
-        } else if (mapper.findActiveChildIdForUpdate(id) != null) {
+        } else if (locationRepository.findActiveChildIdForUpdate(id) != null) {
             throw new MasterDataOperationException("LOCATION_HAS_ENABLED_CHILDREN",
                     "Enabled child locations must be disabled or moved first.", 409);
-        } else if (mapper.findActiveAssetReferenceIdForUpdate(id) != null) {
+        } else if (locationRepository.findActiveAssetReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("LOCATION_HAS_CURRENT_ASSETS",
                     "Active assets reference this location.", 409);
-        } else if (mapper.findPlannedAssetReferenceIdForUpdate(id) != null) {
+        } else if (locationRepository.findPlannedAssetReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("LOCATION_HAS_OPEN_REFERENCES",
                     "Pending asset targets reference this location.", 409);
-        } else if (mapper.findOpenInboundReferenceIdForUpdate(id) != null) {
+        } else if (locationRepository.findOpenInboundReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("LOCATION_HAS_OPEN_REFERENCES",
                     "Open inbound items reference this location.", 409);
         }
         Instant now = clock.instant();
-        requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+        requireOne(locationRepository.changeStatus(id, expectedVersion, status, actorId, now));
         Location result = get(id);
         audit(actorId, requestId, enabled ? "LOCATION_ENABLED" : "LOCATION_DISABLED", id, now);
         record(actorId, operation, key, digest, 200, result);
@@ -173,7 +175,7 @@ class LocationService {
             return null;
         }
         long id = referenceId(reference, "warehouse");
-        WarehouseRow warehouse = warehouses.findForUpdate(id);
+        WarehouseRow warehouse = warehouseRepository.findForUpdate(id);
         if (warehouse == null) {
             throw new MasterDataOperationException("LOCATION_WAREHOUSE_NOT_FOUND",
                     "The warehouse does not exist.", 409);
@@ -193,7 +195,7 @@ class LocationService {
             return null;
         }
         long id = referenceId(reference, "parent location");
-        LocationRow parent = mapper.findForUpdate(id);
+        LocationRow parent = locationRepository.findForUpdate(id);
         if (parent == null) {
             throw new MasterDataOperationException("LOCATION_PARENT_NOT_FOUND",
                     "The parent location does not exist.", 409);
@@ -239,7 +241,7 @@ class LocationService {
                 throw new MasterDataOperationException("LOCATION_CYCLE",
                         "The location hierarchy contains a cycle.", 409);
             }
-            LocationRow parent = mapper.findForUpdate(currentId);
+            LocationRow parent = locationRepository.findForUpdate(currentId);
             if (parent == null || !"ACTIVE".equals(parent.status())) {
                 throw parentDisabled();
             }
@@ -261,7 +263,7 @@ class LocationService {
 
     private void assertWarehouseActive(Long warehouseId) {
         if (warehouseId != null) {
-            WarehouseRow warehouse = warehouses.findForUpdate(warehouseId);
+            WarehouseRow warehouse = warehouseRepository.findForUpdate(warehouseId);
             if (warehouse == null || !"ACTIVE".equals(warehouse.status())) {
                 throw warehouseDisabled();
             }
@@ -279,7 +281,7 @@ class LocationService {
     }
 
     private LocationRow require(long id) {
-        LocationRow row = mapper.find(id);
+        LocationRow row = locationRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The location");
         }
@@ -287,7 +289,7 @@ class LocationService {
     }
 
     private LocationRow requireForUpdate(long id) {
-        LocationRow row = mapper.findForUpdate(id);
+        LocationRow row = locationRepository.findForUpdate(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The location");
         }
@@ -309,7 +311,7 @@ class LocationService {
     }
 
     private void assertCodeAvailable(String code, Long currentId) {
-        LocationRow existing = mapper.findByCode(normalizeCode(code));
+        LocationRow existing = locationRepository.findByCode(normalizeCode(code));
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw new MasterDataOperationException("LOCATION_CODE_CONFLICT",
                     "The location code is already in use.", 409);
@@ -317,7 +319,7 @@ class LocationService {
     }
 
     private Optional<Location> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -330,14 +332,14 @@ class LocationService {
     private void record(long actorId, String operation, String key, String digest,
             int status, Location result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "LOCATION",
                 Long.parseLong(result.getId()), result.getVersion(), now,
                 now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

@@ -38,7 +38,7 @@ import tools.jackson.databind.ObjectMapper;
 class IdentityMasterDataService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final IdentityMasterDataMapper mapper;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataPhoneCodec phoneCodec;
     private final MasterDataFingerprint fingerprint;
     private final IdentityImportParser importParser;
@@ -47,14 +47,14 @@ class IdentityMasterDataService {
     private final ApplicationEventPublisher events;
 
     IdentityMasterDataService(
-            IdentityMasterDataMapper mapper,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataPhoneCodec phoneCodec,
             MasterDataFingerprint fingerprint,
             IdentityImportParser importParser,
             ObjectMapper objectMapper,
             Clock authClock,
             ApplicationEventPublisher events) {
-        this.mapper = mapper;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.phoneCodec = phoneCodec;
         this.fingerprint = fingerprint;
         this.importParser = importParser;
@@ -67,8 +67,8 @@ class IdentityMasterDataService {
         return new PageOrganization(
                 page,
                 pageSize,
-                mapper.countOrganizations(),
-                mapper.listOrganizations((page - 1) * pageSize, pageSize).stream()
+                identityMasterDataRepository.countOrganizations(),
+                identityMasterDataRepository.listOrganizations((page - 1) * pageSize, pageSize).stream()
                         .map(this::toOrganization)
                         .toList());
     }
@@ -77,8 +77,8 @@ class IdentityMasterDataService {
         return new PageEmployee(
                 page,
                 pageSize,
-                mapper.countEmployees(),
-                mapper.listEmployees((page - 1) * pageSize, pageSize).stream()
+                identityMasterDataRepository.countEmployees(),
+                identityMasterDataRepository.listEmployees((page - 1) * pageSize, pageSize).stream()
                         .map(this::toEmployee)
                         .toList());
     }
@@ -92,7 +92,7 @@ class IdentityMasterDataService {
     }
 
     OrganizationActiveReferencePage listActiveOrganizations(int page, int pageSize) {
-        List<OrganizationActiveReference> items = mapper
+        List<OrganizationActiveReference> items = identityMasterDataRepository
                 .listOrganizations((page - 1) * pageSize, pageSize).stream()
                 .filter(row -> "ACTIVE".equals(row.status()))
                 .map(row -> new OrganizationActiveReference(
@@ -143,7 +143,7 @@ class IdentityMasterDataService {
         if (request.getParentOrganization() != null) {
             OrganizationRow parent = Objects.requireNonNull(
                     validateActiveOrganization(request.getParentOrganization()));
-            if (parent.id() == id || mapper.countOrganizationCycle(id, parent.id()) != 0) {
+            if (parent.id() == id || identityMasterDataRepository.countOrganizationCycle(id, parent.id()) != 0) {
                 throw MasterDataOperationException.dependencyConflict("The organization hierarchy would contain a cycle.");
             }
             parentId = parent.id();
@@ -152,7 +152,7 @@ class IdentityMasterDataService {
         String name = optional(request.getName()).orElse(current.name());
         assertOrganizationCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.updateOrganization(
+        requireVersionUpdate(identityMasterDataRepository.updateOrganization(
                 id, expectedVersion, code.strip(), normalizeCode(code), name.strip(), parentId, actorId, now));
         Organization result = getOrganization(id);
         audit(actorId, requestId, "ORGANIZATION_UPDATED", id, now);
@@ -304,7 +304,7 @@ class IdentityMasterDataService {
         Instant now = clock.instant();
         NewOrganizationRow inserted = new NewOrganizationRow(
                 code.strip(), normalizeCode(code), name.strip(), parentId, actorId, now);
-        requireOne(mapper.insertOrganization(inserted));
+        requireOne(identityMasterDataRepository.insertOrganization(inserted));
         audit(actorId, requestId, "ORGANIZATION_CREATED", inserted.getId(), now);
         return getOrganization(inserted.getId());
     }
@@ -318,14 +318,14 @@ class IdentityMasterDataService {
         if (!"ACTIVE".equals(current.status())) {
             throw MasterDataOperationException.dependencyConflict("The organization is already disabled.");
         }
-        if (mapper.countActiveChildOrganizations(id) != 0
-                || mapper.countActiveEmployees(id) != 0
-                || mapper.countActiveAuthorizationScopes(id) != 0) {
+        if (identityMasterDataRepository.countActiveChildOrganizations(id) != 0
+                || identityMasterDataRepository.countActiveEmployees(id) != 0
+                || identityMasterDataRepository.countActiveAuthorizationScopes(id) != 0) {
             throw MasterDataOperationException.dependencyConflict(
                     "The organization still has active child, employee, or authorization dependencies.");
         }
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.disableOrganization(id, expectedVersion, actorId, now));
+        requireVersionUpdate(identityMasterDataRepository.disableOrganization(id, expectedVersion, actorId, now));
         audit(actorId, requestId, "ORGANIZATION_DISABLED", id, now);
         return getOrganization(id);
     }
@@ -343,7 +343,7 @@ class IdentityMasterDataService {
         NewEmployeeRow inserted = new NewEmployeeRow(
                 employeeNo.strip(), normalizeCode(employeeNo), name.strip(), organizationId,
                 phoneCodec.encrypt(phone), phoneCodec.lookupHash(phone), actorId, now);
-        requireOne(mapper.insertEmployee(inserted));
+        requireOne(identityMasterDataRepository.insertEmployee(inserted));
         audit(actorId, requestId, "EMPLOYEE_CREATED", inserted.getId(), now);
         return getEmployee(inserted.getId());
     }
@@ -363,7 +363,7 @@ class IdentityMasterDataService {
                     "Registered phone changes require verified phone correction.", 409);
         }
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.updateEmployee(
+        requireVersionUpdate(identityMasterDataRepository.updateEmployee(
                 current.id(), current.version(), employeeNo.strip(), normalizeCode(employeeNo), name.strip(),
                 organizationId, phoneCodec.encrypt(phone), phoneCodec.lookupHash(phone), actorId, now));
         audit(actorId, requestId, "EMPLOYEE_UPDATED", current.id(), now);
@@ -389,9 +389,9 @@ class IdentityMasterDataService {
             }
         }
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.changeEmployeeStatus(id, expectedVersion, status, actorId, now));
+        requireVersionUpdate(identityMasterDataRepository.changeEmployeeStatus(id, expectedVersion, status, actorId, now));
         if (!enabled) {
-            mapper.disableEmployeeAccount(id, actorId, now);
+            identityMasterDataRepository.disableEmployeeAccount(id, actorId, now);
         }
         audit(actorId, requestId, enabled ? "EMPLOYEE_ENABLED" : "EMPLOYEE_DISABLED", id, now);
         events.publishEvent(new WorkforceAvailabilityChanged());
@@ -417,12 +417,12 @@ class IdentityMasterDataService {
                     ? current.parentId()
                     : requireActiveOrganizationByCode(row.parentCode()).id();
             if (parentId != null && (parentId == current.id()
-                    || mapper.countOrganizationCycle(current.id(), parentId) != 0)) {
+                    || identityMasterDataRepository.countOrganizationCycle(current.id(), parentId) != 0)) {
                 throw MasterDataOperationException.dependencyConflict(
                         "Identity import row " + row.rowNumber() + " creates an organization cycle.");
             }
             Instant now = clock.instant();
-            requireVersionUpdate(mapper.updateOrganization(
+            requireVersionUpdate(identityMasterDataRepository.updateOrganization(
                     current.id(), version, current.code(), normalizeCode(current.code()),
                     requiredImportName(row), parentId, actorId, now));
             audit(actorId, requestId, "ORGANIZATION_UPDATED", current.id(), now);
@@ -485,22 +485,22 @@ class IdentityMasterDataService {
     }
 
     private OrganizationRow requireOrganization(long id) {
-        return Optional.ofNullable(mapper.findOrganization(id))
+        return Optional.ofNullable(identityMasterDataRepository.findOrganization(id))
                 .orElseThrow(() -> MasterDataOperationException.notFound("The organization"));
     }
 
     private OrganizationRow requireOrganizationByCode(String code) {
-        return Optional.ofNullable(mapper.findOrganizationByCode(normalizeCode(code)))
+        return Optional.ofNullable(identityMasterDataRepository.findOrganizationByCode(normalizeCode(code)))
                 .orElseThrow(() -> MasterDataOperationException.notFound("The organization"));
     }
 
     private EmployeeRow requireEmployee(long id) {
-        return Optional.ofNullable(mapper.findEmployee(id))
+        return Optional.ofNullable(identityMasterDataRepository.findEmployee(id))
                 .orElseThrow(() -> MasterDataOperationException.notFound("The employee"));
     }
 
     private EmployeeRow requireEmployeeByNumber(String employeeNo) {
-        return Optional.ofNullable(mapper.findEmployeeByNumber(normalizeCode(employeeNo)))
+        return Optional.ofNullable(identityMasterDataRepository.findEmployeeByNumber(normalizeCode(employeeNo)))
                 .orElseThrow(() -> MasterDataOperationException.notFound("The employee"));
     }
 
@@ -519,14 +519,14 @@ class IdentityMasterDataService {
     }
 
     private void assertOrganizationCodeAvailable(String code, Long currentId) {
-        OrganizationRow existing = mapper.findOrganizationByCode(normalizeCode(code));
+        OrganizationRow existing = identityMasterDataRepository.findOrganizationByCode(normalizeCode(code));
         if (existing != null && !Long.valueOf(existing.id()).equals(currentId)) {
             throw MasterDataOperationException.writeConflict("The organization code is already in use.");
         }
     }
 
     private void assertEmployeeNumberAvailable(String employeeNo, Long currentId) {
-        EmployeeRow existing = mapper.findEmployeeByNumber(normalizeCode(employeeNo));
+        EmployeeRow existing = identityMasterDataRepository.findEmployeeByNumber(normalizeCode(employeeNo));
         if (existing != null && !Long.valueOf(existing.id()).equals(currentId)) {
             throw MasterDataOperationException.writeConflict("The employee number is already in use.");
         }
@@ -538,7 +538,7 @@ class IdentityMasterDataService {
             String key,
             String digest,
             Class<T> type) {
-        IdempotencyRow existing = mapper.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -561,7 +561,7 @@ class IdentityMasterDataService {
         Long numericId = resourceId == null ? null : parseId(resourceId);
         Long version = response instanceof Organization organization ? organization.getVersion()
                 : response instanceof Employee employee ? employee.getVersion() : null;
-        requireOne(mapper.insertIdempotency(
+        requireOne(identityMasterDataRepository.insertIdempotency(
                 actorId,
                 operation,
                 key,
@@ -576,7 +576,7 @@ class IdentityMasterDataService {
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(mapper.insertAudit(
+        requireOne(identityMasterDataRepository.insertAudit(
                 actorId,
                 requestId.toString(),
                 now,

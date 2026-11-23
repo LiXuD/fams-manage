@@ -27,38 +27,38 @@ import tools.jackson.databind.ObjectMapper;
 class WarehouseService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final WarehouseMapper mapper;
-    private final IdentityMasterDataMapper records;
+    private final WarehouseRepository warehouseRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     WarehouseService(
-            WarehouseMapper mapper,
-            IdentityMasterDataMapper records,
+            WarehouseRepository warehouseRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint,
             ObjectMapper objectMapper,
             Clock authClock) {
-        this.mapper = mapper;
-        this.records = records;
+        this.warehouseRepository = warehouseRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageWarehouse list(int page, int pageSize) {
-        List<Warehouse> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<Warehouse> items = warehouseRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toWarehouse).toList();
-        return new PageWarehouse(page, pageSize, mapper.count(), items);
+        return new PageWarehouse(page, pageSize, warehouseRepository.count(), items);
     }
 
     WarehouseActiveReferencePage listActive(int page, int pageSize) {
-        List<WarehouseActiveReference> items = mapper
+        List<WarehouseActiveReference> items = warehouseRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(row -> new WarehouseActiveReference(
                         Long.toString(row.id()), row.code(), row.name(), row.version()))
                 .toList();
-        return new WarehouseActiveReferencePage(page, pageSize, mapper.countActive(), items);
+        return new WarehouseActiveReferencePage(page, pageSize, warehouseRepository.countActive(), items);
     }
 
     Warehouse get(long id) {
@@ -83,7 +83,7 @@ class WarehouseService {
         Instant now = clock.instant();
         NewWarehouseRow row = new NewWarehouseRow(
                 code, normalizeCode(code), name, optional(request.getDescription(), 500), actorId, now);
-        requireOne(mapper.insert(row));
+        requireOne(warehouseRepository.insert(row));
         Warehouse result = get(row.getId());
         audit(actorId, requestId, "WAREHOUSE_CREATED", row.getId(), now);
         record(actorId, operation, key, digest, 201, result);
@@ -114,7 +114,7 @@ class WarehouseService {
                 : optional(request.getDescription(), 500);
         assertCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireOne(mapper.update(id, expectedVersion, code, normalizeCode(code),
+        requireOne(warehouseRepository.update(id, expectedVersion, code, normalizeCode(code),
                 name, description, actorId, now));
         Warehouse result = get(id);
         audit(actorId, requestId, "WAREHOUSE_UPDATED", id, now);
@@ -145,24 +145,24 @@ class WarehouseService {
                     enabled ? "WAREHOUSE_ALREADY_ENABLED" : "WAREHOUSE_ALREADY_DISABLED",
                     "The warehouse already has the requested status.", 409);
         }
-        if (!enabled && mapper.findActiveLocationIdForUpdate(id) != null) {
+        if (!enabled && warehouseRepository.findActiveLocationIdForUpdate(id) != null) {
             throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
                     "Active locations still reference this warehouse.", 409);
         }
-        if (!enabled && mapper.findActiveAssetReferenceIdForUpdate(id) != null) {
+        if (!enabled && warehouseRepository.findActiveAssetReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("WAREHOUSE_HAS_ACTIVE_ASSETS",
                     "Active assets reference this warehouse.", 409);
         }
-        if (!enabled && mapper.findPlannedAssetReferenceIdForUpdate(id) != null) {
+        if (!enabled && warehouseRepository.findPlannedAssetReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_BUSINESS_REFERENCES",
                     "Pending asset targets reference this warehouse.", 409);
         }
-        if (!enabled && mapper.findOpenInboundReferenceIdForUpdate(id) != null) {
+        if (!enabled && warehouseRepository.findOpenInboundReferenceIdForUpdate(id) != null) {
             throw new MasterDataOperationException("WAREHOUSE_HAS_OPEN_INBOUND_REFERENCES",
                     "Open inbound items reference this warehouse.", 409);
         }
         Instant now = clock.instant();
-        requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+        requireOne(warehouseRepository.changeStatus(id, expectedVersion, status, actorId, now));
         Warehouse result = get(id);
         audit(actorId, requestId, enabled ? "WAREHOUSE_ENABLED" : "WAREHOUSE_DISABLED", id, now);
         record(actorId, operation, key, digest, 200, result);
@@ -170,7 +170,7 @@ class WarehouseService {
     }
 
     private WarehouseRow require(long id) {
-        WarehouseRow row = mapper.find(id);
+        WarehouseRow row = warehouseRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The warehouse");
         }
@@ -178,7 +178,7 @@ class WarehouseService {
     }
 
     private WarehouseRow requireForUpdate(long id) {
-        WarehouseRow row = mapper.findForUpdate(id);
+        WarehouseRow row = warehouseRepository.findForUpdate(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The warehouse");
         }
@@ -193,7 +193,7 @@ class WarehouseService {
     }
 
     private void assertCodeAvailable(String code, Long currentId) {
-        WarehouseRow existing = mapper.findByCode(normalizeCode(code));
+        WarehouseRow existing = warehouseRepository.findByCode(normalizeCode(code));
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw new MasterDataOperationException(
                     "WAREHOUSE_CODE_CONFLICT", "The warehouse code is already in use.", 409);
@@ -201,7 +201,7 @@ class WarehouseService {
     }
 
     private Optional<Warehouse> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -214,13 +214,13 @@ class WarehouseService {
     private void record(
             long actorId, String operation, String key, String digest, int status, Warehouse result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "WAREHOUSE", Long.parseLong(result.getId()),
                 result.getVersion(), now, now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

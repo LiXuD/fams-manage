@@ -27,38 +27,38 @@ import tools.jackson.databind.ObjectMapper;
 class ManufacturerService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final ManufacturerMapper mapper;
-    private final IdentityMasterDataMapper records;
+    private final ManufacturerRepository manufacturerRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     ManufacturerService(
-            ManufacturerMapper mapper,
-            IdentityMasterDataMapper records,
+            ManufacturerRepository manufacturerRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint,
             ObjectMapper objectMapper,
             Clock authClock) {
-        this.mapper = mapper;
-        this.records = records;
+        this.manufacturerRepository = manufacturerRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageManufacturer list(int page, int pageSize) {
-        List<Manufacturer> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<Manufacturer> items = manufacturerRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toManufacturer).toList();
-        return new PageManufacturer(page, pageSize, mapper.count(), items);
+        return new PageManufacturer(page, pageSize, manufacturerRepository.count(), items);
     }
 
     ManufacturerActiveReferencePage listActive(int page, int pageSize) {
-        List<ManufacturerActiveReference> items = mapper
+        List<ManufacturerActiveReference> items = manufacturerRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(row -> new ManufacturerActiveReference(
                         Long.toString(row.id()), row.code(), row.name(), row.version()))
                 .toList();
-        return new ManufacturerActiveReferencePage(page, pageSize, mapper.countActive(), items);
+        return new ManufacturerActiveReferencePage(page, pageSize, manufacturerRepository.countActive(), items);
     }
 
     Manufacturer get(long id) {
@@ -83,7 +83,7 @@ class ManufacturerService {
         Instant now = clock.instant();
         NewManufacturerRow row = new NewManufacturerRow(
                 code, normalizeCode(code), name, optional(request.getDescription(), 500), actorId, now);
-        requireOne(mapper.insert(row));
+        requireOne(manufacturerRepository.insert(row));
         Manufacturer result = get(row.getId());
         audit(actorId, requestId, "MANUFACTURER_CREATED", row.getId(), now);
         record(actorId, operation, key, digest, 201, result);
@@ -114,7 +114,7 @@ class ManufacturerService {
                 : optional(request.getDescription(), 500);
         assertCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireOne(mapper.update(id, expectedVersion, code, normalizeCode(code),
+        requireOne(manufacturerRepository.update(id, expectedVersion, code, normalizeCode(code),
                 name, description, actorId, now));
         Manufacturer result = get(id);
         audit(actorId, requestId, "MANUFACTURER_UPDATED", id, now);
@@ -146,7 +146,7 @@ class ManufacturerService {
                     "The manufacturer already has the requested status.", 409);
         }
         Instant now = clock.instant();
-        requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+        requireOne(manufacturerRepository.changeStatus(id, expectedVersion, status, actorId, now));
         Manufacturer result = get(id);
         audit(actorId, requestId, enabled ? "MANUFACTURER_ENABLED" : "MANUFACTURER_DISABLED", id, now);
         record(actorId, operation, key, digest, 200, result);
@@ -154,7 +154,7 @@ class ManufacturerService {
     }
 
     private ManufacturerRow require(long id) {
-        ManufacturerRow row = mapper.find(id);
+        ManufacturerRow row = manufacturerRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The manufacturer");
         }
@@ -169,7 +169,7 @@ class ManufacturerService {
     }
 
     private void assertCodeAvailable(String code, Long currentId) {
-        ManufacturerRow existing = mapper.findByCode(normalizeCode(code));
+        ManufacturerRow existing = manufacturerRepository.findByCode(normalizeCode(code));
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw new MasterDataOperationException(
                     "MANUFACTURER_CODE_CONFLICT", "The manufacturer code is already in use.", 409);
@@ -177,7 +177,7 @@ class ManufacturerService {
     }
 
     private Optional<Manufacturer> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -190,13 +190,13 @@ class ManufacturerService {
     private void record(
             long actorId, String operation, String key, String digest, int status, Manufacturer result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "MANUFACTURER", Long.parseLong(result.getId()),
                 result.getVersion(), now, now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

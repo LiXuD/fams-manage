@@ -26,39 +26,39 @@ import tools.jackson.databind.ObjectMapper;
 class BrandService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final BrandMapper mapper;
-    private final ManufacturerMapper manufacturers;
-    private final IdentityMasterDataMapper records;
+    private final BrandRepository brandRepository;
+    private final ManufacturerRepository manufacturerRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
     BrandService(
-            BrandMapper mapper,
-            ManufacturerMapper manufacturers,
-            IdentityMasterDataMapper records,
+            BrandRepository brandRepository,
+            ManufacturerRepository manufacturerRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint,
             ObjectMapper objectMapper,
             Clock authClock) {
-        this.mapper = mapper;
-        this.manufacturers = manufacturers;
-        this.records = records;
+        this.brandRepository = brandRepository;
+        this.manufacturerRepository = manufacturerRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageBrand list(int page, int pageSize) {
-        List<Brand> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<Brand> items = brandRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toBrand).toList();
-        return new PageBrand(page, pageSize, mapper.count(), items);
+        return new PageBrand(page, pageSize, brandRepository.count(), items);
     }
 
     MasterdataViews.Page<MasterdataViews.BrandActiveReference> listActive(int page, int pageSize) {
-        List<MasterdataViews.BrandActiveReference> items = mapper
+        List<MasterdataViews.BrandActiveReference> items = brandRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(MasterdataViews::brandActiveReference).toList();
-        return new MasterdataViews.Page<>(items, mapper.countActive(), page, pageSize);
+        return new MasterdataViews.Page<>(items, brandRepository.countActive(), page, pageSize);
     }
 
     Brand get(long id) {
@@ -80,7 +80,7 @@ class BrandService {
         Instant now = clock.instant();
         NewBrandRow row = new NewBrandRow(code, normalizeCode(code), name,
                 optional(request.getDescription(), 500), manufacturerId, actorId, now);
-        requireOne(mapper.insert(row));
+        requireOne(brandRepository.insert(row));
         Brand result = get(row.getId());
         audit(actorId, requestId, "BRAND_CREATED", row.getId(), now);
         record(actorId, operation, key, digest, 201, result);
@@ -108,7 +108,7 @@ class BrandService {
                 ? current.defaultManufacturerId() : validateManufacturer(request.getDefaultManufacturer());
         assertCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireOne(mapper.update(id, expectedVersion, code, normalizeCode(code), name,
+        requireOne(brandRepository.update(id, expectedVersion, code, normalizeCode(code), name,
                 manufacturerId, description, actorId, now));
         Brand result = get(id);
         audit(actorId, requestId, "BRAND_UPDATED", id, now);
@@ -134,7 +134,7 @@ class BrandService {
                     "The brand already has the requested status.", 409);
         }
         Instant now = clock.instant();
-        requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+        requireOne(brandRepository.changeStatus(id, expectedVersion, status, actorId, now));
         Brand result = get(id);
         audit(actorId, requestId, enabled ? "BRAND_ENABLED" : "BRAND_DISABLED", id, now);
         record(actorId, operation, key, digest, 200, result);
@@ -154,7 +154,7 @@ class BrandService {
         } catch (NumberFormatException exception) {
             throw MasterDataOperationException.invalid("The manufacturer id is invalid.");
         }
-        ManufacturerRow manufacturer = manufacturers.find(id);
+        ManufacturerRow manufacturer = manufacturerRepository.find(id);
         if (manufacturer == null) {
             throw new MasterDataOperationException("BRAND_DEFAULT_MANUFACTURER_NOT_FOUND",
                     "The default manufacturer does not exist.", 409);
@@ -171,7 +171,7 @@ class BrandService {
     }
 
     private BrandRow require(long id) {
-        BrandRow row = mapper.find(id);
+        BrandRow row = brandRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The brand");
         }
@@ -186,7 +186,7 @@ class BrandService {
     }
 
     private void assertCodeAvailable(String code, Long currentId) {
-        BrandRow existing = mapper.findByCode(normalizeCode(code));
+        BrandRow existing = brandRepository.findByCode(normalizeCode(code));
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw new MasterDataOperationException(
                     "BRAND_CODE_CONFLICT", "The brand code is already in use.", 409);
@@ -194,7 +194,7 @@ class BrandService {
     }
 
     private Optional<Brand> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -206,13 +206,13 @@ class BrandService {
 
     private void record(long actorId, String operation, String key, String digest, int status, Brand result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "BRAND", Long.parseLong(result.getId()),
                 result.getVersion(), now, now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

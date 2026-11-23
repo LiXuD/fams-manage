@@ -25,24 +25,25 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
     private static final Pattern TEMPLATE = Pattern.compile("[A-Za-z0-9_-]{1,80}");
 
-    private final NotificationChannelMapper mapper;
-    private final IdentityMasterDataMapper records;
+    private final NotificationChannelRepository notificationChannelRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    NotificationChannelConfigService(NotificationChannelMapper mapper,
-            IdentityMasterDataMapper records, MasterDataFingerprint fingerprint,
+    NotificationChannelConfigService(NotificationChannelRepository notificationChannelRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
+            MasterDataFingerprint fingerprint,
             ObjectMapper objectMapper, Clock authClock) {
-        this.mapper = mapper;
-        this.records = records;
+        this.notificationChannelRepository = notificationChannelRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     NotificationChannelConfig current() {
-        NotificationChannelState state = mapper.state();
+        NotificationChannelState state = notificationChannelRepository.state();
         if (state == null || state.currentVersionId() == null) {
             return new NotificationChannelConfig("", "", 0L);
         }
@@ -51,7 +52,7 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
 
     @Override
     public Templates currentTemplates() {
-        NotificationChannelState state = mapper.state();
+        NotificationChannelState state = notificationChannelRepository.state();
         if (state == null || state.currentVersionId() == null) {
             return Templates.unconfigured();
         }
@@ -71,24 +72,24 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
         }
         String smsTemplate = template(request.getSmsTemplate());
         String wechatTemplate = template(request.getWechatTemplate());
-        NotificationChannelState state = mapper.lockState();
+        NotificationChannelState state = notificationChannelRepository.lockState();
         if (state == null || state.currentVersion() != expectedVersion) {
             throw versionConflict();
         }
-        String actorUsername = mapper.accountUsername(actorId);
+        String actorUsername = notificationChannelRepository.accountUsername(actorId);
         if (actorUsername == null) {
             throw MasterDataOperationException.notFound("The administrator account");
         }
         NotificationChannelRow before = state.currentVersionId() == null
                 ? null : require(state.currentVersionId());
         Instant now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
-        if (before != null && mapper.supersede(before.id()) != 1) {
+        if (before != null && notificationChannelRepository.supersede(before.id()) != 1) {
             throw versionConflict();
         }
         NewNotificationChannelRow row = new NewNotificationChannelRow(expectedVersion + 1,
                 smsTemplate, wechatTemplate, actorId, actorUsername, now);
-        requireOne(mapper.insert(row));
-        requireOne(mapper.activate(expectedVersion, row.getVersion(), row.getId()));
+        requireOne(notificationChannelRepository.insert(row));
+        requireOne(notificationChannelRepository.activate(expectedVersion, row.getVersion(), row.getId()));
         NotificationChannelConfig result = toConfig(require(row.getId()));
         audit(actorId, requestId, before, result, now);
         record(actorId, operation, key, digest, result, row.getId(), now);
@@ -108,7 +109,7 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
     }
 
     private NotificationChannelRow require(long id) {
-        NotificationChannelRow row = mapper.find(id);
+        NotificationChannelRow row = notificationChannelRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The channel-configuration version");
         }
@@ -117,7 +118,7 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
 
     private Optional<NotificationChannelConfig> replay(long actorId, String operation,
             String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -130,14 +131,14 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
 
     private void record(long actorId, String operation, String key, String digest,
             NotificationChannelConfig result, long resourceId, Instant now) {
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, 201,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, 201,
                 objectMapper.writeValueAsString(result), "NOTIFICATION_CHANNEL_CONFIG",
                 resourceId, result.getVersion(), now, now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, NotificationChannelRow before,
             NotificationChannelConfig after, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of(
                         "action", "NOTIFICATION_CHANNEL_CONFIG_REPLACED",
                         "before", before == null ? Map.of()

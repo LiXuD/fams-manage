@@ -27,36 +27,37 @@ import tools.jackson.databind.ObjectMapper;
 class AssetCategoryService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final AssetCategoryMapper mapper;
-    private final NumberingRuleMapper numberingRules;
-    private final IdentityMasterDataMapper records;
+    private final AssetCategoryRepository assetCategoryRepository;
+    private final NumberingRuleRepository numberingRuleRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    AssetCategoryService(AssetCategoryMapper mapper, NumberingRuleMapper numberingRules,
-            IdentityMasterDataMapper records,
+    AssetCategoryService(AssetCategoryRepository assetCategoryRepository,
+            NumberingRuleRepository numberingRuleRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint, ObjectMapper objectMapper, Clock authClock) {
-        this.mapper = mapper;
-        this.numberingRules = numberingRules;
-        this.records = records;
+        this.assetCategoryRepository = assetCategoryRepository;
+        this.numberingRuleRepository = numberingRuleRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageAssetCategory list(int page, int pageSize) {
-        List<AssetCategory> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<AssetCategory> items = assetCategoryRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toCategory).toList();
-        return new PageAssetCategory(page, pageSize, mapper.count(), items);
+        return new PageAssetCategory(page, pageSize, assetCategoryRepository.count(), items);
     }
 
     MasterdataViews.Page<MasterdataViews.AssetCategoryActiveReference> listActive(
             int page, int pageSize) {
-        List<MasterdataViews.AssetCategoryActiveReference> items = mapper
+        List<MasterdataViews.AssetCategoryActiveReference> items = assetCategoryRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(MasterdataViews::assetCategoryActiveReference).toList();
-        return new MasterdataViews.Page<>(items, mapper.countActive(), page, pageSize);
+        return new MasterdataViews.Page<>(items, assetCategoryRepository.countActive(), page, pageSize);
     }
 
     AssetCategory get(long id) {
@@ -84,7 +85,7 @@ class AssetCategoryService {
                 optional(request.getSuggestedUnit(), 32, "Suggested unit"),
                 prefix,
                 objectMapper.writeValueAsString(request.getExtensionFieldTemplate()), actorId, now);
-        requireOne(mapper.insert(row));
+        requireOne(assetCategoryRepository.insert(row));
         AssetCategory result = get(row.getId());
         audit(actorId, requestId, "ASSET_CATEGORY_CREATED", row.getId(), now);
         record(actorId, operation, key, digest, 201, result);
@@ -123,7 +124,7 @@ class AssetCategoryService {
                 : validateParent(request.getParentCategory(), id);
         assertCodeAvailable(code, id);
         Instant now = clock.instant();
-        requireOne(mapper.update(id, expectedVersion, code, normalizeCode(code), name,
+        requireOne(assetCategoryRepository.update(id, expectedVersion, code, normalizeCode(code), name,
                 parentId, description, suggestedUnit, numberingPrefix, template, actorId, now));
         AssetCategory result = get(id);
         audit(actorId, requestId, "ASSET_CATEGORY_UPDATED", id, now);
@@ -154,7 +155,7 @@ class AssetCategoryService {
             validateActivePrefix(current.numberingPrefix(), id);
         }
         Instant now = clock.instant();
-        requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+        requireOne(assetCategoryRepository.changeStatus(id, expectedVersion, status, actorId, now));
         AssetCategory result = get(id);
         audit(actorId, requestId, enabled ? "ASSET_CATEGORY_ENABLED" : "ASSET_CATEGORY_DISABLED",
                 id, now);
@@ -175,7 +176,7 @@ class AssetCategoryService {
         } catch (NumberFormatException exception) {
             throw MasterDataOperationException.invalid("The parent category id is invalid.");
         }
-        AssetCategoryRow parent = mapper.findForUpdate(parentId);
+        AssetCategoryRow parent = assetCategoryRepository.findForUpdate(parentId);
         if (parent == null) {
             throw new MasterDataOperationException("ASSET_CATEGORY_PARENT_NOT_FOUND",
                     "The parent category does not exist.", 409);
@@ -192,13 +193,13 @@ class AssetCategoryService {
     }
 
     private void lockNumberingConfiguration() {
-        if (numberingRules.lockConfiguration() == null) {
+        if (numberingRuleRepository.lockConfiguration() == null) {
             throw MasterDataOperationException.writeConflict("The numbering configuration is unavailable.");
         }
     }
 
     private void validateActivePrefix(String prefix, Long categoryId) {
-        NumberingRuleRow active = numberingRules.findActiveTarget("ASSET");
+        NumberingRuleRow active = numberingRuleRepository.findActiveTarget("ASSET");
         if (active == null || !"CATEGORY_PREFIX".equals(active.mode())) {
             return;
         }
@@ -206,7 +207,7 @@ class AssetCategoryService {
             throw new MasterDataOperationException("NUMBERING_CATEGORY_PREFIX_MISSING",
                     "Every active category requires a legal numbering prefix.", 409);
         }
-        if (numberingRules.countActivePrefixOtherThan(
+        if (numberingRuleRepository.countActivePrefixOtherThan(
                 categoryId == null ? -1L : categoryId, prefix) > 0) {
             throw new MasterDataOperationException("NUMBERING_CATEGORY_PREFIX_CONFLICT",
                     "Active category numbering prefixes are ambiguous.", 409);
@@ -220,7 +221,7 @@ class AssetCategoryService {
                 throw new MasterDataOperationException("ASSET_CATEGORY_CYCLE",
                         "The category hierarchy would contain a cycle.", 409);
             }
-            AssetCategoryRow row = mapper.findForUpdate(currentId);
+            AssetCategoryRow row = assetCategoryRepository.findForUpdate(currentId);
             if (row == null) {
                 throw new MasterDataOperationException("ASSET_CATEGORY_PARENT_NOT_FOUND",
                         "The parent category does not exist.", 409);
@@ -236,7 +237,7 @@ class AssetCategoryService {
                 throw new MasterDataOperationException("ASSET_CATEGORY_CYCLE",
                         "The category hierarchy contains a cycle.", 409);
             }
-            AssetCategoryRow row = mapper.findForUpdate(currentId);
+            AssetCategoryRow row = assetCategoryRepository.findForUpdate(currentId);
             if (row == null || !"ACTIVE".equals(row.status())) {
                 throw parentDisabled();
             }
@@ -250,7 +251,7 @@ class AssetCategoryService {
     }
 
     private AssetCategoryRow require(long id) {
-        AssetCategoryRow row = mapper.find(id);
+        AssetCategoryRow row = assetCategoryRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The category");
         }
@@ -258,7 +259,7 @@ class AssetCategoryService {
     }
 
     private AssetCategoryRow requireForUpdate(long id) {
-        AssetCategoryRow row = mapper.findForUpdate(id);
+        AssetCategoryRow row = assetCategoryRepository.findForUpdate(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The category");
         }
@@ -273,7 +274,7 @@ class AssetCategoryService {
     }
 
     private void assertCodeAvailable(String code, Long currentId) {
-        AssetCategoryRow existing = mapper.findByCode(normalizeCode(code));
+        AssetCategoryRow existing = assetCategoryRepository.findByCode(normalizeCode(code));
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw new MasterDataOperationException("ASSET_CATEGORY_CODE_CONFLICT",
                     "The category code is already in use.", 409);
@@ -281,7 +282,7 @@ class AssetCategoryService {
     }
 
     private Optional<AssetCategory> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -294,14 +295,14 @@ class AssetCategoryService {
     private void record(long actorId, String operation, String key, String digest,
             int status, AssetCategory result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "ASSET_CATEGORY",
                 Long.parseLong(result.getId()), result.getVersion(), now,
                 now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

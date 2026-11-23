@@ -15,15 +15,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 class NumberAllocationService {
 
-    private final NumberingRuleMapper rules;
-    private final NumberAllocationMapper allocations;
+    private final NumberingRuleRepository numberingRuleRepository;
+    private final NumberAllocationRepository numberAllocationRepository;
     private final BusinessParameterService parameters;
     private final Clock clock;
 
-    NumberAllocationService(NumberingRuleMapper rules, NumberAllocationMapper allocations,
+    NumberAllocationService(NumberingRuleRepository numberingRuleRepository,
+            NumberAllocationRepository numberAllocationRepository,
             BusinessParameterService parameters, Clock authClock) {
-        this.rules = rules;
-        this.allocations = allocations;
+        this.numberingRuleRepository = numberingRuleRepository;
+        this.numberAllocationRepository = numberAllocationRepository;
         this.parameters = parameters;
         this.clock = authClock;
     }
@@ -33,12 +34,12 @@ class NumberAllocationService {
         if (target == null || count < 1 || count > 1000) {
             throw MasterDataOperationException.invalid("The numbering request is invalid.");
         }
-        NumberingRuleRow active = rules.findActiveTarget(target.name());
+        NumberingRuleRow active = numberingRuleRepository.findActiveTarget(target.name());
         if (active == null) {
             throw new MasterDataOperationException("NUMBERING_RULE_UNAVAILABLE",
                     "No active numbering rule owns this target.", 409);
         }
-        NumberingRuleRow rule = rules.findForUpdate(active.id());
+        NumberingRuleRow rule = numberingRuleRepository.findForUpdate(active.id());
         if (rule == null || !"ACTIVE".equals(rule.status()) || !target.name().equals(rule.target())) {
             throw new MasterDataOperationException("NUMBERING_RULE_UNAVAILABLE",
                     "The numbering rule changed.", 409);
@@ -48,7 +49,7 @@ class NumberAllocationService {
             if (categoryId == null) {
                 throw prefixMissing();
             }
-            prefix = allocations.activeCategoryPrefix(categoryId);
+            prefix = numberAllocationRepository.activeCategoryPrefix(categoryId);
             if (prefix == null || !prefix.matches("[A-Za-z0-9_-]{1,32}")) {
                 throw prefixMissing();
             }
@@ -63,8 +64,8 @@ class NumberAllocationService {
                 ? "N" : "P" + prefix.toUpperCase(java.util.Locale.ROOT)) + "-"
                 + (date.isEmpty() ? "N" : "D" + rule.datePart() + date);
         var now = clock.instant();
-        allocations.ensureSequence(namespace, now);
-        Long previous = allocations.lockSequence(namespace);
+        numberAllocationRepository.ensureSequence(namespace, now);
+        Long previous = numberAllocationRepository.lockSequence(namespace);
         if (previous == null) {
             throw MasterDataOperationException.writeConflict("The number sequence is unavailable.");
         }
@@ -73,7 +74,7 @@ class NumberAllocationService {
             throw new MasterDataOperationException("NUMBERING_SEQUENCE_EXHAUSTED",
                     "The number sequence is exhausted.", 409);
         }
-        if (allocations.advanceSequence(namespace, previous, previous + count, now) != 1) {
+        if (numberAllocationRepository.advanceSequence(namespace, previous, previous + count, now) != 1) {
             throw MasterDataOperationException.writeConflict("The number sequence changed.");
         }
         List<NumberReservation> result = new ArrayList<>();
@@ -82,7 +83,7 @@ class NumberAllocationService {
             String rendered = displayPrefix + "-"
                     + String.format(java.util.Locale.ROOT, "%0" + rule.sequenceLength() + "d", sequence);
             NewNumberAllocationRow row = new NewNumberAllocationRow(namespace, sequence, rendered, now);
-            if (allocations.insert(row) != 1) {
+            if (numberAllocationRepository.insert(row) != 1) {
                 throw MasterDataOperationException.writeConflict("The number reservation failed.");
             }
             result.add(new NumberReservation(row.getId(), rendered));
@@ -101,7 +102,7 @@ class NumberAllocationService {
     }
 
     private void finish(long reservationId, String state) {
-        if (allocations.finish(reservationId, state) != 1) {
+        if (numberAllocationRepository.finish(reservationId, state) != 1) {
             throw MasterDataOperationException.writeConflict("The number reservation is no longer open.");
         }
     }

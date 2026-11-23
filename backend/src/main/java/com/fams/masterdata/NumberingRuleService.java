@@ -31,25 +31,26 @@ import tools.jackson.databind.ObjectMapper;
 class NumberingRuleService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
-    private final NumberingRuleMapper mapper;
-    private final IdentityMasterDataMapper records;
+    private final NumberingRuleRepository numberingRuleRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    NumberingRuleService(NumberingRuleMapper mapper, IdentityMasterDataMapper records,
+    NumberingRuleService(NumberingRuleRepository numberingRuleRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint, ObjectMapper objectMapper, Clock authClock) {
-        this.mapper = mapper;
-        this.records = records;
+        this.numberingRuleRepository = numberingRuleRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageNumberingRule list(int page, int pageSize) {
-        List<NumberingRule> items = mapper.list((page - 1) * pageSize, pageSize).stream()
+        List<NumberingRule> items = numberingRuleRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toRule).toList();
-        return new PageNumberingRule(page, pageSize, mapper.count(), items);
+        return new PageNumberingRule(page, pageSize, numberingRuleRepository.count(), items);
     }
 
     NumberingRule get(long id) {
@@ -67,7 +68,7 @@ class NumberingRuleService {
         }
         lockConfiguration();
         String code = required(request.getCode(), 64, "Rule code");
-        if (mapper.findByCode(normalize(code)) != null) {
+        if (numberingRuleRepository.findByCode(normalize(code)) != null) {
             throw codeConflict();
         }
         NumberingConfig config = validated(request.getTarget(), request.getMode(),
@@ -78,7 +79,7 @@ class NumberingRuleService {
                 config.target(), config.mode(), config.fixedPrefix(), config.datePart(),
                 config.sequenceLength(), actorId, now);
         try {
-            requireOne(mapper.insert(row));
+            requireOne(numberingRuleRepository.insert(row));
         } catch (DataIntegrityViolationException exception) {
             throw targetConflict();
         }
@@ -118,7 +119,7 @@ class NumberingRuleService {
         }
         Instant now = clock.instant();
         try {
-            requireOne(mapper.update(id, expectedVersion, config.target(), config.mode(),
+            requireOne(numberingRuleRepository.update(id, expectedVersion, config.target(), config.mode(),
                     config.fixedPrefix(), config.datePart(), config.sequenceLength(), actorId, now));
         } catch (DataIntegrityViolationException exception) {
             throw targetConflict();
@@ -155,7 +156,7 @@ class NumberingRuleService {
         }
         Instant now = clock.instant();
         try {
-            requireOne(mapper.changeStatus(id, expectedVersion, status, actorId, now));
+            requireOne(numberingRuleRepository.changeStatus(id, expectedVersion, status, actorId, now));
         } catch (DataIntegrityViolationException exception) {
             throw targetConflict();
         }
@@ -191,13 +192,13 @@ class NumberingRuleService {
     }
 
     private void lockConfiguration() {
-        if (mapper.lockConfiguration() == null) {
+        if (numberingRuleRepository.lockConfiguration() == null) {
             throw MasterDataOperationException.writeConflict("The numbering configuration is unavailable.");
         }
     }
 
     private void validateCategoryPrefixes() {
-        List<String> prefixes = mapper.activeCategoryPrefixes();
+        List<String> prefixes = numberingRuleRepository.activeCategoryPrefixes();
         if (prefixes.isEmpty()) {
             throw prefixMissing();
         }
@@ -219,7 +220,7 @@ class NumberingRuleService {
     }
 
     private void assertTargetAvailable(String target, Long currentId) {
-        NumberingRuleRow existing = mapper.findActiveTarget(target);
+        NumberingRuleRow existing = numberingRuleRepository.findActiveTarget(target);
         if (existing != null && (currentId == null || existing.id() != currentId)) {
             throw targetConflict();
         }
@@ -236,7 +237,7 @@ class NumberingRuleService {
     }
 
     private NumberingRuleRow require(long id) {
-        NumberingRuleRow row = mapper.find(id);
+        NumberingRuleRow row = numberingRuleRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The numbering rule");
         }
@@ -244,7 +245,7 @@ class NumberingRuleService {
     }
 
     private NumberingRuleRow requireForUpdate(long id) {
-        NumberingRuleRow row = mapper.findForUpdate(id);
+        NumberingRuleRow row = numberingRuleRepository.findForUpdate(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The numbering rule");
         }
@@ -259,7 +260,7 @@ class NumberingRuleService {
     }
 
     private Optional<NumberingRule> replay(long actorId, String operation, String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -272,14 +273,14 @@ class NumberingRuleService {
     private void record(long actorId, String operation, String key, String digest,
             int status, NumberingRule result) {
         Instant now = clock.instant();
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, status,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, status,
                 objectMapper.writeValueAsString(result), "NUMBERING_RULE",
                 Long.parseLong(result.getId()), result.getVersion(), now,
                 now.plus(IDEMPOTENCY_RETENTION)));
     }
 
     private void audit(long actorId, UUID requestId, String action, long targetId, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of("action", action, "targetId", targetId))));
     }
 

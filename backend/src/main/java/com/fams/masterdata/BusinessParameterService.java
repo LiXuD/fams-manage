@@ -31,29 +31,30 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 class BusinessParameterService {
 
-    private final BusinessParameterMapper mapper;
-    private final IdentityMasterDataMapper records;
+    private final BusinessParameterRepository businessParameterRepository;
+    private final IdentityMasterDataRepository identityMasterDataRepository;
     private final MasterDataFingerprint fingerprint;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
-    BusinessParameterService(BusinessParameterMapper mapper, IdentityMasterDataMapper records,
+    BusinessParameterService(BusinessParameterRepository businessParameterRepository,
+            IdentityMasterDataRepository identityMasterDataRepository,
             MasterDataFingerprint fingerprint, ObjectMapper objectMapper, Clock authClock) {
-        this.mapper = mapper;
-        this.records = records;
+        this.businessParameterRepository = businessParameterRepository;
+        this.identityMasterDataRepository = identityMasterDataRepository;
         this.fingerprint = fingerprint;
         this.objectMapper = objectMapper;
         this.clock = authClock;
     }
 
     PageBusinessParameterVersion list(int page, int pageSize) {
-        List<BusinessParameterVersion> items = mapper.list((page - 1) * pageSize, pageSize)
+        List<BusinessParameterVersion> items = businessParameterRepository.list((page - 1) * pageSize, pageSize)
                 .stream().map(this::toVersion).toList();
-        return new PageBusinessParameterVersion(page, pageSize, mapper.count(), items);
+        return new PageBusinessParameterVersion(page, pageSize, businessParameterRepository.count(), items);
     }
 
     BusinessParameterVersion get(long id) {
-        BusinessParameterRow row = mapper.find(id);
+        BusinessParameterRow row = businessParameterRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The business-parameter version");
         }
@@ -61,7 +62,7 @@ class BusinessParameterService {
     }
 
     BusinessParameterVersion current() {
-        BusinessParameterState state = mapper.state();
+        BusinessParameterState state = businessParameterRepository.state();
         if (state == null || state.currentVersionId() == null) {
             throw MasterDataOperationException.notFound("The current business-parameter version");
         }
@@ -69,7 +70,7 @@ class BusinessParameterService {
     }
 
     ZoneId currentZoneOrDefault() {
-        BusinessParameterState state = mapper.state();
+        BusinessParameterState state = businessParameterRepository.state();
         if (state == null || state.currentVersionId() == null) {
             return ZoneId.of("Asia/Shanghai");
         }
@@ -88,11 +89,11 @@ class BusinessParameterService {
         }
         BusinessParameterVersionCreateRequest request = parse(raw);
         validate(raw, request.getSnapshot());
-        BusinessParameterState state = mapper.lockState();
+        BusinessParameterState state = businessParameterRepository.lockState();
         if (state == null || state.currentVersion() != expectedVersion) {
             throw versionConflict();
         }
-        String actorUsername = mapper.accountUsername(actorId);
+        String actorUsername = businessParameterRepository.accountUsername(actorId);
         if (actorUsername == null) {
             throw MasterDataOperationException.notFound("The administrator account");
         }
@@ -103,13 +104,13 @@ class BusinessParameterService {
             throw new MasterDataOperationException("BUSINESS_PARAMETER_VERSION_CONFLICT",
                     "The next version must have a later effective instant.", 409);
         }
-        if (before != null && mapper.supersede(state.currentVersionId()) != 1) {
+        if (before != null && businessParameterRepository.supersede(state.currentVersionId()) != 1) {
             throw versionConflict();
         }
         NewBusinessParameterRow row = new NewBusinessParameterRow(expectedVersion + 1,
                 now, actorId, actorUsername, objectMapper.writeValueAsString(request.getSnapshot()));
-        requireOne(mapper.insert(row));
-        requireOne(mapper.activate(expectedVersion, row.getVersion(), row.getId()));
+        requireOne(businessParameterRepository.insert(row));
+        requireOne(businessParameterRepository.activate(expectedVersion, row.getVersion(), row.getId()));
         BusinessParameterVersion result = get(row.getId());
         audit(actorId, requestId, before, result, now);
         record(actorId, operation, key, digest, result, now);
@@ -217,7 +218,7 @@ class BusinessParameterService {
 
     private Optional<BusinessParameterVersion> replay(long actorId, String operation,
             String key, String digest) {
-        IdempotencyRow existing = records.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }
@@ -230,7 +231,7 @@ class BusinessParameterService {
 
     private void record(long actorId, String operation, String key, String digest,
             BusinessParameterVersion result, Instant now) {
-        requireOne(records.insertIdempotency(actorId, operation, key, digest, 201,
+        requireOne(identityMasterDataRepository.insertIdempotency(actorId, operation, key, digest, 201,
                 objectMapper.writeValueAsString(result), "BUSINESS_PARAMETER_VERSION",
                 Long.parseLong(result.getId()), result.getVersion(), now,
                 now.plus(java.time.Duration.ofHours(24))));
@@ -238,7 +239,7 @@ class BusinessParameterService {
 
     private void audit(long actorId, UUID requestId, BusinessParameterVersion before,
             BusinessParameterVersion after, Instant now) {
-        requireOne(records.insertAudit(actorId, requestId.toString(), now,
+        requireOne(identityMasterDataRepository.insertAudit(actorId, requestId.toString(), now,
                 objectMapper.writeValueAsString(Map.of(
                         "action", "BUSINESS_PARAMETER_VERSION_CREATED",
                         "before", before == null ? Map.of() : before.getSnapshot(),
