@@ -82,3 +82,33 @@ TOTAL public instance methods = 224   annotated = 224   真实缺口 = 0
 ## 7. 运行时门禁结果（待补）
 
 副本 `/tmp/conv-gate` 的 `JAVA01_VERIFY_PASS` / 覆盖率行 / 失败步骤，见本文件提交时的实际结果。
+
+## 8. 后续批次暴露的审计口径缺陷（未解决，交接项）
+
+CONV-06 的 L-B 代理报告 `transfer/TransferService` 有 8 个方法"完全没有方法级注解"。实测确认
+（`TransferService.java` 第 336/446/489/596/622/655/728/764/773/807/853/969/995/1068 行的入口
+**没有 `public` 修饰符**，是包私有方法；全类只有 7 处 `@Transactional`）。
+
+这使本批 §3 的"224/224 无缺口"结论口径必须收窄：**我的机械审计把包私有方法排除在分母之外**，
+理由是 Spring 默认 `publicAnnotationsOnly`（全仓 grep 未发现显式 `@EnableTransactionManagement`
+覆盖，走 Boot 默认）。因此这 15 个入口在改造前后都不经事务属性解析，本批没有让它们变差。
+
+但这个前提与另一条硬事实相互矛盾，我没有预算在本次会话里判定，必须作为开放风险交接：
+各域 Port 的方法普遍是 `@Transactional(propagation = Propagation.MANDATORY)`
+（如 `asset/AssetRepairPort`、`loss/LossInitialPort`），MANDATORY 在**无事务上下文时直接抛
+`IllegalTransactionStateException`**。若 `TransferService.action/decide/physical/receipt/reassign`
+确实无事务，它们调用这些 Port 早该在运行时用例里炸开；既然主线运行时用例历史上是绿的，
+说明"包私有入口不受类级事务属性约束"这一推断中至少有一环不成立（可能是 CGLIB 同包代理对
+非 public 方法仍套用类级属性，或这些入口实际由已标注的 public 包装方法间接调用）。
+
+两种结果都需处理，且都是**独立于本批的既存问题**，不是本批引入的回归：
+- 若推断成立 → `TransferService` 的转派写链路存在既存的事务边界缺口，应单独立批修（入口提 public
+  或补方法级注解），并复核 `InboundService` 那 7 个只有裸 `@Transactional`（无 `rollbackFor`）的写方法。
+- 若推断不成立（类级属性本就作用于包私有方法）→ 本批删除 `TransferService` 的类级注解
+  **是一次真实回归**，必须立刻恢复这 15 个方法的注解。
+
+复现判据建议：在 `TransferService.action` 调用链上对任一 MANDATORY Port 方法加断言或跑
+`-Dd6.*.transfer.runtime=true` 的运行时用例；同时用一次性实验验证 Spring 6 下包私有方法
+是否继承类级 `@Transactional`。在此之前，**不要把 §3 的 224/224 读作"全部入口已覆盖"**。
+同类需一并复核的还有 `reminder/WechatSubscriptionService` 与 `inbound/InboundReassignmentService`
+（§4 已登记为"语义空转"，用的是同一个未经证实的前提）。
