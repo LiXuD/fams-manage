@@ -50,7 +50,11 @@ public class InventorySelectionService {
         this.differences = differences;
     }
 
-    public Map<String, Object> detail(Actor actor, long taskId, long itemId, int page, int size) {
+    /** The frozen detail exit has no total without its COUNT row. */
+    private static final String TOTAL_REQUIRED = "INVENTORY_SELECTION_TOTAL_REQUIRED";
+
+    public SelectionViews.SelectionDetailView detail(
+            Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
         var task = task(taskId);
         var item = item(taskId, itemId);
@@ -64,30 +68,32 @@ public class InventorySelectionService {
                         itemId,
                         size,
                         ((long) page - 1) * size);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("taskId", Long.toString(taskId));
-        result.put("taskVersion", task.get("version"));
-        result.put("itemId", Long.toString(itemId));
-        result.put("recheckGeneration", item.get("recheck_generation"));
         var currentReview = review(item);
-        result.put("review", wire(currentReview.isEmpty() ? Map.of("version", 0) : currentReview));
-        result.put("contextDigest", digest(context));
-        result.put("movementEvents", context.movements());
-        result.put("history", wire(rows));
-        result.put("page", page);
-        result.put("pageSize", size);
-        result.put(
-                "total",
-                db.queryForObject(
-                        "SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?"
-                                + " AND item_id=? FOR SHARE",
-                        Long.class,
-                        taskId,
-                        itemId));
-        return result;
+        // The COUNT FOR SHARE stays the last locked read of this exit (legacy argument order).
+        var total =
+                java.util.Objects.requireNonNull(
+                        db.queryForObject(
+                                "SELECT COUNT(*) FROM fams_inventory_selection_event WHERE task_id=?"
+                                        + " AND item_id=? FOR SHARE",
+                                Long.class,
+                                taskId,
+                                itemId),
+                        TOTAL_REQUIRED);
+        return new SelectionViews.SelectionDetailView(
+                Long.toString(taskId),
+                number(task, "version"),
+                Long.toString(itemId),
+                number(item, "recheck_generation"),
+                SelectionViews.reviewChip(currentReview),
+                digest(context),
+                context.movements(),
+                SelectionViews.selectionEvents(json, rows),
+                page,
+                size,
+                total);
     }
 
-    public Map<String, Object> select(
+    public SelectionViews.SelectionReply select(
             Actor actor,
             long taskId,
             long itemId,
@@ -112,7 +118,7 @@ public class InventorySelectionService {
             }
             return json.readValue(
                     receipts.getFirst().get("response").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    SelectionViews.SelectionReply.class);
         }
         var item = item(taskId, itemId);
         var prior = review(item);
@@ -257,16 +263,11 @@ public class InventorySelectionService {
                 now(),
                 taskId);
         var response =
-                Map.<String, Object>of(
-                        "taskId",
+                new SelectionViews.SelectionReply(
                         Long.toString(taskId),
-                        "itemId",
                         Long.toString(itemId),
-                        "version",
                         version + 1,
-                        "review",
-                        wire(review(item)),
-                        "contextDigest",
+                        SelectionViews.reviewState(review(item)),
                         digest(context));
         audit(actor, current, task, "INVENTORY_EVIDENCE_SELECTED", response);
         db.update(
@@ -282,7 +283,7 @@ public class InventorySelectionService {
         return response;
     }
 
-    public Map<String, Object> evidenceSubjects(
+    public SelectionViews.EvidenceSubjectView evidenceSubjects(
             Actor actor, long taskId, long itemId, long observationId) {
         admin(actor);
         var task = task(taskId);
@@ -293,70 +294,63 @@ public class InventorySelectionService {
                         "SELECT * FROM fams_inventory_review_subject WHERE observation_id=? ORDER"
                                 + " BY dimension FOR SHARE",
                         observationId);
-        var result = new java.util.ArrayList<Object>();
+        var result = new java.util.ArrayList<SelectionViews.EvidenceSubjectRow>();
         for (var row : rows) {
-            var value = new LinkedHashMap<String, Object>(row);
-            value.put(
-                    "decisions",
+            // decisions, links and repairLinks are read per subject in the legacy append order.
+            var decisionRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_decision WHERE observation_id=?"
                                     + " AND dimension=? ORDER BY after_version FOR SHARE",
                             observationId,
-                            row.get("dimension")));
-            value.put(
-                    "links",
+                            row.get("dimension"));
+            var linkRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_transfer WHERE observation_id=?"
                                     + " AND dimension=? ORDER BY decision_version FOR SHARE",
                             observationId,
-                            row.get("dimension")));
-            value.put(
-                    "repairLinks",
+                            row.get("dimension"));
+            var repairRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_repair WHERE observation_id=? AND"
                                 + " dimension=? ORDER BY decision_version FOR SHARE",
                             observationId,
-                            row.get("dimension")));
-            result.add(wire(value));
+                            row.get("dimension"));
+            result.add(
+                    SelectionViews.evidenceSubject(row, decisionRows, linkRows, repairRows));
         }
-        return Map.of(
-                "items",
+        return new SelectionViews.EvidenceSubjectView(
                 result,
-                "requiredDimensions",
                 differences.requiredDimensions(task, raw).stream().sorted().toList());
     }
 
-    public Map<String, Object> dispositions(
+    public SelectionViews.DispositionPage dispositions(
             Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
         task(taskId);
         item(taskId, itemId);
-        return Map.of(
-                "items",
-                wire(
-                        db.queryForList(
-                                "SELECT * FROM fams_inventory_evidence_disposition WHERE task_id=?"
-                                    + " AND item_id=? ORDER BY observation_id LIMIT ? OFFSET ? FOR"
-                                    + " SHARE",
-                                taskId,
-                                itemId,
-                                size,
-                                ((long) page - 1) * size)),
-                "total",
+        var rows =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_evidence_disposition WHERE task_id=?"
+                            + " AND item_id=? ORDER BY observation_id LIMIT ? OFFSET ? FOR"
+                            + " SHARE",
+                        taskId,
+                        itemId,
+                        size,
+                        ((long) page - 1) * size);
+        var total =
                 java.util.Objects.requireNonNull(
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM fams_inventory_evidence_disposition WHERE"
                                         + " task_id=? AND item_id=? FOR SHARE",
                                 Long.class,
                                 taskId,
-                                itemId)),
-                "page",
-                page,
-                "pageSize",
-                size);
+                                itemId),
+                        TOTAL_REQUIRED);
+        return new SelectionViews.DispositionPage(
+                SelectionViews.evidenceDispositions(rows), total, page, size);
     }
 
-    public Map<String, Object> decideEvidence(
+    public SelectionViews.EvidenceDecisionReply decideEvidence(
             Actor actor,
             long taskId,
             long itemId,
@@ -366,7 +360,15 @@ public class InventorySelectionService {
         var current = admin(actor);
         var task = task(taskId);
         String fingerprint = hash(version + "\n" + itemId + "\n" + json.writeValueAsString(input));
-        var original = original(actor, current, task, key, "DECIDE_EVIDENCE", fingerprint);
+        var original =
+                original(
+                        actor,
+                        current,
+                        task,
+                        key,
+                        "DECIDE_EVIDENCE",
+                        fingerprint,
+                        SelectionViews.EvidenceDecisionReply.class);
         if (original != null) {
             return original;
         }
@@ -571,21 +573,19 @@ public class InventorySelectionService {
                 actor,
                 current,
                 task,
-                itemId,
-                version,
                 key,
                 "DECIDE_EVIDENCE",
                 fingerprint,
-                Map.of(
-                        "observationId",
+                new SelectionViews.EvidenceDecisionReply(
                         Long.toString(input.observationId()),
-                        "method",
                         input.method(),
-                        "closed",
-                        closed));
+                        closed,
+                        task.get("id").toString(),
+                        Long.toString(itemId),
+                        version + 1));
     }
 
-    public Map<String, Object> acceptSelected(
+    public SelectionViews.EvidenceAcceptanceReply acceptSelected(
             Actor actor,
             long taskId,
             long itemId,
@@ -595,7 +595,15 @@ public class InventorySelectionService {
         var current = admin(actor);
         var task = task(taskId);
         String fingerprint = hash(version + "\n" + itemId + "\n" + json.writeValueAsString(input));
-        var original = original(actor, current, task, key, "ACCEPT_SELECTED", fingerprint);
+        var original =
+                original(
+                        actor,
+                        current,
+                        task,
+                        key,
+                        "ACCEPT_SELECTED",
+                        fingerprint,
+                        SelectionViews.EvidenceAcceptanceReply.class);
         if (original != null) {
             return original;
         }
@@ -699,16 +707,18 @@ public class InventorySelectionService {
                 current.id(),
                 current.username(),
                 now());
+        // The legacy payload argument re-read the review row here, before finishEvidence bumped
+        // the task version; the read keeps that exact position.
+        var accepted = SelectionViews.reviewState(review(item));
         return finishEvidence(
                 actor,
                 current,
                 task,
-                itemId,
-                version,
                 key,
                 "ACCEPT_SELECTED",
                 fingerprint,
-                Map.of("review", wire(review(item))));
+                new SelectionViews.EvidenceAcceptanceReply(
+                        accepted, task.get("id").toString(), Long.toString(itemId), version + 1));
     }
 
     private boolean special(String dimension) {
@@ -877,13 +887,15 @@ public class InventorySelectionService {
         }
     }
 
-    private Map<String, Object> original(
+    /** Replays a stored receipt into the typed exit of its own operation (JAVA-16a blueprint). */
+    private <T> T original(
             Actor actor,
             Current current,
             Map<String, Object> task,
             UUID key,
             String operation,
-            String fingerprint) {
+            String fingerprint,
+            Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
@@ -899,29 +911,26 @@ public class InventorySelectionService {
         if (!fingerprint.equals(rows.getFirst().get("payload_sha256"))) {
             reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
         }
-        return json.readValue(
-                rows.getFirst().get("response").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(rows.getFirst().get("response").toString(), type);
     }
 
-    private Map<String, Object> finishEvidence(
+    /**
+     * Persists the already assembled reply. The caller builds it in place of the legacy
+     * LinkedHashMap merge (payload keys, then taskId/itemId/version), which read no row, so the
+     * UPDATE/audit/receipt order below is the frozen one.
+     */
+    private <T> T finishEvidence(
             Actor actor,
             Current current,
             Map<String, Object> task,
-            long itemId,
-            long version,
             UUID key,
             String operation,
             String fingerprint,
-            Map<String, Object> payload) {
+            T response) {
         db.update(
                 "UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?",
                 now(),
                 task.get("id"));
-        var response = new LinkedHashMap<String, Object>(payload);
-        response.put("taskId", task.get("id").toString());
-        response.put("itemId", Long.toString(itemId));
-        response.put("version", version + 1);
         audit(actor, current, task, operation, response);
         db.update(
                 "INSERT INTO"
@@ -1082,39 +1091,6 @@ public class InventorySelectionService {
         } catch (java.security.NoSuchAlgorithmException failure) {
             throw new IllegalStateException(failure);
         }
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> row) {
-            var result = new LinkedHashMap<String, Object>();
-            row.forEach(
-                    (key, child) -> {
-                        String name = key.toString();
-                        Object data =
-                                name.endsWith("_json") && child instanceof String text
-                                        ? json.readValue(text, Object.class)
-                                        : child;
-                        result.put(
-                                name,
-                                data instanceof Number
-                                                && (name.equals("id")
-                                                        || name.endsWith("_id")
-                                                        || name.endsWith("Id"))
-                                        ? data.toString()
-                                        : wire(data));
-                    });
-            return result;
-        }
-        if (value instanceof List<?> rows) {
-            return rows.stream().map(this::wire).toList();
-        }
-        if (value instanceof Timestamp time) {
-            return time.toInstant().toString();
-        }
-        if (value instanceof java.time.LocalDateTime time) {
-            return time.toInstant(java.time.ZoneOffset.UTC).toString();
-        }
-        return value;
     }
 
     private long number(Map<String, Object> row, String name) {

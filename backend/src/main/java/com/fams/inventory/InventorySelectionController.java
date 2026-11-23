@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -37,7 +36,7 @@ class InventorySelectionController {
     }
 
     @GetMapping("/tasks/{task}/items/{item}/selection")
-    Map<String, Object> detail(
+    SelectionViews.SelectionDetailView detail(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestParam(defaultValue = "1") @Min(1) int page,
@@ -46,7 +45,7 @@ class InventorySelectionController {
     }
 
     @PostMapping("/tasks/{task}/items/{item}/selection")
-    Map<String, Object> select(
+    SelectionViews.SelectionReply select(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -56,7 +55,7 @@ class InventorySelectionController {
     }
 
     @GetMapping("/tasks/{task}/items/{item}/evidence-subjects")
-    Map<String, Object> subjects(
+    SelectionViews.EvidenceSubjectView subjects(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestParam @Positive long observationId) {
@@ -64,7 +63,7 @@ class InventorySelectionController {
     }
 
     @GetMapping("/tasks/{task}/items/{item}/evidence-dispositions")
-    Map<String, Object> dispositions(
+    SelectionViews.DispositionPage dispositions(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestParam(defaultValue = "1") @Min(1) int page,
@@ -73,7 +72,7 @@ class InventorySelectionController {
     }
 
     @PostMapping("/tasks/{task}/items/{item}/evidence-decisions")
-    Map<String, Object> decide(
+    SelectionViews.EvidenceDecisionReply decide(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -83,7 +82,7 @@ class InventorySelectionController {
     }
 
     @PostMapping("/tasks/{task}/items/{item}/acceptance")
-    Map<String, Object> accept(
+    SelectionViews.EvidenceAcceptanceReply accept(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestHeader("Idempotency-Key") UUID key,

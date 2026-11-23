@@ -56,7 +56,10 @@ public class InventoryDifferenceService {
         this.clock = clock;
     }
 
-    public Map<String, Object> list(Actor actor, long taskId, int page, int size) {
+    /** The difference list exit has no total without its COUNT row. */
+    private static final String TOTAL_REQUIRED = "INVENTORY_DIFFERENCE_TOTAL_REQUIRED";
+
+    public SelectionViews.DifferencePage list(Actor actor, long taskId, int page, int size) {
         admin(actor);
         task(taskId);
         var rows =
@@ -68,49 +71,43 @@ public class InventoryDifferenceService {
                         taskId,
                         size,
                         (page - 1) * size);
-        var values = new ArrayList<Object>();
+        var values = new ArrayList<SelectionViews.DifferenceSubjectRow>();
         for (var row : rows) {
-            var value = new LinkedHashMap<String, Object>(row);
-            value.put(
-                    "decisions",
+            // decisions, links and repairLinks are read per subject in the legacy append order.
+            var decisionRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_decision WHERE observation_id=?"
                                     + " AND dimension=? ORDER BY after_version FOR SHARE",
                             row.get("observation_id"),
-                            row.get("dimension")));
-            value.put(
-                    "links",
+                            row.get("dimension"));
+            var linkRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_transfer WHERE observation_id=?"
                                     + " AND dimension=? ORDER BY decision_version FOR SHARE",
                             row.get("observation_id"),
-                            row.get("dimension")));
-            value.put(
-                    "repairLinks",
+                            row.get("dimension"));
+            var repairRows =
                     db.queryForList(
                             "SELECT * FROM fams_inventory_review_repair WHERE observation_id=? AND"
                                     + " dimension=? ORDER BY decision_version FOR SHARE",
                             row.get("observation_id"),
-                            row.get("dimension")));
-            values.add(wire(value));
+                            row.get("dimension"));
+            values.add(SelectionViews.differenceSubject(row, decisionRows, linkRows, repairRows));
         }
-        return Map.of(
-                "items",
+        return new SelectionViews.DifferencePage(
                 values,
-                "page",
                 page,
-                "pageSize",
                 size,
-                "total",
                 Objects.requireNonNull(
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM fams_inventory_review_subject WHERE task_id=?"
                                         + " FOR SHARE",
                                 Long.class,
-                                taskId)));
+                                taskId),
+                        TOTAL_REQUIRED));
     }
 
-    public Map<String, Object> prepare(
+    public SelectionViews.DifferencePrepareReply prepare(
             Actor actor,
             long taskId,
             long version,
@@ -119,7 +116,15 @@ public class InventoryDifferenceService {
         var current = admin(actor);
         var task = task(taskId);
         String hash = hash(version, input);
-        var prior = replay(actor, current, task, "PREPARE_DIFFERENCES", key, hash);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        task,
+                        "PREPARE_DIFFERENCES",
+                        key,
+                        hash,
+                        SelectionViews.DifferencePrepareReply.class);
         if (prior != null) {
             return prior;
         }
@@ -165,6 +170,7 @@ public class InventoryDifferenceService {
                 }
             }
         }
+        boolean changed = created > 0;
         return finish(
                 actor,
                 current,
@@ -173,8 +179,9 @@ public class InventoryDifferenceService {
                 key,
                 "PREPARE_DIFFERENCES",
                 hash,
-                Map.of("created", created),
-                created > 0);
+                new SelectionViews.DifferencePrepareReply(
+                        created, task.get("id").toString(), versionAfter(version, changed)),
+                changed);
     }
 
     /**
@@ -279,7 +286,7 @@ public class InventoryDifferenceService {
         return java.util.Set.copyOf(dimensions);
     }
 
-    public Map<String, Object> decide(
+    public SelectionViews.DifferenceDecisionReply decide(
             Actor actor,
             long taskId,
             long version,
@@ -288,7 +295,15 @@ public class InventoryDifferenceService {
         var current = admin(actor);
         var task = task(taskId);
         String hash = hash(version, input);
-        var prior = replay(actor, current, task, "DECIDE_DIFFERENCES", key, hash);
+        var prior =
+                replay(
+                        actor,
+                        current,
+                        task,
+                        "DECIDE_DIFFERENCES",
+                        key,
+                        hash,
+                        SelectionViews.DifferenceDecisionReply.class);
         if (prior != null) {
             return prior;
         }
@@ -402,7 +417,7 @@ public class InventoryDifferenceService {
             }
         }
         int index = 0;
-        var decisions = new ArrayList<Object>();
+        var decisions = new ArrayList<SelectionViews.DifferenceDecisionItem>();
         for (var row : rows) {
             var linked = created != null ? created : links.isEmpty() ? null : links.get(index);
             String status = "BOOK_CORRECT".equals(input.method()) ? "CLOSED" : "PROCESSING";
@@ -459,17 +474,14 @@ public class InventoryDifferenceService {
                         now());
             }
             decisions.add(
-                    Map.of(
-                            "observationId",
+                    new SelectionViews.DifferenceDecisionItem(
                             row.get("observation_id").toString(),
-                            "dimension",
-                            row.get("dimension"),
-                            "version",
+                            (String) row.get("dimension"),
                             after,
-                            "status",
                             status,
-                            "linkedRequestId",
-                            linked == null ? "" : linked.requestId()));
+                            linked == null ? "" : linked.requestId(),
+                            null,
+                            null));
             index++;
         }
         return finish(
@@ -480,11 +492,13 @@ public class InventoryDifferenceService {
                 key,
                 "DECIDE_DIFFERENCES",
                 hash,
-                Map.of("items", decisions),
+                new SelectionViews.DifferenceDecisionReply(
+                        decisions, task.get("id").toString(), versionAfter(version, true)),
                 true);
     }
 
-    public Map<String, Object> repairContext(Actor actor, long taskId, long observationId) {
+    public SelectionViews.DifferenceRepairContext repairContext(
+            Actor actor, long taskId, long observationId) {
         admin(actor);
         var task = task(taskId);
         var subject = repairSubject(taskId, observationId);
@@ -499,28 +513,26 @@ public class InventoryDifferenceService {
         if (context == null) {
             throw new InventoryFailure(409, "INVENTORY_REVIEW_ASSET_CHANGED");
         }
-        var result = new LinkedHashMap<String, Object>();
-        result.put("taskId", Long.toString(taskId));
-        result.put("taskVersion", number(task, "version"));
-        result.put("observationId", Long.toString(observationId));
-        result.put("subjectVersion", number(subject, "version"));
-        result.put("subjectStatus", subject.get("subject_status"));
-        result.put("assetId", Long.toString(asset));
-        result.put("currentAsset", json.readTree(context.snapshotJson()));
-        result.put("originalObservedAt", wire(observation.get("raw_observed_at")));
-        result.put("originalFacts", json.readTree(observation.get("facts_json").toString()));
-        result.put(
-                "repairLinks",
-                wire(
-                        db.queryForList(
-                                "SELECT * FROM fams_inventory_review_repair WHERE observation_id=?"
-                                        + " AND dimension='CONDITION' ORDER BY decision_version FOR"
-                                        + " SHARE",
-                                observationId)));
-        return result;
+        var repairLinks =
+                db.queryForList(
+                        "SELECT * FROM fams_inventory_review_repair WHERE observation_id=?"
+                                + " AND dimension='CONDITION' ORDER BY decision_version FOR"
+                                + " SHARE",
+                        observationId);
+        return new SelectionViews.DifferenceRepairContext(
+                Long.toString(taskId),
+                number(task, "version"),
+                Long.toString(observationId),
+                number(subject, "version"),
+                (String) subject.get("subject_status"),
+                Long.toString(asset),
+                json.readTree(context.snapshotJson()),
+                SelectionViews.timeValue(observation.get("raw_observed_at")),
+                json.readTree(observation.get("facts_json").toString()),
+                SelectionViews.repairLinks(repairLinks));
     }
 
-    private Map<String, Object> decideRepair(
+    private SelectionViews.DifferenceDecisionReply decideRepair(
             Actor actor,
             Current current,
             Map<String, Object> task,
@@ -687,24 +699,18 @@ public class InventoryDifferenceService {
                 key,
                 "DECIDE_DIFFERENCES",
                 hash,
-                Map.of(
-                        "items",
+                new SelectionViews.DifferenceDecisionReply(
                         List.of(
-                                Map.of(
-                                        "observationId",
+                                new SelectionViews.DifferenceDecisionItem(
                                         Long.toString(ref.observationId()),
-                                        "dimension",
                                         "CONDITION",
-                                        "version",
                                         after,
-                                        "status",
                                         status,
-                                        "linkedRequestId",
                                         "",
-                                        "linkedRepairId",
                                         linked.repairId(),
-                                        "repairStatus",
-                                        linked.status()))),
+                                        linked.status())),
+                        task.get("id").toString(),
+                        versionAfter(version, true)),
                 true);
     }
 
@@ -818,13 +824,15 @@ public class InventoryDifferenceService {
         throw new InventoryReviewConflict(code, fields);
     }
 
-    private Map<String, Object> replay(
+    /** Replays a stored receipt into the typed exit of its own operation (JAVA-16a blueprint). */
+    private <T> T replay(
             Actor actor,
             Current current,
             Map<String, Object> task,
             String operation,
             UUID key,
-            String hash) {
+            String hash,
+            Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
@@ -840,12 +848,15 @@ public class InventoryDifferenceService {
         if (!hash.equals(rows.getFirst().get("payload_sha256"))) {
             reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
         }
-        return json.readValue(
-                rows.getFirst().get("response").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(rows.getFirst().get("response").toString(), type);
     }
 
-    private Map<String, Object> finish(
+    /**
+     * Persists the already assembled reply. The caller builds it in place of the legacy
+     * LinkedHashMap merge (payload keys, then taskId/version), which reads no row, so the
+     * UPDATE/audit/receipt order below is the frozen one.
+     */
+    private <T> T finish(
             Actor actor,
             Current current,
             Map<String, Object> task,
@@ -853,9 +864,9 @@ public class InventoryDifferenceService {
             UUID key,
             String operation,
             String hash,
-            Map<String, Object> payload,
+            T result,
             boolean changed) {
-        long after = version + (changed ? 1 : 0);
+        long after = versionAfter(version, changed);
         if (changed) {
             db.update(
                     "UPDATE fams_inventory_task SET version=?,updated_at=? WHERE id=?",
@@ -863,9 +874,6 @@ public class InventoryDifferenceService {
                     now(),
                     task.get("id"));
         }
-        var result = new LinkedHashMap<>(payload);
-        result.put("taskId", task.get("id").toString());
-        result.put("version", after);
         audit(actor, current, task, operation, result);
         db.update(
                 "INSERT INTO"
@@ -879,6 +887,11 @@ public class InventoryDifferenceService {
                 json.writeValueAsString(result),
                 now());
         return result;
+    }
+
+    /** The frozen finish() version arithmetic: only a changing command bumps the task version. */
+    private static long versionAfter(long version, boolean changed) {
+        return version + (changed ? 1 : 0);
     }
 
     private void audit(

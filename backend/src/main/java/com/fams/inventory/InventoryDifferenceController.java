@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -37,7 +36,7 @@ class InventoryDifferenceController {
     }
 
     @GetMapping("/tasks/{task}/differences")
-    Map<String, Object> list(
+    SelectionViews.DifferencePage list(
             @PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
@@ -45,7 +44,7 @@ class InventoryDifferenceController {
     }
 
     @PostMapping("/tasks/{task}/differences/preparation")
-    Map<String, Object> prepare(
+    SelectionViews.DifferencePrepareReply prepare(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,
@@ -54,13 +53,13 @@ class InventoryDifferenceController {
     }
 
     @GetMapping("/tasks/{task}/differences/{observation}/repair-context")
-    Map<String, Object> repairContext(
+    SelectionViews.DifferenceRepairContext repairContext(
             @PathVariable @Positive long task, @PathVariable @Positive long observation) {
         return differences.repairContext(actors.capture(), task, observation);
     }
 
     @PostMapping("/tasks/{task}/differences/decisions")
-    Map<String, Object> decide(
+    SelectionViews.DifferenceDecisionReply decide(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -37,7 +36,7 @@ class InventoryReadinessController {
     }
 
     @GetMapping("/tasks/{task}")
-    Map<String, Object> detail(
+    SelectionViews.ReadinessView detail(
             @PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
@@ -45,7 +44,7 @@ class InventoryReadinessController {
     }
 
     @GetMapping("/tasks/{task}/items/{item}/unobserved-history")
-    Map<String, Object> history(
+    SelectionViews.UnobservedHistoryPage history(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
@@ -54,7 +53,7 @@ class InventoryReadinessController {
     }
 
     @PostMapping("/tasks/{task}/items/{item}/unobserved")
-    Map<String, Object> record(
+    SelectionViews.UnobservedReply record(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @RequestHeader("Idempotency-Key") UUID key,
@@ -64,7 +63,7 @@ class InventoryReadinessController {
     }
 
     @PostMapping("/tasks/{task}/items/{item}/missing/{reason}/loss")
-    Map<String, Object> reportMissing(
+    SelectionViews.MissingLossReply reportMissing(
             @PathVariable @Positive long task,
             @PathVariable @Positive long item,
             @PathVariable @Positive long reason,
@@ -75,7 +74,7 @@ class InventoryReadinessController {
     }
 
     @PostMapping("/tasks/{task}/waiting-review")
-    Map<String, Object> waiting(
+    SelectionViews.WaitingReply waiting(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version,

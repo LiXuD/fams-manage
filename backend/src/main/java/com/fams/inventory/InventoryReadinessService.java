@@ -67,7 +67,8 @@ public class InventoryReadinessService {
         this.losses = losses;
     }
 
-    public Map<String, Object> detail(Actor actor, long taskId, int page, int size) {
+    public SelectionViews.ReadinessView detail(
+            Actor actor, long taskId, int page, int size) {
         admin(actor);
         var task = task(taskId);
         var items =
@@ -104,60 +105,70 @@ public class InventoryReadinessService {
                 items.stream()
                         .map(
                                 row -> {
-                                    var value = new LinkedHashMap<String, Object>();
-                                    value.put("id", row.get("id").toString());
-                                    value.put("item", wire(row));
                                     var context = contexts.get(number(row, "asset_id"));
-                                    value.put(
-                                            "current",
+                                    var reasons = byItem.getOrDefault(number(row, "id"), List.of());
+                                    return new SelectionViews.ReadinessItem(
+                                            row.get("id").toString(),
+                                            SelectionViews.readinessItemRow(json, row),
                                             context == null
                                                     ? null
-                                                    : json.readValue(
-                                                            context.snapshotJson(), Object.class));
-                                    value.put(
-                                            "canRecord",
+                                                    : json.readTree(context.snapshotJson()),
                                             context != null
                                                     && "IN_PROGRESS".equals(task.get("task_status"))
                                                     && row.get("review_status") == null
-                                                    && number(row, "valid_raw_count") == 0);
-                                    var reasons = byItem.getOrDefault(number(row, "id"), List.of());
-                                    value.put("physicalMissingOpen", reasons.stream().anyMatch(reason -> {
-                                        var report = progress.get(number(reason, "id"));
-                                        return report == null || !report.transferred();
-                                    }));
-                                    value.put("missingLosses", reasons.stream().map(reason -> {
-                                        var report = progress.get(number(reason, "id"));
-                                        var entry = new LinkedHashMap<String, Object>();
-                                        entry.put("reasonId", reason.get("id").toString());
-                                        entry.put("generation", reason.get("recheck_generation"));
-                                        entry.put("reason", reason.get("reason"));
-                                        entry.put("report", report);
-                                        entry.put("canSubmit", context != null
-                                                && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status"))
-                                                && (report == null || report.canRetry()));
-                                        return entry;
-                                    }).toList());
-                                    return value;
+                                                    && number(row, "valid_raw_count") == 0,
+                                            reasons.stream()
+                                                    .anyMatch(
+                                                            reason -> {
+                                                                var report =
+                                                                        progress.get(
+                                                                                number(
+                                                                                        reason,
+                                                                                        "id"));
+                                                                return report == null
+                                                                        || !report.transferred();
+                                                            }),
+                                            reasons.stream()
+                                                    .map(
+                                                            reason -> {
+                                                                var report =
+                                                                        progress.get(
+                                                                                number(
+                                                                                        reason,
+                                                                                        "id"));
+                                                                return new SelectionViews
+                                                                                .MissingLossRow(
+                                                                        reason.get("id").toString(),
+                                                                        number(reason,
+                                                                                "recheck_generation"),
+                                                                        (String) reason.get("reason"),
+                                                                        report,
+                                                                        context != null
+                                                                                && List.of(
+                                                                                                "IN_PROGRESS",
+                                                                                                "WAITING_REVIEW")
+                                                                                        .contains(
+                                                                                                task.get(
+                                                                                                        "task_status"))
+                                                                                && (report == null
+                                                                                        || report
+                                                                                                .canRetry()));
+                                                            })
+                                                    .toList());
                                 })
                         .toList();
-        return Map.of(
-                "task",
-                wire(task),
-                "items",
+        return new SelectionViews.ReadinessView(
+                SelectionViews.taskRow(json, task),
                 rows,
-                "total",
                 count(taskId),
-                "page",
                 page,
-                "pageSize",
                 size,
-                "missingCount",
                 missing(taskId),
-                "notObservedCount",
                 notObserved(taskId));
     }
 
-    public Map<String, Object> history(Actor actor, long taskId, long itemId, int page, int size) {
+    public SelectionViews.UnobservedHistoryPage history(
+            Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
         task(taskId);
         item(taskId, itemId);
@@ -177,18 +188,11 @@ public class InventoryReadinessService {
                                 Long.class,
                                 taskId,
                                 itemId));
-        return Map.of(
-                "items",
-                rows.stream().map(this::wire).toList(),
-                "total",
-                total,
-                "page",
-                page,
-                "pageSize",
-                size);
+        return new SelectionViews.UnobservedHistoryPage(
+                SelectionViews.unobservedReasons(rows), total, page, size);
     }
 
-    public Map<String, Object> record(
+    public SelectionViews.UnobservedReply record(
             Actor actor,
             long taskId,
             long itemId,
@@ -199,7 +203,15 @@ public class InventoryReadinessService {
         var task = task(taskId);
         String operation = "UNOBSERVED:" + itemId;
         String digest = hash(version + ":" + itemId + ":" + json.writeValueAsString(input));
-        var prior = original(actor, current, task, operation, key, digest);
+        var prior =
+                original(
+                        actor,
+                        current,
+                        task,
+                        operation,
+                        key,
+                        digest,
+                        SelectionViews.UnobservedReply.class);
         if (prior != null) {
             return prior;
         }
@@ -281,33 +293,40 @@ public class InventoryReadinessService {
                 now,
                 taskId);
         var response =
-                Map.<String, Object>of(
-                        "taskId",
+                new SelectionViews.UnobservedReply(
                         Long.toString(taskId),
-                        "itemId",
                         Long.toString(itemId),
-                        "reasonId",
                         Long.toString(id),
-                        "version",
                         version + 1,
-                        "reviewVersion",
                         1,
-                        "status",
                         "NOT_OBSERVED",
-                        "physicalMissingOpen",
                         "ASSET_NOT_FOUND".equals(input.kind()));
         audit(actor, current, task, "INVENTORY_NOT_OBSERVED", version + 1, response);
         save(current, taskId, operation, key, digest, response);
         return response;
     }
 
-    public Map<String, Object> reportMissing(Actor actor, long taskId, long itemId, long reasonId,
-            long version, UUID key, MissingLossInput input) {
+    public SelectionViews.MissingLossReply reportMissing(
+            Actor actor,
+            long taskId,
+            long itemId,
+            long reasonId,
+            long version,
+            UUID key,
+            MissingLossInput input) {
         var current = admin(actor);
         var task = task(taskId);
         String operation = "MISSING_LOSS:" + reasonId;
         String digest = hash(version + ":" + itemId + ":" + json.writeValueAsString(input));
-        var prior = original(actor, current, task, operation, key, digest);
+        var prior =
+                original(
+                        actor,
+                        current,
+                        task,
+                        operation,
+                        key,
+                        digest,
+                        SelectionViews.MissingLossReply.class);
         if (prior != null) {
             return prior;
         }
@@ -342,15 +361,19 @@ public class InventoryReadinessService {
             throw new InventoryFailure(failure.status(), failure.getMessage());
         }
         db.update("UPDATE fams_inventory_task SET version=version+1,updated_at=? WHERE id=?", now(), taskId);
-        var response = Map.<String, Object>of("taskId", Long.toString(taskId),
-                "itemId", Long.toString(itemId), "reasonId", Long.toString(reasonId),
-                "reportId", reportId, "version", version + 1);
+        var response =
+                new SelectionViews.MissingLossReply(
+                        Long.toString(taskId),
+                        Long.toString(itemId),
+                        Long.toString(reasonId),
+                        reportId,
+                        version + 1);
         audit(actor, current, task, "INVENTORY_MISSING_REPORTED", version + 1, response);
         save(current, taskId, operation, key, digest, response);
         return response;
     }
 
-    public Map<String, Object> waiting(
+    public SelectionViews.WaitingReply waiting(
             Actor actor,
             long taskId,
             long version,
@@ -360,7 +383,15 @@ public class InventoryReadinessService {
         var task = task(taskId);
         String operation = "WAITING_REVIEW";
         String digest = hash(version + ":" + json.writeValueAsString(input));
-        var prior = original(actor, current, task, operation, key, digest);
+        var prior =
+                original(
+                        actor,
+                        current,
+                        task,
+                        operation,
+                        key,
+                        digest,
+                        SelectionViews.WaitingReply.class);
         if (prior != null) {
             return prior;
         }
@@ -380,15 +411,8 @@ public class InventoryReadinessService {
                 now(),
                 taskId);
         var response =
-                Map.<String, Object>of(
-                        "taskId",
-                        Long.toString(taskId),
-                        "version",
-                        version + 1,
-                        "status",
-                        "WAITING_REVIEW",
-                        "notObservedCount",
-                        notObserved(taskId));
+                new SelectionViews.WaitingReply(
+                        Long.toString(taskId), version + 1, "WAITING_REVIEW", notObserved(taskId));
         audit(
                 actor,
                 current,
@@ -466,13 +490,15 @@ public class InventoryReadinessService {
         return rows.getFirst();
     }
 
-    private Map<String, Object> original(
+    /** Replays a stored receipt into the typed exit of its own operation (JAVA-16a blueprint). */
+    private <T> T original(
             Actor actor,
             Current current,
             Map<String, Object> task,
             String operation,
             UUID key,
-            String hash) {
+            String hash,
+            Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
@@ -488,9 +514,7 @@ public class InventoryReadinessService {
         if (!hash.equals(rows.getFirst().get("payload_sha256"))) {
             conflict(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of());
         }
-        return json.readValue(
-                rows.getFirst().get("response").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(rows.getFirst().get("response").toString(), type);
     }
 
     private void save(
@@ -565,30 +589,6 @@ public class InventoryReadinessService {
                 after,
                 now,
                 value);
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> row) {
-            var result = new LinkedHashMap<String, Object>();
-            row.forEach(
-                    (key, item) -> {
-                        String name = key.toString();
-                        Object content =
-                                name.endsWith("_json") && item instanceof String text
-                                        ? json.readValue(text, Object.class)
-                                        : item;
-                        result.put(
-                                name,
-                                item != null && (name.equals("id") || name.endsWith("_id"))
-                                        ? item.toString()
-                                        : wire(content));
-                    });
-            return result;
-        }
-        if (value instanceof Timestamp || value instanceof java.time.LocalDateTime) {
-            return instant(value).toString();
-        }
-        return value;
     }
 
     private String reviewMethod(Map<String, Object> review) {
