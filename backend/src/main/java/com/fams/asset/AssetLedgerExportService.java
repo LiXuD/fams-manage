@@ -25,15 +25,15 @@ class AssetLedgerExportService {
 
     private final AssetLedgerExportAccess access;
     private final AssetService assets;
-    private final AssetMapper mapper;
+    private final AssetRepository assetRepository;
     private final Clock clock;
     private final ObjectMapper json;
 
-    AssetLedgerExportService(AssetLedgerExportAccess access, AssetService assets, AssetMapper mapper,
-            Clock clock, ObjectMapper json) {
+    AssetLedgerExportService(AssetLedgerExportAccess access, AssetService assets,
+            AssetRepository assetRepository, Clock clock, ObjectMapper json) {
         this.access = access;
         this.assets = assets;
-        this.mapper = mapper;
+        this.assetRepository = assetRepository;
         this.clock = clock;
         this.json = json;
     }
@@ -42,16 +42,16 @@ class AssetLedgerExportService {
     public String export(RequisitionActorContext.Actor actor, Map<String, String> query) {
         access.require(actor);
         var filters = assets.filters(query);
-        if (mapper.count(actor.id(), filters) > MAX_ROWS) {
+        if (assetRepository.count(actor.id(), filters) > MAX_ROWS) {
             throw new AssetOperationException("ASSET_EXPORT_LIMIT", "Narrow the asset filters to 10000 rows.", 422);
         }
-        var rows = mapper.list(actor.id(), filters, MAX_ROWS, 0);
+        var rows = assetRepository.list(actor.id(), filters, MAX_ROWS, 0);
         var csv = new StringBuilder("\uFEFF").append(String.join(",", COLUMNS)).append("\r\n");
         for (var row : rows) {
             csv.append(COLUMNS.stream().map(column -> cell(row.get(column)))
                     .collect(Collectors.joining(","))).append("\r\n");
         }
-        mapper.audit(actor.id(), "ASSET_LEDGER_EXPORTED", actor.requestId().toString(), clock.instant(),
+        assetRepository.audit(actor.id(), "ASSET_LEDGER_EXPORTED", actor.requestId().toString(), clock.instant(),
                 json.writeValueAsString(Map.of("filterFields", filters.keySet(), "rows", rows.size())));
         return csv.toString();
     }

@@ -56,7 +56,7 @@ class AssetListReferenceQueryTest {
         when(mapper.count(anyLong(), anyMap())).thenReturn(50L);
         when(mapper.referenceViews(anyString(), anyList()))
                 .thenReturn(List.of(Map.of("id", 1L, "version", 0L)));
-        var service = new AssetService(mapper, mock(AssetMasterDataPort.class),
+        var service = new AssetService(new AssetRepository(mapper), mock(AssetMasterDataPort.class),
                 mock(AssetSecretCodec.class), new ObjectMapper(), Clock.systemUTC(), "FAMS");
         var result = service.list(new Actor(1, "worker", true, false, "WAREHOUSE_OPERATOR", "test"),
                 1, 50, Map.of());

@@ -37,6 +37,11 @@ class FamsArchitectureTest {
     }
 
     @Test
+    void servicesDoNotReachMybatisMappers() {
+        FamsArchitectureRules.SERVICES_DO_NOT_REACH_MYBATIS_MAPPERS.check(productionClasses);
+    }
+
+    @Test
     void applicationEntryPointIsInTheRootPackage() {
         FamsArchitectureRules.APPLICATION_ENTRY_POINT_IS_IN_THE_ROOT_PACKAGE.check(
                 productionClasses

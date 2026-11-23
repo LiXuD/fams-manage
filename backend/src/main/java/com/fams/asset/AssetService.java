@@ -56,17 +56,17 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class AssetService {
-    private final AssetMapper mapper;
+    private final AssetRepository assetRepository;
     private final AssetMasterDataPort masterData;
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
     private final Clock clock;
     private final String enterpriseName;
 
-    AssetService(AssetMapper mapper, AssetMasterDataPort masterData, AssetSecretCodec codec,
+    AssetService(AssetRepository assetRepository, AssetMasterDataPort masterData, AssetSecretCodec codec,
             ObjectMapper json, Clock authClock,
             @Value("${fams.asset.enterprise-name:FAMS}") String enterpriseName) {
-        this.mapper = mapper;
+        this.assetRepository = assetRepository;
         this.masterData = masterData;
         this.codec = codec;
         this.json = json;
@@ -81,12 +81,12 @@ class AssetService {
         }
         int offset = Math.toIntExact((long) (page - 1) * pageSize);
         Map<String, Object> filters = filters(query);
-        List<Map<String, Object>> rows = mapper.list(actor.id(), filters, pageSize, offset);
+        List<Map<String, Object>> rows = assetRepository.list(actor.id(), filters, pageSize, offset);
         Map<String, Map<Long, Map<String, Object>>> references = listReferences(rows);
         List<Asset> items = rows.stream().map(row -> toAsset(row, (id, kind) ->
                 id == null ? null : references.getOrDefault(kind, Map.of()).get(id))).toList();
         return new PageAsset(page, pageSize,
-                mapper.count(actor.id(), filters), items);
+                assetRepository.count(actor.id(), filters), items);
     }
 
     Map<String, Object> filters(Map<String, String> query) {
@@ -161,7 +161,7 @@ class AssetService {
         LocalDate earliest = utcDate.minusDays(1);
         LocalDate latest = utcDate.plusDays(1);
         Map<String, String> datesByZone = new HashMap<>();
-        for (String name : mapper.candidateLoanTimezones(earliest, latest)) {
+        for (String name : assetRepository.candidateLoanTimezones(earliest, latest)) {
             datesByZone.put(name, now.atZone(ZoneId.of(name)).toLocalDate().toString());
         }
         return new BorrowOverdue(Boolean.parseBoolean(value), earliest, latest, json.writeValueAsString(datesByZone));
@@ -190,7 +190,7 @@ class AssetService {
         if (replay != null) { return replay; }
         Map<String, Object> current = visible(actor, id, true);
         checkVersion(current, expectedVersion);
-        if (mapper.factoryReplacement(id) != 0
+        if (assetRepository.factoryReplacement(id) != 0
                 && (request.getSource() != null && !"FACTORY_REPLACEMENT".equals(request.getSource())
                     || request.getSerialNumber() != null && !java.util.Objects.equals(
                             optional(request.getSerialNumber(), 128), text(current, "serial_number")))) {
@@ -259,7 +259,7 @@ class AssetService {
         }
         Long locationId = (Long) values.get("locationId");
         Long warehouseId = (Long) values.get("warehouseId");
-        Map<String, Object> location = locationId == null ? null : mapper.location(locationId);
+        Map<String, Object> location = locationId == null ? null : assetRepository.location(locationId);
         if (locationId != null && (location == null || warehouseId == null
                 || number(location, "warehouse_id") != warehouseId)) {
             throw AssetOperationException.conflict("ASSET_MASTER_DATA_DISABLED",
@@ -269,7 +269,7 @@ class AssetService {
         values.put("version", expectedVersion);
         values.put("actorId", actor.id());
         values.put("now", now());
-        if (mapper.update(values) != 1) { throw versionConflict(); }
+        if (assetRepository.update(values) != 1) { throw versionConflict(); }
         event(actor, id, "ASSET_UPDATED", "Asset card corrected", expectedVersion, expectedVersion + 1);
         Asset result = get(actor, id);
         record(actor.id(), operation, key, digest, 200, result, id, result.getVersion());
@@ -310,7 +310,7 @@ class AssetService {
         Long categoryId = (Long) values.get("categoryId");
         var allocated = masterData.reserveAssetCodes(categoryId, 1).getFirst();
         values.put("code", allocated.code());
-        mapper.insert(values);
+        assetRepository.insert(values);
         long id = ((Number) values.get("id")).longValue();
         masterData.markUsed(allocated.reservationId());
         issueTag(id, (Instant) values.get("now"));
@@ -351,7 +351,7 @@ class AssetService {
             template.setExtensionValues(extensionValues(source));
             Map<String, Object> values = draftValues(actor, template, sourceId);
             values.put("code", code.code());
-            mapper.insert(values);
+            assetRepository.insert(values);
             long id = ((Number) values.get("id")).longValue();
             masterData.markUsed(code.reservationId());
             issueTag(id, (Instant) values.get("now"));
@@ -378,11 +378,11 @@ class AssetService {
         if (number(row, "creator_account_id") != actor.id()) {
             throw AssetOperationException.conflict("ASSET_NOT_CREATOR", "Only the creator can cancel the draft.");
         }
-        if (mapper.activeLock(id) != 0) {
+        if (assetRepository.activeLock(id) != 0) {
             throw AssetOperationException.conflict("ASSET_DRAFT_LOCKED", "The asset has an active business lock.");
         }
         required(reason, 500, "ASSET_CANCEL_REASON_REQUIRED");
-        if (mapper.cancel(id, expectedVersion, reason.strip(), actor.id(), now()) != 1) {
+        if (assetRepository.cancel(id, expectedVersion, reason.strip(), actor.id(), now()) != 1) {
             throw versionConflict();
         }
         event(actor, id, "ASSET_DRAFT_CANCELLED", "Draft cancelled", expectedVersion, expectedVersion + 1);
@@ -393,19 +393,19 @@ class AssetService {
 
     PageAssetTimelineEvent timeline(Actor actor, long id, int page, int pageSize) {
         visible(actor, id, false);
-        List<AssetTimelineEvent> events = mapper.timeline(id, pageSize, (page - 1) * pageSize)
+        List<AssetTimelineEvent> events = assetRepository.timeline(id, pageSize, (page - 1) * pageSize)
                 .stream().map(row -> new AssetTimelineEvent(
                         Long.toString(number(row, "id")), text(row, "event_type"),
                         instant(row, "occurred_at").atOffset(ZoneOffset.UTC),
                         json.readTree(text(row, "summary_json")).path("summary").asText(),
                         text(row, "business_type"), Long.toString(number(row, "business_id"))))
                 .toList();
-        return new PageAssetTimelineEvent(page, pageSize, mapper.timelineCount(id), events);
+        return new PageAssetTimelineEvent(page, pageSize, assetRepository.timelineCount(id), events);
     }
 
     AssetTag tag(Actor actor, long id) {
         Map<String, Object> row = visible(actor, id, false);
-        Map<String, Object> tag = mapper.tag(id);
+        Map<String, Object> tag = assetRepository.tag(id);
         if (tag == null) { throw AssetOperationException.notFound(); }
         String token = codec.decrypt((byte[]) tag.get("token_ciphertext"));
         return new AssetTag(enterpriseName, text(row, "name"), text(row, "asset_code"), token, token);
@@ -415,7 +415,7 @@ class AssetService {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) {
             throw AssetOperationException.notFound();
         }
-        Long id = mapper.assetIdByTokenHash(codec.hash(token));
+        Long id = assetRepository.assetIdByTokenHash(codec.hash(token));
         if (id == null) { throw AssetOperationException.notFound(); }
         Asset asset = get(actor, id);
         return new AssetQrAccessResult(asset.getAssetCode(), asset.getName(),
@@ -435,17 +435,17 @@ class AssetService {
                 .contains(text(asset, "lifecycle_status"))) {
             throw AssetOperationException.conflict("ASSET_TAG_NOT_ELIGIBLE", "The asset is not eligible for placement.");
         }
-        var tag = mapper.tag(id);
+        var tag = assetRepository.tag(id);
         if (tag == null || !hash.equals(text(tag, "token_hash"))) {
             throw AssetOperationException.conflict("ASSET_TAG_NOT_CURRENT", "The scanned tag is not the current asset tag.");
         }
         long tagVersion = number(tag, "tag_version");
         var issuedAt = instant(tag, "issued_at");
-        var placement = mapper.tagPlacement(id, tagVersion, issuedAt);
+        var placement = assetRepository.tagPlacement(id, tagVersion, issuedAt);
         Instant confirmedAt;
         if (placement == null) {
             confirmedAt = now();
-            mapper.addTagPlacement(id, tagVersion, issuedAt, actor.id(), confirmedAt);
+            assetRepository.addTagPlacement(id, tagVersion, issuedAt, actor.id(), confirmedAt);
             event(actor, id, "ASSET_TAG_PLACEMENT_CONFIRMED", "Current QR tag placement confirmed",
                     expectedVersion, expectedVersion);
         } else {
@@ -472,15 +472,15 @@ class AssetService {
             throw AssetOperationException.conflict("ASSET_TAG_NOT_PRINTABLE", "Only published assets have printable tags.");
         }
         required(reason, 500, "ASSET_TAG_REASON_REQUIRED");
-        Map<String, Object> old = mapper.tag(id);
+        Map<String, Object> old = assetRepository.tag(id);
         if (old == null) { throw AssetOperationException.notFound(); }
         Instant timestamp = now();
         String token = codec.token();
-        mapper.archiveTag(id, text(old, "token_hash"), instant(old, "issued_at"), timestamp,
+        assetRepository.archiveTag(id, text(old, "token_hash"), instant(old, "issued_at"), timestamp,
                 reason.strip());
-        if (mapper.rotateTag(id, number(old, "tag_version"), codec.encrypt(token),
+        if (assetRepository.rotateTag(id, number(old, "tag_version"), codec.encrypt(token),
                 codec.hash(token), timestamp) != 1
-                || mapper.touch(id, expectedVersion, actor.id(), timestamp) != 1) {
+                || assetRepository.touch(id, expectedVersion, actor.id(), timestamp) != 1) {
             throw versionConflict();
         }
         event(actor, id, "ASSET_TAG_REPLACED", "Tag replaced", expectedVersion, expectedVersion + 1);
@@ -544,9 +544,9 @@ class AssetService {
     }
 
     AssetTagPrintJobResult printJob(Actor actor, long id) {
-        Map<String, Object> job = mapper.printJob(id, actor.id());
+        Map<String, Object> job = assetRepository.printJob(id, actor.id());
         if (job == null) { throw AssetOperationException.notFound(); }
-        List<Map<String, Object>> rows = mapper.printItems(id);
+        List<Map<String, Object>> rows = assetRepository.printItems(id);
         if ("SINGLE".equals(text(job, "job_type"))) {
             Map<String, Object> item = rows.getFirst();
             visible(actor, number(item, "asset_id"), false);
@@ -590,12 +590,12 @@ class AssetService {
         values.put("actorId", actorId);
         values.put("jobType", jobType);
         values.put("now", now());
-        mapper.insertPrintJob(values);
+        assetRepository.insertPrintJob(values);
         long id = ((Number) values.get("id")).longValue();
         for (Map<String, Object> asset : assets) {
-            Map<String, Object> tag = mapper.tag(number(asset, "id"));
+            Map<String, Object> tag = assetRepository.tag(number(asset, "id"));
             if (tag == null) { throw AssetOperationException.notFound(); }
-            mapper.insertPrintItem(id, number(asset, "id"), number(asset, "version"),
+            assetRepository.insertPrintItem(id, number(asset, "id"), number(asset, "version"),
                     number(tag, "tag_version"), text(asset, "asset_code"),
                     text(asset, "name"), (byte[]) tag.get("token_ciphertext"));
         }
@@ -613,7 +613,7 @@ class AssetService {
         putReference(values, "manufacturerId", request.getManufacturer(), "manufacturer");
         Long warehouse = (Long) values.get("warehouseId");
         Long location = (Long) values.get("locationId");
-        Map<String, Object> locationRow = location == null ? null : mapper.location(location);
+        Map<String, Object> locationRow = location == null ? null : assetRepository.location(location);
         if (location != null && (locationRow == null || warehouse == null
                 || number(locationRow, "warehouse_id") != warehouse)) {
             throw AssetOperationException.conflict("ASSET_MASTER_DATA_DISABLED", "The planned location is outside its warehouse.");
@@ -653,7 +653,7 @@ class AssetService {
         if (categoryId == null) {
             throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID", "A category is required for extension values.");
         }
-        String templateJson = mapper.categoryTemplate(categoryId);
+        String templateJson = assetRepository.categoryTemplate(categoryId);
         JsonNode template = json.readTree(templateJson == null ? "[]" : templateJson);
         if (!template.isArray() || extensions.size() > template.size()) {
             throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID", "Extension fields do not match the category.");
@@ -717,12 +717,12 @@ class AssetService {
     private Map<String, Object> refRow(Long id, String kind) {
         if (id == null) { return null; }
         return switch (kind) {
-            case "category" -> mapper.category(id);
-            case "organization" -> mapper.organization(id);
-            case "warehouse" -> mapper.warehouse(id);
-            case "location" -> mapper.location(id);
-            case "brand" -> mapper.brand(id);
-            case "manufacturer" -> mapper.manufacturer(id);
+            case "category" -> assetRepository.category(id);
+            case "organization" -> assetRepository.organization(id);
+            case "warehouse" -> assetRepository.warehouse(id);
+            case "location" -> assetRepository.location(id);
+            case "brand" -> assetRepository.brand(id);
+            case "manufacturer" -> assetRepository.manufacturer(id);
             default -> throw new IllegalArgumentException("Unknown reference kind");
         };
     }
@@ -730,13 +730,13 @@ class AssetService {
     private Map<String, Object> refViewRow(Long id, String kind) {
         if (id == null) { return null; }
         return switch (kind) {
-            case "category" -> mapper.categoryView(id);
-            case "organization" -> mapper.organizationView(id);
-            case "warehouse" -> mapper.warehouseView(id);
-            case "location" -> mapper.locationView(id);
-            case "brand" -> mapper.brandView(id);
-            case "manufacturer" -> mapper.manufacturerView(id);
-            case "employee" -> mapper.employee(id);
+            case "category" -> assetRepository.categoryView(id);
+            case "organization" -> assetRepository.organizationView(id);
+            case "warehouse" -> assetRepository.warehouseView(id);
+            case "location" -> assetRepository.locationView(id);
+            case "brand" -> assetRepository.brandView(id);
+            case "manufacturer" -> assetRepository.manufacturerView(id);
+            case "employee" -> assetRepository.employee(id);
             default -> throw new IllegalArgumentException("Unknown reference kind");
         };
     }
@@ -759,7 +759,7 @@ class AssetService {
         Map<String, Map<Long, Map<String, Object>>> result = new HashMap<>();
         for (var entry : ids.entrySet()) {
             Map<Long, Map<String, Object>> byId = new HashMap<>();
-            for (var value : mapper.referenceViews(entry.getKey(), List.copyOf(entry.getValue()))) {
+            for (var value : assetRepository.referenceViews(entry.getKey(), List.copyOf(entry.getValue()))) {
                 byId.put(number(value, "id"), value);
             }
             result.put(entry.getKey(), byId);
@@ -785,7 +785,7 @@ class AssetService {
     }
 
     private Map<String, Object> visible(Actor actor, long id, boolean lock) {
-        Map<String, Object> row = lock ? mapper.lock(id) : mapper.find(id);
+        Map<String, Object> row = lock ? assetRepository.lock(id) : assetRepository.find(id);
         if (row == null || (("DRAFT".equals(text(row, "card_stage"))
                 || "CANCELLED".equals(text(row, "card_stage")))
                 && number(row, "creator_account_id") != actor.id())) {
@@ -893,25 +893,26 @@ class AssetService {
 
     private void issueTag(long id, Instant timestamp) {
         String token = codec.token();
-        mapper.insertTag(id, codec.encrypt(token), codec.hash(token), timestamp);
+        assetRepository.insertTag(id, codec.encrypt(token), codec.hash(token), timestamp);
     }
 
     private void event(Actor actor, long assetId, String event, String summary,
             Long beforeVersion, Long afterVersion) {
         Instant timestamp = now();
-        mapper.event(assetId, event, timestamp, json.writeValueAsString(Map.of("summary", summary)), actor.id());
+        assetRepository.event(assetId, event, timestamp,
+                json.writeValueAsString(Map.of("summary", summary)), actor.id());
         Map<String, Object> detail = new HashMap<>();
         detail.put("assetId", assetId);
         detail.put("role", actor.role());
         detail.put("beforeVersion", beforeVersion);
         detail.put("afterVersion", afterVersion);
         detail.put("summary", summary);
-        mapper.audit(actor.id(), event, actor.requestId(), timestamp,
+        assetRepository.audit(actor.id(), event, actor.requestId(), timestamp,
                 json.writeValueAsString(detail));
     }
 
     private <T> T replay(long actorId, String operation, String key, String digest, Class<T> type) {
-        Map<String, Object> prior = mapper.replay(actorId, operation, key, now());
+        Map<String, Object> prior = assetRepository.replay(actorId, operation, key, now());
         if (prior == null) { return null; }
         if (!digest.equals(text(prior, "payload_sha256"))) {
             throw AssetOperationException.conflict("ASSET_IDEMPOTENCY_CONFLICT", "The key has another payload.");
@@ -922,7 +923,7 @@ class AssetService {
     private void record(long actorId, String operation, String key, String digest,
             int status, Object response, Long id, Long version) {
         Instant timestamp = now();
-        mapper.record(actorId, operation, key, digest, status, json.writeValueAsString(response),
+        assetRepository.record(actorId, operation, key, digest, status, json.writeValueAsString(response),
                 id, version, timestamp, timestamp.plus(24, ChronoUnit.HOURS));
     }
 

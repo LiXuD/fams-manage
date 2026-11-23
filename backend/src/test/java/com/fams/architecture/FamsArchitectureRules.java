@@ -1,6 +1,7 @@
 package com.fams.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.methods;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
@@ -11,6 +12,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.Optional;
+import org.apache.ibatis.annotations.Mapper;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +58,14 @@ final class FamsArchitectureRules {
             .should()
             .resideInAPackage("com.fams")
             .because("root-package placement lets component scanning cover com.fams without an override");
+
+    static final ArchRule SERVICES_DO_NOT_REACH_MYBATIS_MAPPERS = noClasses()
+            .that()
+            .haveSimpleNameEndingWith("Service")
+            .should()
+            .dependOnClassesThat()
+            .areAnnotatedWith(Mapper.class)
+            .because("persistence is owned by the Repository and Port boundary, not the service");
 
     private FamsArchitectureRules() {
     }

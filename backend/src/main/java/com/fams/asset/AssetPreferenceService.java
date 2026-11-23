@@ -24,22 +24,22 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class AssetPreferenceService {
-    private final AssetMapper mapper;
+    private final AssetRepository assetRepository;
     private final AssetSecretCodec codec;
     private final ObjectMapper json;
     private final Clock clock;
 
-    AssetPreferenceService(AssetMapper mapper, AssetSecretCodec codec,
+    AssetPreferenceService(AssetRepository assetRepository, AssetSecretCodec codec,
             ObjectMapper json, Clock authClock) {
-        this.mapper = mapper;
+        this.assetRepository = assetRepository;
         this.codec = codec;
         this.json = json;
         this.clock = authClock;
     }
 
     PageAssetSavedFilter list(Actor actor, int page, int pageSize) {
-        return new PageAssetSavedFilter(page, pageSize, mapper.savedFilterCount(actor.id()),
-                mapper.savedFilters(actor.id(), pageSize, (page - 1) * pageSize)
+        return new PageAssetSavedFilter(page, pageSize, assetRepository.savedFilterCount(actor.id()),
+                assetRepository.savedFilters(actor.id(), pageSize, (page - 1) * pageSize)
                         .stream().map(this::toFilter).toList());
     }
 
@@ -50,13 +50,13 @@ class AssetPreferenceService {
         String digest = codec.hash(operation + json.writeValueAsString(request));
         AssetSavedFilter replay = replay(actor, operation, key, digest);
         if (replay != null) { return replay; }
-        if (mapper.savedFilterCount(actor.id()) >= 20) {
+        if (assetRepository.savedFilterCount(actor.id()) >= 20) {
             throw AssetOperationException.conflict("ASSET_SAVED_FILTER_LIMIT_REACHED",
                     "At most 20 personal filters are allowed.");
         }
         Map<String, Object> values = values(actor, request.getName(), request.getCriteria());
-        mapper.insertSavedFilter(values);
-        AssetSavedFilter result = toFilter(mapper.savedFilter(
+        assetRepository.insertSavedFilter(values);
+        AssetSavedFilter result = toFilter(assetRepository.savedFilter(
                 ((Number) values.get("id")).longValue(), actor.id()));
         audit(actor, "ASSET_SAVED_FILTER_CREATED", requestId, result.getId());
         record(actor, operation, key, digest, result);
@@ -79,8 +79,8 @@ class AssetPreferenceService {
         Map<String, Object> values = values(actor, name, criteria);
         values.put("id", id);
         values.put("version", version);
-        if (mapper.updateSavedFilter(values) != 1) { throw versionConflict(); }
-        AssetSavedFilter result = toFilter(mapper.savedFilter(id, actor.id()));
+        if (assetRepository.updateSavedFilter(values) != 1) { throw versionConflict(); }
+        AssetSavedFilter result = toFilter(assetRepository.savedFilter(id, actor.id()));
         audit(actor, "ASSET_SAVED_FILTER_UPDATED", requestId, result.getId());
         record(actor, operation, key, digest, result);
         return result;
@@ -90,17 +90,17 @@ class AssetPreferenceService {
     void delete(Actor actor, long id, long version, String key, UUID requestId) {
         String operation = "deleteAssetSavedFilter";
         String digest = codec.hash(operation + id + ":" + version);
-        Map<String, Object> prior = mapper.replay(actor.id(), operation, key, now());
+        Map<String, Object> prior = assetRepository.replay(actor.id(), operation, key, now());
         if (prior != null) {
             if (!digest.equals(prior.get("payload_sha256"))) { throw idempotencyConflict(); }
             return;
         }
         Map<String, Object> existing = require(actor, id);
         if (((Number) existing.get("version")).longValue() != version) { throw versionConflict(); }
-        if (mapper.deleteSavedFilter(id, actor.id(), version) != 1) { throw versionConflict(); }
+        if (assetRepository.deleteSavedFilter(id, actor.id(), version) != 1) { throw versionConflict(); }
         audit(actor, "ASSET_SAVED_FILTER_DELETED", requestId, Long.toString(id));
         Instant timestamp = now();
-        mapper.record(actor.id(), operation, key, digest, 204, "{}", null, null,
+        assetRepository.record(actor.id(), operation, key, digest, 204, "{}", null, null,
                 timestamp, timestamp.plus(24, ChronoUnit.HOURS));
     }
 
@@ -121,7 +121,7 @@ class AssetPreferenceService {
     }
 
     private Map<String, Object> require(Actor actor, long id) {
-        Map<String, Object> result = mapper.savedFilter(id, actor.id());
+        Map<String, Object> result = assetRepository.savedFilter(id, actor.id());
         if (result == null) { throw AssetOperationException.notFound(); }
         return result;
     }
@@ -143,7 +143,7 @@ class AssetPreferenceService {
     }
 
     private AssetSavedFilter replay(Actor actor, String operation, String key, String digest) {
-        Map<String, Object> prior = mapper.replay(actor.id(), operation, key, now());
+        Map<String, Object> prior = assetRepository.replay(actor.id(), operation, key, now());
         if (prior == null) { return null; }
         if (!digest.equals(prior.get("payload_sha256"))) { throw idempotencyConflict(); }
         return json.readValue(prior.get("response_body_json").toString(), AssetSavedFilter.class);
@@ -152,13 +152,13 @@ class AssetPreferenceService {
     private void record(Actor actor, String operation, String key, String digest,
             AssetSavedFilter result) {
         Instant timestamp = now();
-        mapper.record(actor.id(), operation, key, digest, 200,
+        assetRepository.record(actor.id(), operation, key, digest, 200,
                 json.writeValueAsString(result), Long.parseLong(result.getId()), result.getVersion(),
                 timestamp, timestamp.plus(24, ChronoUnit.HOURS));
     }
 
     private void audit(Actor actor, String event, UUID requestId, String id) {
-        mapper.audit(actor.id(), event, requestId.toString(), now(),
+        assetRepository.audit(actor.id(), event, requestId.toString(), now(),
                 json.writeValueAsString(Map.of("filterId", id)));
     }
 

@@ -16,13 +16,14 @@ import tools.jackson.databind.ObjectMapper;
 class AssetLookupService {
     private static final int PAGE_SIZE = 30;
     private final RequisitionActorContext actors;
-    private final AssetMapper mapper;
+    private final AssetRepository assetRepository;
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
-    AssetLookupService(RequisitionActorContext actors, AssetMapper mapper, JdbcTemplate db, ObjectMapper json) {
+    AssetLookupService(RequisitionActorContext actors, AssetRepository assetRepository, JdbcTemplate db,
+            ObjectMapper json) {
         this.actors = actors;
-        this.mapper = mapper;
+        this.assetRepository = assetRepository;
         this.db = db;
         this.json = json;
     }
@@ -48,7 +49,7 @@ class AssetLookupService {
         }
         var asset = matching.getFirst();
         var id = Long.parseLong(asset.id());
-        var rows = mapper.timeline(id, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).stream()
+        var rows = assetRepository.timeline(id, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE).stream()
                 .map(row -> new Entry(row.get("id").toString(), row.get("event_type").toString(),
                         eventTime(row.get("occurred_at")),
                         global ? row.get("business_type").toString() : null,

@@ -42,7 +42,7 @@ class AccountAdminService {
 
     private static final Duration IDEMPOTENCY_RETENTION = Duration.ofHours(24);
 
-    private final AccountAdminMapper mapper;
+    private final AccountAdminRepository accountAdminRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthPayloadFingerprint payloadFingerprint;
     private final AuthApplicationService authService;
@@ -51,14 +51,14 @@ class AccountAdminService {
     private final ApplicationEventPublisher events;
 
     AccountAdminService(
-            AccountAdminMapper mapper,
+            AccountAdminRepository accountAdminRepository,
             PasswordEncoder passwordEncoder,
             AuthPayloadFingerprint payloadFingerprint,
             AuthApplicationService authService,
             ObjectMapper objectMapper,
             Clock clock,
             ApplicationEventPublisher events) {
-        this.mapper = mapper;
+        this.accountAdminRepository = accountAdminRepository;
         this.passwordEncoder = passwordEncoder;
         this.payloadFingerprint = payloadFingerprint;
         this.authService = authService;
@@ -69,10 +69,10 @@ class AccountAdminService {
 
     PageSystemAccount listAccounts(int page, int pageSize) {
         int offset = Math.multiplyExact(page - 1, pageSize);
-        List<SystemAccount> items = mapper.listAccounts(offset, pageSize).stream()
+        List<SystemAccount> items = accountAdminRepository.listAccounts(offset, pageSize).stream()
                 .map(this::toContract)
                 .toList();
-        return new PageSystemAccount(page, pageSize, mapper.countAccounts(), items);
+        return new PageSystemAccount(page, pageSize, accountAdminRepository.countAccounts(), items);
     }
 
     SystemAccount getAccount(long accountId) {
@@ -119,7 +119,7 @@ class AccountAdminService {
             return replay.orElseThrow();
         }
 
-        EmployeeAdminRow employee = Optional.ofNullable(mapper.findEmployee(employeeId))
+        EmployeeAdminRow employee = Optional.ofNullable(accountAdminRepository.findEmployee(employeeId))
                 .orElseThrow(AuthOperationException::employeeNotFound);
         if (!"ACTIVE".equals(employee.status())) {
             throw AuthOperationException.relationConflict("The employee is not active.");
@@ -127,10 +127,10 @@ class AccountAdminService {
         if (employee.version() != employeeVersion) {
             throw AuthOperationException.versionConflict();
         }
-        if (mapper.countByNormalizedUsername(normalizedUsername) != 0) {
+        if (accountAdminRepository.countByNormalizedUsername(normalizedUsername) != 0) {
             throw AuthOperationException.relationConflict("The username is already in use.");
         }
-        if (mapper.countByEmployeeId(employeeId) != 0) {
+        if (accountAdminRepository.countByEmployeeId(employeeId) != 0) {
             throw AuthOperationException.relationConflict("The employee already has a system account.");
         }
         validatePassword(initialPassword, username);
@@ -143,7 +143,7 @@ class AccountAdminService {
                 passwordEncoder.encode(initialPassword),
                 actorAccountId,
                 now);
-        requireOne(mapper.insertAccount(newAccount));
+        requireOne(accountAdminRepository.insertAccount(newAccount));
         SystemAccount result = getAccount(newAccount.getId());
         recordIdempotency(
                 actorAccountId,
@@ -197,7 +197,8 @@ class AccountAdminService {
             throw AuthOperationException.stateConflict("The account already has the requested status.");
         }
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.updateStatus(accountId, expectedVersion, target, actorAccountId, now));
+        requireVersionUpdate(accountAdminRepository.updateStatus(accountId, expectedVersion, target,
+                actorAccountId, now));
         SystemAccount result = getAccount(accountId);
         recordIdempotency(
                 actorAccountId,
@@ -242,7 +243,7 @@ class AccountAdminService {
         SystemAccountAdminRow current = requireVersion(accountId, expectedVersion);
         validatePassword(newInitialPassword, current.username());
         Instant now = clock.instant();
-        requireVersionUpdate(mapper.resetInitialPassword(
+        requireVersionUpdate(accountAdminRepository.resetInitialPassword(
                 accountId,
                 expectedVersion,
                 passwordEncoder.encode(newInitialPassword),
@@ -290,18 +291,19 @@ class AccountAdminService {
             return replay.orElseThrow();
         }
         requireVersion(accountId, expectedVersion);
-        boolean assigned = mapper.countRole(accountId, role) != 0;
+        boolean assigned = accountAdminRepository.countRole(accountId, role) != 0;
         if (grant == assigned) {
             throw AuthOperationException.stateConflict(
                     grant ? "The role is already assigned." : "The role is not assigned.");
         }
         Instant now = clock.instant();
         if (grant) {
-            requireOne(mapper.insertRole(accountId, role, actorAccountId, now));
+            requireOne(accountAdminRepository.insertRole(accountId, role, actorAccountId, now));
         } else {
-            requireOne(mapper.deleteRole(accountId, role));
+            requireOne(accountAdminRepository.deleteRole(accountId, role));
         }
-        requireVersionUpdate(mapper.advanceRoleVersion(accountId, expectedVersion, actorAccountId, now));
+        requireVersionUpdate(accountAdminRepository.advanceRoleVersion(accountId, expectedVersion,
+                actorAccountId, now));
         SystemAccount result = getAccount(accountId);
         recordIdempotency(
                 actorAccountId,
@@ -326,10 +328,10 @@ class AccountAdminService {
 
     SystemAccountAuthorization getAuthorization(long accountId, Role role) {
         SystemAccountAdminRow account = requireAccount(accountId);
-        if (mapper.countRole(accountId, role) == 0) {
+        if (accountAdminRepository.countRole(accountId, role) == 0) {
             throw AuthOperationException.relationConflict("The account does not have the requested role.");
         }
-        AuthorizationAdminRow current = mapper.findCurrentAuthorization(accountId, role);
+        AuthorizationAdminRow current = accountAdminRepository.findCurrentAuthorization(accountId, role);
         if (current == null) {
             return emptyAuthorization(account, role);
         }
@@ -369,7 +371,7 @@ class AccountAdminService {
         AuthorizationAdminRow current = requireAuthorizationVersion(accountId, role, expectedVersion);
         Instant now = clock.instant();
         if (current != null) {
-            requireOne(mapper.supersedeAuthorization(current.id(), now));
+            requireOne(accountAdminRepository.supersedeAuthorization(current.id(), now));
         }
         NewAuthorizationRow replacement = new NewAuthorizationRow(
                 accountId,
@@ -380,11 +382,11 @@ class AccountAdminService {
                 actorAccountId,
                 body.getReason(),
                 now);
-        requireOne(mapper.insertAuthorization(replacement));
+        requireOne(accountAdminRepository.insertAuthorization(replacement));
         insertAuthorizationDetails(replacement.getId(), body.getDataScopes(), body.getFieldPermissions(), now);
-        requireOne(mapper.advanceAuthorizationEpoch(accountId, actorAccountId, now));
+        requireOne(accountAdminRepository.advanceAuthorizationEpoch(accountId, actorAccountId, now));
         SystemAccountAuthorization result = toContract(
-                mapper.findCurrentAuthorization(accountId, role));
+                accountAdminRepository.findCurrentAuthorization(accountId, role));
         recordIdempotency(
                 actorAccountId,
                 operation,
@@ -435,7 +437,7 @@ class AccountAdminService {
             throw AuthOperationException.stateConflict("The authorization is already revoked.");
         }
         Instant now = clock.instant();
-        requireOne(mapper.supersedeAuthorization(current.id(), now));
+        requireOne(accountAdminRepository.supersedeAuthorization(current.id(), now));
         NewAuthorizationRow revoked = new NewAuthorizationRow(
                 accountId,
                 role,
@@ -445,10 +447,10 @@ class AccountAdminService {
                 actorAccountId,
                 reason,
                 now);
-        requireOne(mapper.insertAuthorization(revoked));
-        requireOne(mapper.advanceAuthorizationEpoch(accountId, actorAccountId, now));
+        requireOne(accountAdminRepository.insertAuthorization(revoked));
+        requireOne(accountAdminRepository.advanceAuthorizationEpoch(accountId, actorAccountId, now));
         SystemAccountAuthorization result = toContract(
-                mapper.findCurrentAuthorization(accountId, role));
+                accountAdminRepository.findCurrentAuthorization(accountId, role));
         recordIdempotency(
                 actorAccountId,
                 operation,
@@ -484,7 +486,7 @@ class AccountAdminService {
     }
 
     private SystemAccountAdminRow requireAccount(long accountId) {
-        return Optional.ofNullable(mapper.findAccount(accountId))
+        return Optional.ofNullable(accountAdminRepository.findAccount(accountId))
                 .orElseThrow(AuthOperationException::accountNotFound);
     }
 
@@ -498,7 +500,7 @@ class AccountAdminService {
 
     private void requireAccountRole(long accountId, Role role) {
         requireAccount(accountId);
-        if (mapper.countRole(accountId, role) == 0) {
+        if (accountAdminRepository.countRole(accountId, role) == 0) {
             throw AuthOperationException.relationConflict("The account does not have the requested role.");
         }
     }
@@ -507,7 +509,7 @@ class AccountAdminService {
             long accountId,
             Role role,
             long expectedVersion) {
-        AuthorizationAdminRow current = mapper.findCurrentAuthorization(accountId, role);
+        AuthorizationAdminRow current = accountAdminRepository.findCurrentAuthorization(accountId, role);
         long currentVersion = current == null ? 0 : current.generation();
         if (currentVersion != expectedVersion) {
             throw AuthOperationException.versionConflict();
@@ -541,21 +543,22 @@ class AccountAdminService {
     }
 
     private SystemAccountAuthorization toContract(AuthorizationAdminRow authorization) {
-        List<DataScopeGrant> scopes = mapper.findScopes(authorization.id()).stream()
+        List<DataScopeGrant> scopes = accountAdminRepository.findScopes(authorization.id()).stream()
                 .map(scope -> new DataScopeGrant(
                         com.fams.product.contract.model.DataScopeType.valueOf(scope.scopeType().name()),
-                        mapper.findOrganizationReferences(scope.id()).stream()
+                        accountAdminRepository.findOrganizationReferences(scope.id()).stream()
                                 .map(reference -> new OrganizationReference(
                                         Long.toString(reference.id()), reference.version()))
                                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new)),
-                        mapper.findWarehouseReferences(scope.id()).stream()
+                        accountAdminRepository.findWarehouseReferences(scope.id()).stream()
                                 .map(reference -> new CatalogReference(
                                         Long.toString(reference.id()), reference.version()))
                                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))))
                 .toList();
-        Set<SensitiveFieldPermission> fieldPermissions = mapper.findFieldPermissions(authorization.id()).stream()
-                .map(SensitiveFieldPermission::valueOf)
-                .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<SensitiveFieldPermission> fieldPermissions =
+                accountAdminRepository.findFieldPermissions(authorization.id()).stream()
+                        .map(SensitiveFieldPermission::valueOf)
+                        .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
         return new SystemAccountAuthorization(
                 Long.toString(authorization.id()),
                 Long.toString(authorization.accountId()),
@@ -601,13 +604,13 @@ class AccountAdminService {
             }
             scope.getOrganizations().forEach(reference -> {
                 long referenceId = parseReferenceId(reference.getId());
-                if (mapper.countCurrentOrganization(referenceId, reference.getVersion()) != 1) {
+                if (accountAdminRepository.countCurrentOrganization(referenceId, reference.getVersion()) != 1) {
                     throw AuthOperationException.versionConflict();
                 }
             });
             scope.getWarehouses().forEach(reference -> {
                 long referenceId = parseReferenceId(reference.getId());
-                if (mapper.countCurrentWarehouse(referenceId, reference.getVersion()) != 1) {
+                if (accountAdminRepository.countCurrentWarehouse(referenceId, reference.getVersion()) != 1) {
                     throw AuthOperationException.versionConflict();
                 }
             });
@@ -623,22 +626,22 @@ class AccountAdminService {
             NewDataScopeRow storedScope = new NewDataScopeRow(
                     authorizationId,
                     DataScope.valueOf(scope.getScopeType().name()));
-            requireOne(mapper.insertDataScope(storedScope));
+            requireOne(accountAdminRepository.insertDataScope(storedScope));
             for (OrganizationReference reference : scope.getOrganizations()) {
-                requireOne(mapper.insertOrganizationReference(
+                requireOne(accountAdminRepository.insertOrganizationReference(
                         storedScope.getId(),
                         parseReferenceId(reference.getId()),
                         reference.getVersion()));
             }
             for (CatalogReference reference : scope.getWarehouses()) {
-                requireOne(mapper.insertWarehouseReference(
+                requireOne(accountAdminRepository.insertWarehouseReference(
                         storedScope.getId(),
                         parseReferenceId(reference.getId()),
                         reference.getVersion()));
             }
         }
         for (SensitiveFieldPermission fieldPermission : fieldPermissions) {
-            requireOne(mapper.insertFieldPermission(
+            requireOne(accountAdminRepository.insertFieldPermission(
                     authorizationId,
                     fieldPermission.name(),
                     now));
@@ -693,7 +696,7 @@ class AccountAdminService {
             String idempotencyKey,
             String fingerprint,
             Class<T> responseType) {
-        AdminIdempotencyRow recorded = mapper.findIdempotency(
+        AdminIdempotencyRow recorded = accountAdminRepository.findIdempotency(
                 actorAccountId, operation, idempotencyKey);
         if (recorded == null) {
             return Optional.empty();
@@ -719,7 +722,7 @@ class AccountAdminService {
             Long resourceVersion,
             Instant now) {
         try {
-            requireOne(mapper.insertIdempotency(
+            requireOne(accountAdminRepository.insertIdempotency(
                     actorAccountId,
                     operation,
                     idempotencyKey,
