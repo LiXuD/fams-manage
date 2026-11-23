@@ -21,7 +21,6 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
-@Transactional
 public class InventoryRepairPhotoReadService {
     private final InventoryRepairPort repairs;
     private final AttachmentEvidencePort attachments;
@@ -75,6 +74,7 @@ public class InventoryRepairPhotoReadService {
         return ((Number) rows.getFirst().get("id")).longValue();
     }
 
+    @Transactional
     public AttachmentGrantSigner.Grant grant(
             Actor actor, long repair, long observation, UUID object) {
         return attachments.grant(
@@ -83,6 +83,7 @@ public class InventoryRepairPhotoReadService {
                 identity(actor, object));
     }
 
+    @Transactional
     public java.util.List<AttachmentEvidencePort.Metadata> list(
             Actor actor, long repair, long observation) {
         InventoryRepairPort.Evidence evidence;
@@ -103,6 +104,7 @@ public class InventoryRepairPhotoReadService {
                 .toList();
     }
 
+    @Transactional
     public AttachmentReadService.Content read(
             Actor actor, long repair, long observation, UUID object, String token)
             throws IOException {

@@ -15,7 +15,6 @@ import java.util.function.Supplier;
 /** Preserve the original requisition API and typed-payload idempotency contract. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class ItemTargetChangeService {
     private final TargetChangeWorkflow workflow;
     private final ObjectMapper json;
@@ -23,17 +22,21 @@ class ItemTargetChangeService {
         this.workflow = workflow;
         this.json = json;
     }
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TargetChangeViews.Context context(Actor actor, long business, long item) {
         return call(() -> workflow.context(actor, "REQUISITION", business, item));
     }
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TargetChangeViews.Page list(Actor actor, int page, int size) {
         return call(() -> workflow.list(actor, "REQUISITION", page, size));
     }
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     TargetChangeViews.Change propose(Actor actor, long version, String key, ItemTargetChangeInput.Proposal input) {
         var command = new TargetChangeInput.Proposal(input.businessId(), input.itemId(), input.snapshot(),
                 json.valueToTree(input.target()), input.reason(), input.observedAssetCode(), input.physicalVerification(), input.physicalChecked());
         return call(() -> workflow.propose(actor, "REQUISITION", version, key, command));
     }
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     TargetChangeViews.Change decide(Actor actor, long id, long version, String key, ItemTargetChangeInput.Decision input) {
         return call(() -> workflow.decide(actor, "REQUISITION", id, version, key,
                 new TargetChangeInput.Decision(input.result(), input.reason())));

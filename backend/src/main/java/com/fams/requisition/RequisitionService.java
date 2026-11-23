@@ -31,7 +31,6 @@ import java.util.UUID;
 /** Short transactions: credential/account, request, references, then sorted asset locks. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class RequisitionService {
     private static final List<String> STATUSES =
             List.of(
@@ -64,6 +63,7 @@ class RequisitionService {
         this.references = references;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.CatalogPage catalog(Actor actor, String kind, int page, int size) {
         Current current = actors.revalidateLocked(actor);
         if (!List.of("category", "organization", "employee", "location").contains(kind)) {
@@ -84,6 +84,7 @@ class RequisitionService {
                 current.globalApplicant() || current.has(Role.DEPARTMENT_ASSET_MANAGER));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.Page<RequisitionViews.Summary> list(Actor actor, int page, int size, String status) {
         Current current = actors.revalidateLocked(actor);
         if (status != null && !STATUSES.contains(status)) {
@@ -123,12 +124,14 @@ class RequisitionService {
      * by construction. The former {@code Map}-facade {@code get} compatibility wrapper was
      * removed in JAVA-14c once RequisitionReassignmentService moved to this typed exit.
      */
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.Detail getDetail(Actor actor, long id) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         return detailView(id);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail create(Actor actor, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
@@ -141,6 +144,7 @@ class RequisitionService {
         return finish(current, "create", key, hash, id, 201);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail revise(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -174,6 +178,7 @@ class RequisitionService {
         return finish(current, "revise", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail submit(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -199,6 +204,7 @@ class RequisitionService {
         return finish(current, "submit", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail decide(
             Actor actor, long id, long version, String key, RequisitionInput.Decision input) {
         Current current = actors.revalidateLocked(actor);
@@ -262,6 +268,7 @@ class RequisitionService {
         return finish(current, "decide", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail proposeChange(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -456,6 +463,7 @@ class RequisitionService {
         return finish(current, "decide", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail cancel(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
@@ -496,6 +504,7 @@ class RequisitionService {
         return finish(current, "cancel", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail claim(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -514,6 +523,7 @@ class RequisitionService {
         return finish(current, "claim", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId, int page, int size) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -539,6 +549,7 @@ class RequisitionService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail allocate(
             Actor actor, long id, long demandId, long version, String key, Allocation input) {
         Current current = actors.revalidateLocked(actor);
@@ -673,6 +684,7 @@ class RequisitionService {
         return finish(current, "allocate", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail unfulfillable(
             Actor actor,
             long id,
@@ -748,6 +760,7 @@ class RequisitionService {
         return finish(current, "unfulfillable", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail dispute(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
@@ -775,6 +788,7 @@ class RequisitionService {
         return finish(current, "dispute", key, hash, id, 200);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail followup(Actor actor, long id, long demandId, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);

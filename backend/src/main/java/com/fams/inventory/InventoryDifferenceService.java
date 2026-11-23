@@ -29,7 +29,6 @@ import java.util.UUID;
 /** Each dimension competes independently; a joint action commits every version or none. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryDifferenceService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -59,6 +58,7 @@ public class InventoryDifferenceService {
     /** The difference list exit has no total without its COUNT row. */
     private static final String TOTAL_REQUIRED = "INVENTORY_DIFFERENCE_TOTAL_REQUIRED";
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.DifferencePage list(Actor actor, long taskId, int page, int size) {
         admin(actor);
         task(taskId);
@@ -107,6 +107,10 @@ public class InventoryDifferenceService {
                         TOTAL_REQUIRED));
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.DifferencePrepareReply prepare(
             Actor actor,
             long taskId,
@@ -187,6 +191,7 @@ public class InventoryDifferenceService {
     /**
      * Pure derivation used again at final acceptance, including evidence never explicitly listed.
      */
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public java.util.Set<String> requiredDimensions(
             Map<String, Object> task, Map<String, Object> observation) {
         long taskId = number(task, "id");
@@ -286,6 +291,10 @@ public class InventoryDifferenceService {
         return java.util.Set.copyOf(dimensions);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.DifferenceDecisionReply decide(
             Actor actor,
             long taskId,
@@ -497,6 +506,7 @@ public class InventoryDifferenceService {
                 true);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.DifferenceRepairContext repairContext(
             Actor actor, long taskId, long observationId) {
         admin(actor);

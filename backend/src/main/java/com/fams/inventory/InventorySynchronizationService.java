@@ -30,7 +30,6 @@ import java.util.UUID;
 /** Current synchronization is derived, never inferred from an immutable original receipt. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ)
 public class InventorySynchronizationService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -54,6 +53,7 @@ public class InventorySynchronizationService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.OwnDeviceState own(Actor actor, long taskId, UUID device) {
         var current = actors.revalidateLocked(actor);
         Long binding = identities.bindingId(actor);
@@ -74,6 +74,7 @@ public class InventorySynchronizationService {
                 true);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.SyncDeclarationReceipt declare(
             Actor actor,
             long taskId,
@@ -168,6 +169,7 @@ public class InventorySynchronizationService {
         return response;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.SynchronizationStatus status(
             Actor actor, long taskId, int page, int size) {
         if (!actors.revalidateLocked(actor).has(Role.ASSET_ADMIN)) {

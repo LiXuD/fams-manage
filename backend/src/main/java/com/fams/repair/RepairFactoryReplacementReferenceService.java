@@ -9,7 +9,6 @@ import org.springframework.transaction.annotation.Transactional;
 /** Application query boundary keeps handler authorization and catalog selection in one transaction. */
 @Service
 @Profile("fams-product")
-@Transactional
 public class RepairFactoryReplacementReferenceService {
     private final RepairFactoryService factory;
     private final FactoryReplacementCatalogPort catalogs;
@@ -20,6 +19,7 @@ public class RepairFactoryReplacementReferenceService {
         this.catalogs = catalogs;
     }
 
+    @Transactional
     public Object references(RequisitionActorContext.Actor actor, long repair, long round,
             String kind, int page, int size) {
         if (!factory.replacements(actor, repair, round).canRecord()) {

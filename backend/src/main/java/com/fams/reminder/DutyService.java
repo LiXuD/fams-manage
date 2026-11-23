@@ -35,7 +35,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 public class DutyService {
     private static final String OPERATION = "replaceDutyAssignment";
     private static final List<String> POOLS = List.of("ASSET_ADMIN", "WAREHOUSE_OPERATOR");
@@ -74,6 +73,7 @@ public class DutyService {
         public DutyAssignmentList { items = List.copyOf(items); }
     }
 
+    @Transactional(readOnly = true, isolation = Isolation.READ_COMMITTED)
     public DutyAssignmentList current(long accountId) {
         var roles = roles(accountId);
         var administrator = roles.contains(Role.SYSTEM_ADMIN) || roles.contains(Role.ASSET_ADMIN);
@@ -87,6 +87,7 @@ public class DutyService {
         return new DutyAssignmentList(items);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public DutyAssignment replace(long actorId, UUID requestId, String roleCode,
             long primaryAccountId, Long backupAccountId, long expectedVersion, String key) {
         if (!POOLS.contains(roleCode) || primaryAccountId < 1

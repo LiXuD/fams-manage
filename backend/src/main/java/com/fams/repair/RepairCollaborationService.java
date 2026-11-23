@@ -31,7 +31,6 @@ import java.util.UUID;
 /** An explicit invitation opens minimal repair evidence, never staff or warehouse authority. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
 public class RepairCollaborationService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -58,6 +57,7 @@ public class RepairCollaborationService {
         this.attachments = attachments;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.CollaborationBoard staffBoard(Actor actor, long repair) {
         var current = actors.revalidateLocked(actor);
         repairs.getDetail(actor, repair);
@@ -79,6 +79,7 @@ public class RepairCollaborationService {
                 count("SELECT COUNT(*) FROM fams_repair_opinion WHERE repair_id=?", repair));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.Page<RepairViews.CollaborationTechnician> technicians(
             Actor actor, long repair, int page, int size) {
         var current = actors.revalidateLocked(actor);
@@ -102,6 +103,10 @@ public class RepairCollaborationService {
                 size);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.CollaborationRequestReceipt invite(
             Actor actor,
             long repair,
@@ -187,6 +192,10 @@ public class RepairCollaborationService {
                         Long.toString(repair), Long.toString(id), version + 1));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.CollaborationRequestReceipt revoke(
             Actor actor, long invitation, long version, UUID key, RepairInput.Reason input) {
         var current = actors.revalidateLocked(actor);
@@ -238,6 +247,7 @@ public class RepairCollaborationService {
                         row.get("id").toString(), Long.toString(invitation), version + 1));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.Page<RepairViews.CollaborationBrief> mine(
             Actor actor, int page, int size) {
         var current = participant(actor);
@@ -262,6 +272,7 @@ public class RepairCollaborationService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.CollaborationInvitationDetail get(Actor actor, long invitation) {
         var current = participant(actor);
         var pair = aggregate(invitation);
@@ -286,6 +297,10 @@ public class RepairCollaborationService {
                 port == null ? List.of() : photoProjection(port.list("REPAIR_TECH", invitation)));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.CollaborationOpinionReceipt opinion(
             Actor actor,
             long invitation,
@@ -390,6 +405,7 @@ public class RepairCollaborationService {
                         version + 1));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void uploader(Actor actor, long invitation) {
         var current = participant(actor);
         requireParticipant(current, aggregate(invitation));

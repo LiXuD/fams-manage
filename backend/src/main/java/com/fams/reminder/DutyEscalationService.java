@@ -27,7 +27,6 @@ import tools.jackson.databind.ObjectMapper;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 public class DutyEscalationService {
     private static final int PAGE = 200;
     private static final ZoneId FALLBACK_ZONE = ZoneId.of("Asia/Shanghai");
@@ -51,6 +50,7 @@ public class DutyEscalationService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public void escalate() {
         var now = clock.instant();
         var stages = List.of(

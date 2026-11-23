@@ -35,7 +35,6 @@ import java.util.UUID;
 /** Owns scrap documents and their locks. The asset port owns lifecycle transitions. */
 @Service
 @Profile("fams-product")
-@Transactional
 public class ScrapService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -74,6 +73,7 @@ public class ScrapService {
 
     private record LossIntent(long reportVersion, LossSubmission input) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt submit(Actor actor, UUID key, Submission input) {
         var current = actors.revalidateLocked(actor);
         String hash = fingerprint(input);
@@ -86,6 +86,7 @@ public class ScrapService {
                 new AssetScrapPort.StoredSource(source, null, null, null), input, null, null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromLoss(Actor actor, long reportId, long version, UUID key, LossSubmission input) {
         var current = actors.revalidateLocked(actor);
         String operation = "SUBMIT_LOSS:" + reportId;
@@ -133,6 +134,7 @@ public class ScrapService {
 
     private record RepairLink(RepairService.ScrapSource source, long lockVersion, Long replacementId) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromRepair(Actor actor, long repairId, long version, UUID key, RepairSubmission input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(com.fams.auth.Role.WAREHOUSE_OPERATOR)) {
@@ -148,6 +150,7 @@ public class ScrapService {
         return createFromRepair(actor, current, operation, key, hash, input, repair, null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromFactory(Actor actor, long repairId, long roundId, long replacementId, long version,
             long roundVersion, UUID key, RepairSubmission input) {
         var current = actors.revalidateLocked(actor);

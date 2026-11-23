@@ -22,7 +22,6 @@ import tools.jackson.databind.ObjectMapper;
 /** Transfers ownership only; approval, acceptance facts, deadlines and asset locks remain intact. */
 @Profile("fams-product")
 @Service
-@Transactional
 class RequisitionReassignmentService {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
@@ -39,6 +38,7 @@ class RequisitionReassignmentService {
         this.clock = authClock;
     }
 
+    @Transactional
     RequisitionViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
@@ -64,6 +64,7 @@ class RequisitionReassignmentService {
                 declared);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     RequisitionViews.Detail declareUnavailable(Actor actor, long id, long version, String key,
             RequisitionUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
@@ -129,6 +130,7 @@ class RequisitionReassignmentService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     RequisitionViews.Detail reassign(Actor actor, long id, long version, String key,
             RequisitionReassignmentController.Reassignment input) {
         admin(actor);

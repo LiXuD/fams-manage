@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 public class MessageService {
     private static final String ESCALATION_TYPES = "('DUTY_UNREAD_ESCALATION','OVERDUE_UNRESOLVED_WORKDAY')";
     /** The group notice for a still-unhandled object belongs to the overdue exception vocabulary; a duty
@@ -150,6 +149,7 @@ public class MessageService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReminderViews.MessagePage list(RequisitionActorContext.Actor actor, String view, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
         var exception = "EXCEPTION".equals(view);
@@ -191,6 +191,7 @@ public class MessageService {
     }
 
     /** Marking read records only personal read state; the todo, its business lock and its deadline stay untouched. */
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public ReminderViews.MessageReadReceipt read(RequisitionActorContext.Actor actor, String kind, long id) {
         var current = actors.revalidateLocked(actor);
         String addressable;

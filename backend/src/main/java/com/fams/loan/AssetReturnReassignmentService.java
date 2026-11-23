@@ -22,7 +22,6 @@ import tools.jackson.databind.ObjectMapper;
 /** Transfers ownership only; approval, acceptance facts, deadlines and asset locks remain intact. */
 @Profile("fams-product")
 @Service
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class AssetReturnReassignmentService {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
@@ -39,6 +38,7 @@ class AssetReturnReassignmentService {
         this.clock = authClock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     LoanViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
@@ -55,6 +55,7 @@ class AssetReturnReassignmentService {
                 operators.stream().map(LoanViews::operator).toList(), declared);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     LoanViews.AssetReturnDetail declareUnavailable(Actor actor, long id, long version, String key,
             AssetReturnUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
@@ -123,6 +124,7 @@ class AssetReturnReassignmentService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     LoanViews.AssetReturnDetail reassign(Actor actor, long id, long version, String key,
             AssetReturnReassignmentController.Reassignment input) {
         admin(actor);

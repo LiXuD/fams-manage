@@ -27,7 +27,6 @@ import java.util.UUID;
 /** Supplemental decisions never update the terminal source or its frozen result. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryLateService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -51,6 +50,7 @@ public class InventoryLateService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateCasePage list(Actor actor, long taskId, int page, int size) {
         admin(actor);
         var task = task(taskId);
@@ -78,6 +78,7 @@ public class InventoryLateService {
                 true);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateCaseDetail detail(
             Actor actor, long taskId, long observationId, int page, int size) {
         admin(actor);
@@ -113,6 +114,10 @@ public class InventoryLateService {
                 true);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public InventoryViews.InventoryLatePrepareReceipt prepare(
             Actor actor, long taskId, long version, UUID key) {
         var current = admin(actor);
@@ -153,6 +158,10 @@ public class InventoryLateService {
         return response;
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public InventoryViews.InventoryLateDecisionReceipt decide(
             Actor actor,
             long taskId,

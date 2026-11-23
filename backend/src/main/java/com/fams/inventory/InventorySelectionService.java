@@ -26,7 +26,6 @@ import java.util.UUID;
 /** Explicit, versioned evidence choices preserve every original collection fact and decision. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventorySelectionService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -53,6 +52,7 @@ public class InventorySelectionService {
     /** The frozen detail exit has no total without its COUNT row. */
     private static final String TOTAL_REQUIRED = "INVENTORY_SELECTION_TOTAL_REQUIRED";
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.SelectionDetailView detail(
             Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
@@ -93,6 +93,10 @@ public class InventorySelectionService {
                 total);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.SelectionReply select(
             Actor actor,
             long taskId,
@@ -283,6 +287,7 @@ public class InventorySelectionService {
         return response;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.EvidenceSubjectView evidenceSubjects(
             Actor actor, long taskId, long itemId, long observationId) {
         admin(actor);
@@ -323,6 +328,7 @@ public class InventorySelectionService {
                 differences.requiredDimensions(task, raw).stream().sorted().toList());
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.DispositionPage dispositions(
             Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
@@ -350,6 +356,10 @@ public class InventorySelectionService {
                 SelectionViews.evidenceDispositions(rows), total, page, size);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.EvidenceDecisionReply decideEvidence(
             Actor actor,
             long taskId,
@@ -585,6 +595,10 @@ public class InventorySelectionService {
                         version + 1));
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.EvidenceAcceptanceReply acceptSelected(
             Actor actor,
             long taskId,

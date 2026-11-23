@@ -43,7 +43,6 @@ import java.util.UUID;
 
 @Service
 @Profile("fams-product")
-@Transactional
 public class ScrapReviewService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -101,6 +100,7 @@ public class ScrapReviewService {
                 && List.of("WAITING_WAREHOUSE_CLAIM", "PROCESSING").contains(status);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt cancel(Actor actor, long id, long version, UUID key, Cancellation input) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
@@ -171,6 +171,7 @@ public class ScrapReviewService {
             @Size(max = 128) String observedSerial, @NotNull Instant occurredAt,
             @NotNull Boolean physicalIdentityVerified, @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt requestCorrection(Actor actor, long id, long version, UUID key, CorrectionRequest input) {
         var current = current(actor, Role.ASSET_ADMIN);
         var rows = db.queryForList("SELECT * FROM fams_scrap_request WHERE id=? FOR UPDATE", id);
@@ -233,6 +234,7 @@ public class ScrapReviewService {
         return correction;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt decideCorrection(Actor actor, long id, long version, UUID key, CorrectionDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
         boolean approve = "APPROVE".equals(input.result());
@@ -274,6 +276,7 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt claimCorrection(Actor actor, long id, long version, UUID key, CorrectionClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "CORRECTION_CLAIM:" + id;
@@ -298,6 +301,7 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt executeCorrection(Actor actor, long id, long version, UUID key, CorrectionExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         var processor = db.queryForList("SELECT processor_account_id FROM fams_scrap_correction WHERE id=? FOR UPDATE", id);
@@ -366,6 +370,7 @@ public class ScrapReviewService {
     private static final List<Role> FOLLOW_UP_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
             Role.DEPARTMENT_ASSET_MANAGER, Role.EMPLOYEE);
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt requestReversal(Actor actor, long id, long version, UUID key, ReversalRequest input) {
         var current = actors.revalidateLocked(actor);
         var initiator = FOLLOW_UP_INITIATORS.stream().filter(current::has).findFirst()
@@ -448,6 +453,7 @@ public class ScrapReviewService {
         return reversal;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt decideReversal(Actor actor, long id, long version, UUID key, ReversalDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
         boolean approve = "APPROVE".equals(input.result());
@@ -491,6 +497,7 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt claimReversal(Actor actor, long id, long version, UUID key, ReversalClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "REVERSAL_CLAIM:" + id;
@@ -515,6 +522,7 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt executeReversal(Actor actor, long id, long version, UUID key, ReversalExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "REVERSAL_EXECUTE:" + id;
@@ -576,6 +584,7 @@ public class ScrapReviewService {
             @NotNull Instant occurredAt, @NotNull Boolean physicalIdentityVerified,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt requestRecovery(Actor actor, long id, long version, UUID key, RecoveryRequest input) {
         var current = actors.revalidateLocked(actor);
         var initiator = FOLLOW_UP_INITIATORS.stream().filter(current::has).findFirst()
@@ -674,6 +683,7 @@ public class ScrapReviewService {
         return recovery;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt decideRecovery(Actor actor, long id, long version, UUID key, RecoveryDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
         boolean approve = "APPROVE".equals(input.result());
@@ -713,6 +723,7 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt claimRecovery(Actor actor, long id, long version, UUID key, RecoveryClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVERY_CLAIM:" + id;
@@ -737,6 +748,7 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt executeRecovery(Actor actor, long id, long version, UUID key, RecoveryExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "RECOVERY_EXECUTE:" + id;
@@ -776,6 +788,7 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt decide(Actor actor, long id, long version, UUID key, Decision input) {
         var current = current(actor, Role.ASSET_ADMIN);
         String operation = "DECIDE:" + id;
@@ -957,6 +970,7 @@ public class ScrapReviewService {
         return source.equals(repairs.factoryLossScrap(source.repairId(), source.roundId(), asset, source.processorAccountId()));
     }
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt claim(Actor actor, long id, long version, UUID key, Claim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "CLAIM:" + id;
@@ -995,6 +1009,7 @@ public class ScrapReviewService {
             @NotBlank @Size(max = 500) String dispositionMethod,
             LocalDate plannedDisposalDate) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt execute(Actor actor, long id, long version, UUID key, Execution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "EXECUTE:" + id;
@@ -1080,6 +1095,7 @@ public class ScrapReviewService {
             @NotNull @PositiveOrZero Long ownershipVersion,
             @NotNull Instant occurredAt) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt executeFactory(Actor actor, long id, long version, UUID key, FactoryExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "EXECUTE_FACTORY:" + id;
@@ -1156,6 +1172,7 @@ public class ScrapReviewService {
             @NotNull @PositiveOrZero Long ownershipVersion,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public Receipt executeLoss(Actor actor, long id, long version, UUID key, LossExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
         String operation = "EXECUTE_LOSS:" + id;
@@ -1266,6 +1283,7 @@ public class ScrapReviewService {
 
     public record DispositionReceipt(String id, long version, String status) {}
 
+    @Transactional(rollbackFor = Exception.class)
     public DispositionReceipt completeDisposition(Actor actor, long id, long version, UUID key,
             DispositionCompletion input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);

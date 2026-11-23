@@ -36,7 +36,6 @@ import java.util.Objects;
 /** Account, request, demand/target, asset and business lock are held in one short transaction. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class RequisitionHandoverService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -67,6 +66,7 @@ class RequisitionHandoverService {
         this.loans = loans;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.Page<RequisitionViews.PendingReceiptItem> pending(
             Actor actor, int page, int size, Long allocationId) {
         Current current = actors.revalidateLocked(actor);
@@ -99,6 +99,7 @@ class RequisitionHandoverService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Grant grant(Actor actor, long request, long allocation) {
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
@@ -140,6 +141,7 @@ class RequisitionHandoverService {
                 n(item, "version"));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail deliver(
             Actor actor,
             long request,
@@ -229,6 +231,7 @@ class RequisitionHandoverService {
                 requisitions.getDetail(actor, request));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.Detail warehouseAction(
             Actor actor,
             long request,
@@ -323,6 +326,7 @@ class RequisitionHandoverService {
                 requisitions.getDetail(actor, request));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     RequisitionViews.ReceiptResult receipt(
             Actor actor,
             long request,
@@ -466,6 +470,7 @@ class RequisitionHandoverService {
         close(allocation, "HANDOVER_EXCEPTION");
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     ProxyViews.RequisitionSnapshot proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var header = header(request);
@@ -506,6 +511,7 @@ class RequisitionHandoverService {
                 n(demand, "version"));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     ProxyViews.RequisitionReceiptResult proxyReceipt(Actor actor, long request, long allocation,
             ProxyViews.ProxySnapshot expected, String observedCode, long confirmationId) {
         var snapshot = proxySnapshot(actor, request, allocation, true);
@@ -529,6 +535,7 @@ class RequisitionHandoverService {
                 "RECEIVED", Long.toString(target(demand)), observed);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     RequisitionViews.ReceiptDetail receiptDetail(Actor actor, long request, long allocation) {
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
@@ -559,6 +566,7 @@ class RequisitionHandoverService {
                 RequisitionViews.receiptHandover(handover));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TargetChangeViews.RequisitionContext targetChangeContext(Actor actor, long request, long allocation) {
         var current = actors.revalidateLocked(actor);
         var header = header(request);
@@ -610,6 +618,7 @@ class RequisitionHandoverService {
                         .map(row -> TargetChangeViews.handover(json, row)).toList());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     void validateChangedTarget(long request, long allocation, ItemTargetChangeInput.Target target) {
         var header = header(request);
         if (!List.of("PERSONAL", "SHARED").contains(target.custodyType())
@@ -628,6 +637,7 @@ class RequisitionHandoverService {
         targets(next);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     void applyChangedTarget(Actor actor, long request, long allocation, ItemTargetChangeInput.Target target,
             String observedCode, long proposal) {
         var current = actors.revalidateLocked(actor);

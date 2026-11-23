@@ -35,7 +35,6 @@ import java.util.UUID;
 /** Factory-private data never enters the common repair event detail. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
 public class RepairFactoryService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -140,6 +139,7 @@ public class RepairFactoryService {
                 Role.ASSET_ADMIN);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryDetail get(Actor actor, long id) {
         var current = reader(actor);
         var row = header(id);
@@ -203,6 +203,7 @@ public class RepairFactoryService {
                                 && !outstanding(id)));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.Page<RepairViews.FactoryRoundView> rounds(
             Actor actor, long id, int page, int size) {
         var current = reader(actor);
@@ -223,6 +224,7 @@ public class RepairFactoryService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryRoundView round(Actor actor, long id, long round) {
         var current = reader(actor);
         var repair = header(id);
@@ -255,6 +257,7 @@ public class RepairFactoryService {
                         : fileProjection(port.list("REPAIR_FACTORY", round)));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.Page<RepairViews.FactoryEventRow> history(
             Actor actor, long id, int page, int size) {
         var current = reader(actor);
@@ -273,6 +276,10 @@ public class RepairFactoryService {
                 size);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply requestScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeRequest input) {
         var current = warehouse(actor);
@@ -328,6 +335,10 @@ public class RepairFactoryService {
         return remember(current, operation, key, fingerprint, id, scope, null);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply decideScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeDecision input) {
         var current = reader(actor);
@@ -344,6 +355,10 @@ public class RepairFactoryService {
         return endScope(actor, current, row, version, key, operation, fingerprint, input, false);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply withdrawScope(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.ScopeDecision input) {
         var current = reader(actor);
@@ -448,6 +463,10 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, number(row, "id"), input.scopeId(), null);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply createRound(
             Actor actor, long id, long version, UUID key, RepairFactoryInput.RoundCreation input) {
         var current = warehouse(actor);
@@ -529,6 +548,10 @@ public class RepairFactoryService {
         return remember(current, operation, key, fingerprint, id, input.scopeId(), round);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply cancelRound(
             Actor actor,
             long id,
@@ -583,6 +606,10 @@ public class RepairFactoryService {
                 current, operation, key, fingerprint, id, number(round, "scope_id"), roundId);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply dispatch(
             Actor actor,
             long id,
@@ -816,6 +843,10 @@ public class RepairFactoryService {
                 Map.of("reportId", Long.toString(reportId)), role);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply receive(
             Actor actor,
             long id,
@@ -943,6 +974,7 @@ public class RepairFactoryService {
         return !latest.isEmpty() && number(latest.getFirst(), "id") == number(round, "id");
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReplacementsPage replacements(Actor actor, long id, long roundId) {
         var current = reader(actor);
         var row = header(id);
@@ -966,6 +998,10 @@ public class RepairFactoryService {
         return RepairViews.factoryReplacement(json, item, inbound);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply recordReplacement(Actor actor, long id, long roundId, long version,
             UUID key, RepairFactoryInput.ReplacementFact input) {
         var current = warehouse(actor);
@@ -1036,6 +1072,7 @@ public class RepairFactoryService {
         return result;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryPartsPage parts(
             Actor actor, long id, long roundId, int page, int size) {
         var current = reader(actor);
@@ -1093,6 +1130,10 @@ public class RepairFactoryService {
         return !latest.isEmpty() && number(round, "id") == number(latest.getFirst(), "id");
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply recordParts(
             Actor actor,
             long id,
@@ -1212,6 +1253,10 @@ public class RepairFactoryService {
         return result;
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply recordQuote(
             Actor actor,
             long id,
@@ -1222,6 +1267,10 @@ public class RepairFactoryService {
         return recordMoney(actor, id, roundId, version, key, input, false);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.FactoryReply recordCost(
             Actor actor,
             long id,
@@ -1347,6 +1396,7 @@ public class RepairFactoryService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public Current evidenceAccess(Actor actor, long id, long roundId, UUID object) {
         var current = reader(actor);
         readable(current, header(id));
@@ -1363,6 +1413,7 @@ public class RepairFactoryService {
         return current;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void uploader(Actor actor, long id, long roundId) {
         var current = warehouse(actor);
         var row = header(id);

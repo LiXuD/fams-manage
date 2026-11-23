@@ -31,7 +31,6 @@ import java.util.UUID;
 /** Damage and the existing supplemental recheck have independent versions, histories and todos. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryLateDamageService {
     private static final String OPERATION = "LATE_DAMAGE_REPAIR";
     private final JdbcTemplate db;
@@ -56,6 +55,7 @@ public class InventoryLateDamageService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateDamageDetail detail(
             Actor actor, long taskId, long observation, int page, int size) {
         admin(actor);
@@ -100,6 +100,10 @@ public class InventoryLateDamageService {
                 false);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public InventoryViews.InventoryLateDamageDecisionReceipt decide(
             Actor actor,
             long taskId,

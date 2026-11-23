@@ -31,7 +31,6 @@ import java.util.Objects;
 /** Task locks serialize lifecycle and assignment; published snapshots never mutate. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ)
 public class InventoryService {
     private static final tools.jackson.core.type.TypeReference<Map<String, Object>> WIRE_MAP =
             new tools.jackson.core.type.TypeReference<>() {};
@@ -61,6 +60,7 @@ public class InventoryService {
         this.references = references;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryReferenceChoicePage referenceChoices(
             Actor actor, String kind, int page, int size) {
         admin(actor);
@@ -68,6 +68,7 @@ public class InventoryService {
                 references.choices(kind, page, size), page, size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryPreviewDigest preview(
             Actor actor, InventoryInput.Range range) {
         admin(actor);
@@ -81,6 +82,7 @@ public class InventoryService {
                 predicate.args());
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow create(
             Actor actor, String key, InventoryInput.Draft input) {
         var current = admin(actor);
@@ -105,6 +107,7 @@ public class InventoryService {
         return finish(current, "create", key, 0, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow copy(
             Actor actor, long sourceId, long version, String key, InventoryInput.Draft input) {
         var current = admin(actor);
@@ -145,6 +148,7 @@ public class InventoryService {
         return finish(current, "copy:" + sourceId, key, version, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow revise(
             Actor actor, long id, long version, String key, InventoryInput.Draft input) {
         var current = admin(actor);
@@ -168,6 +172,7 @@ public class InventoryService {
         return finish(current, "revise:" + id, key, version, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow publish(
             Actor actor, long id, long version, String key, InventoryInput.Publish input) {
         var current = admin(actor);
@@ -224,6 +229,7 @@ public class InventoryService {
         return finish(current, "publish:" + id, key, version, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow start(
             Actor actor, long id, long version, String key) {
         var current = admin(actor);
@@ -244,6 +250,7 @@ public class InventoryService {
         return finish(current, "start:" + id, key, version, Map.of(), taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow end(
             Actor actor,
             long id,
@@ -307,6 +314,7 @@ public class InventoryService {
         return finish(current, action + ":" + id, key, version, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public InventoryViews.InventoryTaskRow assign(
             Actor actor, long id, long version, String key, InventoryInput.Assign input) {
         var current = admin(actor);
@@ -412,6 +420,7 @@ public class InventoryService {
         return finish(current, "assign:" + id, key, version, input, taskRow(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryTaskPage list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
@@ -447,6 +456,7 @@ public class InventoryService {
                 current.has(Role.ASSET_ADMIN));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryTaskDetail detail(Actor actor, long id, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var task = task(id, false);
@@ -494,6 +504,7 @@ public class InventoryService {
                 admin);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public List<InventoryExecutorPort.ExecutorChoice> executorChoices(Actor actor, int page, int size) {
         admin(actor);
         return executors.choices(page, size);
@@ -503,6 +514,7 @@ public class InventoryService {
      * One recoverable scheduled transition per short transaction, independent of process-local
      * timers.
      */
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public boolean startDue() {
         var rows =
                 db.queryForList(

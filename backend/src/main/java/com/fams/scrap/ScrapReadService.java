@@ -26,7 +26,6 @@ import java.util.Objects;
 
 @Service
 @Profile("fams-product")
-@Transactional
 public class ScrapReadService {
     private static final String SCOPE = " FROM fams_scrap_request r JOIN fams_asset a ON a.id=r.asset_id"
             + " WHERE (? OR r.creator_account_id=?"
@@ -58,10 +57,12 @@ public class ScrapReadService {
         this.clock = clock;
     }
 
+    @Transactional
     public AssetScrapPort.EligiblePage eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
+    @Transactional
     public ScrapViews.RequestPage list(Actor actor, int page, int size) {
         var current = actors.revalidateScrapReaderLocked(actor);
         Object[] scope = scope(current);
@@ -76,6 +77,7 @@ public class ScrapReadService {
                 page, size, canListOverdue(current), null);
     }
 
+    @Transactional
     public ScrapViews.RequestPage overdueDispositions(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if (!canListOverdue(current)) {
@@ -103,6 +105,7 @@ public class ScrapReadService {
         return current.has(Role.ASSET_ADMIN) || current.has(Role.WAREHOUSE_OPERATOR);
     }
 
+    @Transactional
     public ScrapViews.Request get(Actor actor, long id) {
         var current = actors.revalidateScrapReaderLocked(actor);
         var row = visible(current, id);
@@ -112,6 +115,7 @@ public class ScrapReadService {
         return view(current, row, history);
     }
 
+    @Transactional
     public ScrapViews.ChoicePage catalog(Actor actor, long id, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var row = visible(current, id);

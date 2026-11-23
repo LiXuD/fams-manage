@@ -22,7 +22,6 @@ import java.util.HexFormat;
 /** Dates change only through one administrator's decision; overdue never mutates asset custody. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class LoanService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -39,6 +38,7 @@ class LoanService {
         this.requests = requests;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     LoanViews.Page<LoanViews.Loan> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String scope = scope(current);
@@ -51,12 +51,14 @@ class LoanService {
                 total, page, size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     BorrowRequestDatePort.BorrowRequestChoicePage eligibleRequests(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         return requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
                 current.has(Role.WAREHOUSE_OPERATOR), page, size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     LoanViews.LoanDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var loan = loan(id);
@@ -70,6 +72,7 @@ class LoanService {
                         .stream().map(LoanViews::reminder).toList());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     LoanViews.Page<LoanViews.Extension> extensions(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = current.has(Role.ASSET_ADMIN) ? "1=1" : "proposed_by=" + current.id();
@@ -80,6 +83,7 @@ class LoanService {
         return new LoanViews.Page<>(rows.stream().map(LoanViews::extension).toList(), total, page, size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     LoanViews.Extension propose(Actor actor, long id, boolean beforeReceipt, long version,
             String key, LoanController.Extension input) {
         var current = actors.revalidateLocked(actor);
@@ -122,6 +126,7 @@ class LoanService {
                 LoanViews.extension(one("SELECT * FROM fams_loan_extension WHERE id=?", extension)));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     LoanViews.Extension decide(Actor actor, long id, long version, String key, LoanController.Decision input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) { throw new LoanFailure("LOAN_FORBIDDEN", 403); }

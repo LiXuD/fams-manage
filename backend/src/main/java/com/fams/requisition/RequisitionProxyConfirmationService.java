@@ -36,7 +36,6 @@ import java.util.UUID;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class RequisitionProxyConfirmationService {
 
     private final JdbcTemplate db;
@@ -67,10 +66,12 @@ class RequisitionProxyConfirmationService {
         this.storage = storage;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     ProxyViews.ProxySnapshot context(Actor actor, String businessType, long request, long item) {
         return business(businessType).snapshot(actor, request, item, true);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     ProxyViews.ConfirmationPage list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) {
@@ -112,6 +113,7 @@ class RequisitionProxyConfirmationService {
                 current.has(Role.WAREHOUSE_OPERATOR));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     ProxyViews.Confirmation get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = row(id, false);
@@ -119,6 +121,7 @@ class RequisitionProxyConfirmationService {
         return ProxyViews.confirmation(json, row);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     ProxyViews.Confirmation create(
             Actor actor, String key, RequisitionProxyConfirmationController.Draft input) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
@@ -200,6 +203,7 @@ class RequisitionProxyConfirmationService {
         return finish(current, "createProxyConfirmation", key, input, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     ProxyViews.Confirmation submit(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);
@@ -234,6 +238,7 @@ class RequisitionProxyConfirmationService {
         return finish(current, "submitProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     ProxyViews.Confirmation decision(
             Actor actor,
             long id,
@@ -275,6 +280,7 @@ class RequisitionProxyConfirmationService {
         return finish(current, "decideProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     ProxyViews.Confirmation execute(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);

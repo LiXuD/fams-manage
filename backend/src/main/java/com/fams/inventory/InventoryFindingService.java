@@ -34,7 +34,6 @@ import java.util.UUID;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryFindingService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -61,6 +60,7 @@ public class InventoryFindingService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.FindingTargets targets(
             Actor actor, long taskId, String assetCode, String receiptNumber) {
         admin(actor);
@@ -98,6 +98,7 @@ public class InventoryFindingService {
                                 row.path("version").asLong())));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.FindingDetail detail(Actor actor, long taskId, long observationId) {
         admin(actor);
         var task = task(taskId);
@@ -155,6 +156,10 @@ public class InventoryFindingService {
                 historyTotal);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public FindingViews.DecisionReceipt decide(
             Actor actor,
             long taskId,
@@ -344,6 +349,7 @@ public class InventoryFindingService {
         return result;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ObservationPage recollectionTargets(
             Actor actor, long taskId, long observationId, int page, int size) {
         admin(actor);
@@ -380,6 +386,10 @@ public class InventoryFindingService {
     }
 
     /** Recollection resolves uncertainty without assigning a new timestamp to the original fact. */
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public FindingViews.RecollectionReceipt recollect(
             Actor actor,
             long taskId,

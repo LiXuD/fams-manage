@@ -38,7 +38,6 @@ import java.util.UUID;
 /** Short repair transactions never wait for the next person or a scanner. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
 public class RepairService {
     /** Target type of the typed-view to Map mirrors required by frozen port consumers. */
     private static final tools.jackson.core.type.TypeReference<Map<String, Object>> WIRE_MAP =
@@ -81,16 +80,19 @@ public class RepairService {
         this.factoryOperations = factoryOperations;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public AssetRepairPort.EligiblePage eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public LoanViews.Page<LoanViews.RepairFollowupSource> returnSources(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
         return returned.list(page, size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.ReturnSourceDetail returnSource(Actor actor, long followup) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
@@ -102,6 +104,10 @@ public class RepairService {
                                 source.assetId(), -1, source.warehouseId(), source.locationId())));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary submitReturned(
             Actor actor,
             long followup,
@@ -215,6 +221,7 @@ public class RepairService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.Page<RepairViews.RepairSummary> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
@@ -260,10 +267,12 @@ public class RepairService {
      * assembly source, equivalent to the pre-JAVA-16a get() tree; frozen by
      * RepairCoreWireShapeTest). HTTP exits and RepairCollaboration use getDetail directly.
      */
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public Map<String, Object> get(Actor actor, long id) {
         return json.convertValue(getDetail(actor, id), WIRE_MAP);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.RepairDetail getDetail(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -505,10 +514,12 @@ public class RepairService {
                         requestLossAction));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void requireInventoryAdministrator(Actor actor) {
         require(actors.revalidateLocked(actor), Role.ASSET_ADMIN);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void requireInventoryEvidenceReader(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         if (!inventoryEvidenceAllowed(current, header(id))) {
@@ -528,10 +539,18 @@ public class RepairService {
      * Map mirror of {@link #submitSummary} for the frozen InventoryRepairPort consumer; HTTP
      * exits use submitSummary.
      */
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public Map<String, Object> submit(Actor actor, UUID key, RepairInput.Submission input) {
         return json.convertValue(submitSummary(actor, key, input), WIRE_MAP);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary submitSummary(
             Actor actor, UUID key, RepairInput.Submission input) {
         return submitSource(actor, key, input, null);
@@ -680,6 +699,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary decide(
             Actor actor, long id, long version, UUID key, RepairInput.Decision input) {
         var current = actors.revalidateLocked(actor);
@@ -810,6 +833,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary cancel(
             Actor actor, long id, long version, UUID key, RepairInput.Reason input) {
         var current = actors.revalidateLocked(actor);
@@ -838,6 +865,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary claim(Actor actor, long id, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -873,11 +904,19 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary acceptInPlace(
             Actor actor, long id, long version, UUID key, RepairInput.InPlace input) {
         return inPlace(actor, id, version, key, input, false);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary completeInPlace(
             Actor actor, long id, long version, UUID key, RepairInput.InPlace input) {
         return inPlace(actor, id, version, key, input, true);
@@ -1194,12 +1233,17 @@ public class RepairService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public AssetRepairPort.PhysicalPage physicalCatalog(Actor actor, String kind, int page, int size) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
         return assets.physicalCatalog(kind, page, size);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary acceptAway(
             Actor actor, long id, long version, UUID key, RepairInput.AwayAcceptance input) {
         var current = actors.revalidateLocked(actor);
@@ -1278,6 +1322,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary closeInbound(
             Actor actor, long id, long version, UUID key, RepairInput.Inbound input) {
         var current = actors.revalidateLocked(actor);
@@ -1415,6 +1463,7 @@ public class RepairService {
                 .isEmpty();
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public AssetRepairPort.ReturnTarget returnTarget(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1427,6 +1476,10 @@ public class RepairService {
         return effectiveReturnTarget(row);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary deliverReturn(
             Actor actor, long id, long version, UUID key, RepairInput.ReturnDelivery input) {
         var current = actors.revalidateLocked(actor);
@@ -1503,6 +1556,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary receiveReturn(
             Actor actor,
             long id,
@@ -1605,6 +1662,10 @@ public class RepairService {
         return remember(current, operation, key, fingerprint, header(id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairSummary recollectReturn(
             Actor actor, long id, long version, UUID key, RepairInput.ReturnRecollection input) {
         var current = actors.revalidateLocked(actor);
@@ -1743,11 +1804,13 @@ public class RepairService {
                         || current.has(Role.DEPARTMENT_ASSET_MANAGER));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void lockTargetChange(long id) {
         header(id);
         factory.requireInternal(id);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void requireTargetChangeProcessor(long account, long id) {
         var row = header(id);
         if (!java.util.Objects.equals(account, nullable(row.get("processor_account_id")))) {
@@ -1755,6 +1818,7 @@ public class RepairService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public com.fams.targetchange.TargetChangeViews.RepairContext targetChangeContext(Actor actor, long id, long item) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -1819,6 +1883,7 @@ public class RepairService {
                         id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void validateChangedReturnTarget(
             long id, long item, tools.jackson.databind.JsonNode target) {
         var row = header(id);
@@ -1856,6 +1921,10 @@ public class RepairService {
         }
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public void applyChangedReturnTarget(
             Actor actor,
             long id,
@@ -1897,6 +1966,7 @@ public class RepairService {
                 Map.of("proposalId", Long.toString(proposal), "target", valid));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public RepairViews.ReassignmentView reassignment(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
@@ -1917,6 +1987,10 @@ public class RepairService {
                 snapshot, RepairViews.operators(operators), declared);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.UnavailabilityReceipt declareUnavailable(
             Actor actor, long id, long version, UUID key, RepairReassignmentController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
@@ -1972,6 +2046,10 @@ public class RepairService {
                 """, String.class, id, processor, ownershipVersion).stream().findFirst().orElse(null);
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public RepairViews.RepairDetail reassign(
             Actor actor,
             long id,
@@ -2162,6 +2240,7 @@ public class RepairService {
                         loan.expectedReturnDate().toString());
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public boolean proxyProcessor(long account, long id, boolean locked) {
         return !db.queryForList(
                         "SELECT id FROM fams_repair_request WHERE id=? AND processor_account_id=?"
@@ -2171,6 +2250,7 @@ public class RepairService {
                 .isEmpty();
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public com.fams.proxy.ProxyViews.RepairSnapshot proxySnapshot(Actor actor, long id, long item, boolean executing) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -2231,6 +2311,10 @@ public class RepairService {
                         id));
     }
 
+    @Transactional(
+            isolation = Isolation.REPEATABLE_READ,
+            rollbackFor = Exception.class,
+            noRollbackFor = RepairConflict.class)
     public com.fams.proxy.ProxyViews.RepairReceiptResult proxyReceipt(
             Actor actor,
             long id,
@@ -2339,6 +2423,7 @@ public class RepairService {
                 number(row, "version") + 1);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = RepairConflict.class)
     public void photoUploader(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);

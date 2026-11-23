@@ -28,7 +28,6 @@ import java.util.UUID;
 /** Review conclusions never replace original observations or grant custody-changing authority. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryReviewService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -45,6 +44,7 @@ public class InventoryReviewService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ReviewTaskDetail detail(Actor actor, long taskId, int page, int size) {
         admin(actor);
         var task = task(taskId);
@@ -77,6 +77,7 @@ public class InventoryReviewService {
                 countItems(taskId), page, size, reviewedCount(taskId));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ObservationPage observations(Actor actor, long taskId, Long itemId, int page, int size) {
         admin(actor);
         task(taskId);
@@ -102,6 +103,10 @@ public class InventoryReviewService {
                 Objects.requireNonNull(total), page, size);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public FindingViews.NormalBatchReceipt acceptNormal(Actor actor, long taskId, long expectedVersion, UUID key,
             InventoryReviewInput.NormalBatch input) {
         var current = admin(actor);

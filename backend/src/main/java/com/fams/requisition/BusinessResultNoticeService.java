@@ -21,7 +21,6 @@ import java.util.HexFormat;
 
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class BusinessResultNoticeService {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
@@ -35,6 +34,7 @@ class BusinessResultNoticeService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     NoticeViews.NoticePage list(
             RequisitionActorContext.Actor actor, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
@@ -55,6 +55,7 @@ class BusinessResultNoticeService {
                 java.util.Objects.requireNonNull(total), java.util.Objects.requireNonNull(unread));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     NoticeViews.ReviewRequestPage reviewRequests(RequisitionActorContext.Actor actor, int page, int pageSize) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
@@ -78,6 +79,7 @@ class BusinessResultNoticeService {
         return new NoticeViews.ReviewRequestPage(items, java.util.Objects.requireNonNull(total), page, pageSize);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     NoticeViews.ReadReceipt read(RequisitionActorContext.Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT id FROM fams_business_result_notice"
@@ -91,6 +93,7 @@ class BusinessResultNoticeService {
         return new NoticeViews.ReadReceipt(Long.toString(id), true);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT * FROM fams_business_result_notice"

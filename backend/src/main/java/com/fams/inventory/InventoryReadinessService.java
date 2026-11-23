@@ -38,7 +38,6 @@ import jakarta.validation.constraints.Size;
 /** Missing evidence remains explicit and never becomes a successful physical observation. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventoryReadinessService {
     public record MissingLossInput(
             @NotNull @PositiveOrZero Long assetVersion,
@@ -67,6 +66,7 @@ public class InventoryReadinessService {
         this.losses = losses;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.ReadinessView detail(
             Actor actor, long taskId, int page, int size) {
         admin(actor);
@@ -167,6 +167,7 @@ public class InventoryReadinessService {
                 notObserved(taskId));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.UnobservedHistoryPage history(
             Actor actor, long taskId, long itemId, int page, int size) {
         admin(actor);
@@ -192,6 +193,10 @@ public class InventoryReadinessService {
                 SelectionViews.unobservedReasons(rows), total, page, size);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.UnobservedReply record(
             Actor actor,
             long taskId,
@@ -306,6 +311,10 @@ public class InventoryReadinessService {
         return response;
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.MissingLossReply reportMissing(
             Actor actor,
             long taskId,
@@ -373,6 +382,10 @@ public class InventoryReadinessService {
         return response;
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SelectionViews.WaitingReply waiting(
             Actor actor,
             long taskId,

@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class ReminderFollowupService {
     private static final String ACTIVE_STAGE = """
             ((r.business_type='INBOUND' AND
@@ -75,6 +74,7 @@ class ReminderFollowupService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public View get(RequisitionActorContext.Actor actor, long id) {
         requireAdmin(actor);
         var subject = subject(id);
@@ -86,6 +86,7 @@ class ReminderFollowupService {
         return new View(rows.isEmpty() ? null : rows.getFirst());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     public Followup record(RequisitionActorContext.Actor actor, long id, UUID key, Input input) {
         long administrator = requireAdmin(actor);
         var next = input.nextFollowupAt().truncatedTo(ChronoUnit.MILLIS);

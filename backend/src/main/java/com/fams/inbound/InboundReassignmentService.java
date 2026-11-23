@@ -23,7 +23,6 @@ import tools.jackson.databind.ObjectMapper;
 /** Transfers ownership only; approval, acceptance facts, deadlines and asset locks remain intact. */
 @Profile("fams-product")
 @Service
-@Transactional
 class InboundReassignmentService {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
@@ -40,6 +39,7 @@ class InboundReassignmentService {
         this.clock = authClock;
     }
 
+    @Transactional
     InboundViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
@@ -63,6 +63,7 @@ class InboundReassignmentService {
                 unavailabilityDeclared(owner) ? (String) owner.get("unavailable_reason") : null);
     }
 
+    @Transactional(rollbackFor = Exception.class)
     InboundViews.Receipt reassign(Actor actor, long id, long version, String key,
             InboundReassignmentController.Reassignment input) {
         var current = admin(actor);
@@ -139,6 +140,7 @@ class InboundReassignmentService {
         return result;
     }
 
+    @Transactional(rollbackFor = Exception.class)
     InboundViews.UnavailabilityResult declareUnavailable(Actor actor, long id, long version, String key,
             InboundReassignmentController.Unavailability input) {
         var current = actors.revalidateLocked(actor);

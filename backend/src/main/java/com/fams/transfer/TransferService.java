@@ -34,7 +34,6 @@ import java.util.Objects;
 /** All facts, custody changes, locks, audit and replay records share one short transaction. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class TransferService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final JdbcTemplate db;
@@ -59,6 +58,7 @@ class TransferService {
         this.handover = handover;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TransferViews.Page<TransferViews.EligibleAsset> eligible(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = sourceScope(current, "a");
@@ -84,6 +84,7 @@ class TransferService {
                 rows.stream().map(TransferViews::eligibleAsset).toList(), count, page, size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TransferViews.CatalogPage catalog(Actor actor, String kind, Long organization, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if ("personnel".equals(kind)) {
@@ -129,6 +130,7 @@ class TransferService {
         return id;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TransferViews.PersonnelHandover personnel(Actor actor, long employee) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -199,6 +201,7 @@ class TransferService {
                 requisitions.stream().map(TransferViews::openRequisitionRef).toList());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TransferViews.Page<TransferViews.Summary> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = current.globalApplicant() ? "1=1" : "creator_account_id=" + current.id();
@@ -223,6 +226,7 @@ class TransferService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     TransferViews.Detail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
@@ -230,6 +234,7 @@ class TransferService {
         return detail(request);
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     TransferViews.Detail create(Actor actor, String key, TransferController.Draft input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
@@ -241,6 +246,7 @@ class TransferService {
         return finish(current, "create", key, hash, detail(request(id)));
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     TransferViews.Detail createFromLoss(Actor actor, long asset, long version,
             AssetTransferPort.Target target, String reason, LossTransferPort.Source loss) {
         var current = actors.revalidateLocked(actor);

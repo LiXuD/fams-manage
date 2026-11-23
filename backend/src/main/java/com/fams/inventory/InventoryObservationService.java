@@ -29,7 +29,6 @@ import java.util.UUID;
  */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ)
 public class InventoryObservationService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -63,6 +62,7 @@ public class InventoryObservationService {
         this.attachments = attachments;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.CalibrationResult calibrate(
             RequisitionActorContext.Actor actor, InventoryObservationInput.Calibration input) {
         var current = actors.revalidateLocked(actor);
@@ -83,11 +83,13 @@ public class InventoryObservationService {
         return new SealViews.CalibrationResult(id, now.toString(), input.clientTime().toString());
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.Identification identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
         return identify(actor, taskId, source, value, false);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.Identification identifyAndRecord(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
         return identify(actor, taskId, source, value, true);
@@ -156,6 +158,7 @@ public class InventoryObservationService {
                 json.readTree(item.get("snapshot").toString()));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.ObservationReceipt submit(
             RequisitionActorContext.Actor actor,
             long taskId,

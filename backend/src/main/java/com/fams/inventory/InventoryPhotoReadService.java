@@ -21,7 +21,6 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
-@Transactional
 public class InventoryPhotoReadService {
     private final RequisitionActorContext actors;
     private final InventoryAttachmentPort business;
@@ -55,6 +54,7 @@ public class InventoryPhotoReadService {
         return scope;
     }
 
+    @Transactional
     public List<AttachmentEvidencePort.Metadata> list(
             RequisitionActorContext.Actor source, long task, UUID event) {
         return attachments.list("INVENTORY_EVENT", authorize(source, task, event));
@@ -92,12 +92,14 @@ public class InventoryPhotoReadService {
                 created);
     }
 
+    @Transactional
     public AttachmentGrantSigner.Grant grant(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object) {
         long scope = authorize(source, task, event);
         return attachments.grant("INVENTORY_EVENT", scope, identity(source, object));
     }
 
+    @Transactional
     public AttachmentReadService.Content read(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object, String token)
             throws IOException {

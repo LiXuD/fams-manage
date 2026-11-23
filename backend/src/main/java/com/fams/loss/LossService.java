@@ -35,7 +35,6 @@ import java.util.UUID;
 /** Independent loss reporting. Approval authorizes verification; it never confirms a loss. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ)
 public class LossService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -80,10 +79,12 @@ public class LossService {
         this.evidence = evidence;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.EligiblePage eligible(Actor actor, int page, int size) {
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.Page<LossViews.LossReport> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
@@ -116,6 +117,7 @@ public class LossService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.LossDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var row = header(id);
@@ -250,6 +252,7 @@ public class LossService {
                 actions);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submit(Actor actor, UUID key, LossInput.Submission input) {
         var current = actors.revalidateLocked(actor);
         String hash = LossPayloads.fingerprint(json, "SUBMIT", 0, input);
@@ -298,6 +301,7 @@ public class LossService {
         return row;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submitFactory(Actor actor, long repairId, long roundId, long repairVersion,
             UUID key, LossInput.FactorySubmission input) {
         var current = actors.revalidateLocked(actor);
@@ -331,6 +335,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submitInternalRepair(Actor actor, long repairId, long repairVersion, UUID key,
             LossInput.InternalRepairSubmission input) {
         var current = actors.revalidateLocked(actor);
@@ -459,6 +464,7 @@ public class LossService {
                 Long.parseLong(source.path("roundId").asText()), number(row, "asset_id"), number(row, "id"));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport decide(
             Actor actor, long id, long version, UUID key, LossInput.Decision input) {
         var current = actors.revalidateLocked(actor);
@@ -506,6 +512,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport cancel(
             Actor actor, long id, long version, UUID key, LossInput.Reason input) {
         var current = actors.revalidateLocked(actor);
@@ -532,6 +539,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport claim(Actor actor, long id, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -576,6 +584,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport search(
             Actor actor, long id, long version, UUID key, LossInput.Search input) {
         var current = actors.revalidateLocked(actor);
@@ -618,6 +627,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.Page<LossViews.LossReport> followUps(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
@@ -654,6 +664,7 @@ public class LossService {
                 size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport confirmLost(
             Actor actor, long id, long version, UUID key, LossInput.Confirmation input) {
         var current = actors.revalidateLocked(actor);
@@ -710,6 +721,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport followUp(
             Actor actor, long id, long version, UUID key, LossInput.FollowUp input) {
         var current = actors.revalidateLocked(actor);
@@ -755,6 +767,7 @@ public class LossService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverSearching(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryExecution input) {
         var current = actors.revalidateLocked(actor);
@@ -789,6 +802,7 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToRepair(
             Actor actor, long id, long version, UUID key, LossInput.RepairRecovery input) {
         var current = actors.revalidateLocked(actor);
@@ -850,11 +864,13 @@ public class LossService {
         return result;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
         return requestRecovery(actor, id, version, key, input, false, null);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestRepairRecovery(
             Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
         return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, null);
@@ -963,6 +979,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, id, recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery decideRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Decision input) {
         var current = actors.revalidateLocked(actor);
@@ -1016,6 +1033,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery cancelRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Reason input) {
         var current = actors.revalidateLocked(actor);
@@ -1050,6 +1068,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery claimRecovery(Actor actor, long recovery, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.WAREHOUSE_OPERATOR);
@@ -1094,6 +1113,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.RecoveryExecution input) {
         var current = actors.revalidateLocked(actor);
@@ -1140,6 +1160,7 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToRepair(
             Actor actor, long recovery, long version, UUID key, LossInput.ClosedRepairRecovery input) {
         var current = actors.revalidateLocked(actor);
@@ -1181,17 +1202,20 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.RecoveryLocationPage recoveryLocations(Actor actor, int page, int size) {
         if (!applicant(actors.revalidateLocked(actor))) { throw new LossFailure(403, "LOSS_ROLE_REQUIRED"); }
         return assets.recoveryLocations(page, size);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestReturnRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "ASSET_RETURN");
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestTransferRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
@@ -1217,11 +1241,13 @@ public class LossService {
         }
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToReturn(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToReturn(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToReturn(Actor actor, long recovery, long version,
             UUID key, LossInput.ExplicitRecoveryExecution input) {
         return recoverToReturn(actor, recovery, version, key, input, true,
@@ -1282,11 +1308,13 @@ public class LossService {
                 : remember(current, operation, key, hash, header(number(row, "id"))));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
         return recoverToTransfer(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
         return recoverToTransfer(actor, id, version, key, input, true, LossViews.LossReportWithRecovery.class);
@@ -1347,36 +1375,42 @@ public class LossService {
                 : remember(current, operation, key, hash, header(report)));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestFactoryRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "FACTORY_REPAIR");
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestInternalRepairRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
         return requestRecovery(actor, id, version, key,
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "INTERNAL_REPAIR");
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToFactory(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToRetainedRepair(actor, id, version, key, input, false, false,
                 LossViews.LossReport.class);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToFactory(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToRetainedRepair(actor, id, version, key, input, true, false,
                 LossViews.LossReportWithRecovery.class);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToInternalRepair(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToRetainedRepair(actor, id, version, key, input, false, true,
                 LossViews.LossReport.class);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToRetainedRepair(actor, id, version, key, input, true, true,
@@ -1670,6 +1704,7 @@ public class LossService {
                                         current.id(), row.get("processor_account_id"))));
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void photoUploader(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         if (current.id() != number(header(id), "creator_account_id")) {

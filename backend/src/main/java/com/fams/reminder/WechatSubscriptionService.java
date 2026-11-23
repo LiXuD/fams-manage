@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.READ_COMMITTED)
 class WechatSubscriptionService {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
@@ -38,11 +37,13 @@ class WechatSubscriptionService {
         this.clock = clock;
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     MiniSubscriptionVisibility visibility(RequisitionActorContext.Actor actor) {
         actors.revalidateLocked(actor);
         return new MiniSubscriptionVisibility().wechatTemplate(channels.currentTemplates().wechatTemplate());
     }
 
+    @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
     WechatSubscriptionGrant register(RequisitionActorContext.Actor actor, UUID key,
             WechatSubscriptionGrantRequest request) {
         var current = actors.revalidateLocked(actor);

@@ -34,7 +34,6 @@ import java.util.UUID;
 /** Task lock freezes reports, accepted dates and original receipts in one transaction. */
 @Service
 @Profile("fams-product")
-@Transactional(isolation = Isolation.REPEATABLE_READ, noRollbackFor = InventoryReviewConflict.class)
 public class InventorySealService {
     private record Evaluation(
             List<Map<String, Object>> items,
@@ -76,6 +75,7 @@ public class InventorySealService {
         this.losses = losses;
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.Preflight preflight(Actor actor, long taskId) {
         admin(actor);
         var task = task(taskId);
@@ -108,6 +108,10 @@ public class InventorySealService {
                 evaluation.blockers().isEmpty() && missing == 0);
     }
 
+    @Transactional(
+        isolation = Isolation.REPEATABLE_READ,
+        rollbackFor = Exception.class,
+        noRollbackFor = InventoryReviewConflict.class)
     public SealViews.SealReceipt seal(
             Actor actor, long taskId, long version, UUID key, InventorySealInput input) {
         var current = admin(actor);
@@ -346,6 +350,7 @@ public class InventorySealService {
         return json.readValue(prior.getFirst().get("response").toString(), type);
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.SealedReportRow report(Actor actor, long taskId) {
         admin(actor);
         task(taskId);
@@ -359,6 +364,7 @@ public class InventorySealService {
         return SealViews.sealedReportRow(json, rows.getFirst());
     }
 
+    @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.Page<SealViews.SnapshotRow> reportRows(
             Actor actor, long taskId, String section, int page, int size) {
         report(actor, taskId);
