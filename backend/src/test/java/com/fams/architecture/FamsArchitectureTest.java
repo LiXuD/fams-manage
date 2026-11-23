@@ -28,4 +28,18 @@ class FamsArchitectureTest {
                 productionClasses
         );
     }
+
+    @Test
+    void servicesDoNotDeclareClassLevelTransactions() {
+        FamsArchitectureRules.SERVICES_DO_NOT_DECLARE_CLASS_LEVEL_TRANSACTIONS.check(
+                productionClasses
+        );
+    }
+
+    @Test
+    void applicationEntryPointIsInTheRootPackage() {
+        FamsArchitectureRules.APPLICATION_ENTRY_POINT_IS_IN_THE_ROOT_PACKAGE.check(
+                productionClasses
+        );
+    }
 }

@@ -11,6 +11,7 @@ import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.ConditionEvents;
 import com.tngtech.archunit.lang.SimpleConditionEvent;
 import java.util.Optional;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.transaction.annotation.Transactional;
 
 final class FamsArchitectureRules {
@@ -41,6 +42,20 @@ final class FamsArchitectureRules {
             .should()
             .notBeAnnotatedWith(Transactional.class)
             .because("transactions belong to the application service boundary");
+
+    static final ArchRule SERVICES_DO_NOT_DECLARE_CLASS_LEVEL_TRANSACTIONS = classes()
+            .that()
+            .haveSimpleNameEndingWith("Service")
+            .should()
+            .notBeAnnotatedWith(Transactional.class)
+            .because("a class-level transaction cannot express per-operation read and rollback semantics");
+
+    static final ArchRule APPLICATION_ENTRY_POINT_IS_IN_THE_ROOT_PACKAGE = classes()
+            .that()
+            .areAnnotatedWith(SpringBootApplication.class)
+            .should()
+            .resideInAPackage("com.fams")
+            .because("root-package placement lets component scanning cover com.fams without an override");
 
     private FamsArchitectureRules() {
     }
