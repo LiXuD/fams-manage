@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -37,7 +36,7 @@ class InventoryLateDamageController {
     }
 
     @GetMapping("/tasks/{task}/observations/{observation}/damage-repair")
-    Map<String, Object> detail(
+    InventoryViews.InventoryLateDamageDetail detail(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
@@ -46,7 +45,7 @@ class InventoryLateDamageController {
     }
 
     @PostMapping("/tasks/{task}/observations/{observation}/damage-repair")
-    Map<String, Object> decide(
+    InventoryViews.InventoryLateDamageDecisionReceipt decide(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestHeader("Idempotency-Key") UUID key,

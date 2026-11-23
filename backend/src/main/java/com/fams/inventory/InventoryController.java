@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @Profile("fams-product")
@@ -36,19 +35,20 @@ class InventoryController {
     }
 
     @PostMapping("/preview")
-    Map<String, Object> preview(@RequestBody @Valid InventoryInput.Range input) {
+    InventoryViews.InventoryPreviewDigest preview(
+            @RequestBody @Valid InventoryInput.Range input) {
         return service.preview(actors.capture(), input);
     }
 
     @GetMapping
-    Map<String, Object> list(
+    InventoryViews.InventoryTaskPage list(
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return service.list(actors.capture(), page, pageSize);
     }
 
     @GetMapping("/catalog/{kind}")
-    Map<String, Object> catalog(
+    InventoryViews.InventoryReferenceChoicePage catalog(
             @PathVariable
                     @jakarta.validation.constraints.Pattern(
                             regexp = "organization|category|warehouse|location|employee")
@@ -66,7 +66,7 @@ class InventoryController {
     }
 
     @GetMapping("/{id}")
-    Map<String, Object> detail(
+    InventoryViews.InventoryTaskDetail detail(
             @PathVariable @Min(1) long id,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
@@ -74,14 +74,14 @@ class InventoryController {
     }
 
     @PostMapping
-    Map<String, Object> create(
+    InventoryViews.InventoryTaskRow create(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestBody @Valid InventoryInput.Draft input) {
         return service.create(actors.capture(), key, input);
     }
 
     @PostMapping("/{id}/copy")
-    Map<String, Object> copy(
+    InventoryViews.InventoryTaskRow copy(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -90,7 +90,7 @@ class InventoryController {
     }
 
     @PostMapping("/{id}/revision")
-    Map<String, Object> revise(
+    InventoryViews.InventoryTaskRow revise(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -99,7 +99,7 @@ class InventoryController {
     }
 
     @PostMapping("/{id}/publication")
-    Map<String, Object> publish(
+    InventoryViews.InventoryTaskRow publish(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -108,7 +108,7 @@ class InventoryController {
     }
 
     @PostMapping("/{id}/start")
-    Map<String, Object> start(
+    InventoryViews.InventoryTaskRow start(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key) {
@@ -116,7 +116,7 @@ class InventoryController {
     }
 
     @PostMapping("/{id}/assignments")
-    Map<String, Object> assign(
+    InventoryViews.InventoryTaskRow assign(
             @PathVariable @Min(1) long id,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
@@ -125,7 +125,7 @@ class InventoryController {
     }
 
     @PostMapping("/{id}/{action:delete|cancel|terminate}")
-    Map<String, Object> end(
+    InventoryViews.InventoryTaskRow end(
             @PathVariable @Min(1) long id,
             @PathVariable String action,
             @RequestHeader("If-Match-Version") @Min(0) long version,

@@ -33,6 +33,9 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(isolation = Isolation.REPEATABLE_READ)
 public class InventoryService {
+    private static final tools.jackson.core.type.TypeReference<Map<String, Object>> WIRE_MAP =
+            new tools.jackson.core.type.TypeReference<>() {};
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -58,13 +61,15 @@ public class InventoryService {
         this.references = references;
     }
 
-    public Map<String, Object> referenceChoices(Actor actor, String kind, int page, int size) {
+    public InventoryViews.InventoryReferenceChoicePage referenceChoices(
+            Actor actor, String kind, int page, int size) {
         admin(actor);
-        return Map.of(
-                "items", references.choices(kind, page, size), "page", page, "pageSize", size);
+        return new InventoryViews.InventoryReferenceChoicePage(
+                references.choices(kind, page, size), page, size);
     }
 
-    public Map<String, Object> preview(Actor actor, InventoryInput.Range range) {
+    public InventoryViews.InventoryPreviewDigest preview(
+            Actor actor, InventoryInput.Range range) {
         admin(actor);
         var predicate = InventoryRange.predicate(range);
         return digest(
@@ -76,7 +81,8 @@ public class InventoryService {
                 predicate.args());
     }
 
-    public Map<String, Object> create(Actor actor, String key, InventoryInput.Draft input) {
+    public InventoryViews.InventoryTaskRow create(
+            Actor actor, String key, InventoryInput.Draft input) {
         var current = admin(actor);
         var prior = replay(current, "create", key, 0, input);
         if (prior != null) {
@@ -88,7 +94,7 @@ public class InventoryService {
                     + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 input.name().strip(),
-                rangeJson(input.range()),
+                InventoryViews.inventoryRangeJson(json, input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 current.id(),
@@ -96,10 +102,10 @@ public class InventoryService {
                 now());
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         event(actor, current.id(), id, "INVENTORY_CREATED", Map.of(), 0, 0);
-        return finish(current, "create", key, 0, input, clean(task(id, false)));
+        return finish(current, "create", key, 0, input, taskRow(id));
     }
 
-    public Map<String, Object> copy(
+    public InventoryViews.InventoryTaskRow copy(
             Actor actor, long sourceId, long version, String key, InventoryInput.Draft input) {
         var current = admin(actor);
         var prior = replay(current, "copy:" + sourceId, key, version, input);
@@ -120,7 +126,7 @@ public class InventoryService {
                     + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,copied_from_task_id,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 input.name().strip(),
-                rangeJson(input.range()),
+                InventoryViews.inventoryRangeJson(json, input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 current.id(),
@@ -136,10 +142,10 @@ public class InventoryService {
                 Map.of("sourceTaskId", Long.toString(sourceId)),
                 0,
                 0);
-        return finish(current, "copy:" + sourceId, key, version, input, clean(task(id, false)));
+        return finish(current, "copy:" + sourceId, key, version, input, taskRow(id));
     }
 
-    public Map<String, Object> revise(
+    public InventoryViews.InventoryTaskRow revise(
             Actor actor, long id, long version, String key, InventoryInput.Draft input) {
         var current = admin(actor);
         var prior = replay(current, "revise:" + id, key, version, input);
@@ -153,16 +159,16 @@ public class InventoryService {
                         + " name=?,range_json=?,starts_at=?,due_at=?,version=version+1,updated_at=?"
                         + " WHERE id=?",
                 input.name().strip(),
-                rangeJson(input.range()),
+                InventoryViews.inventoryRangeJson(json, input.range()),
                 Timestamp.from(input.startsAt()),
                 Timestamp.from(input.dueAt()),
                 now(),
                 id);
         event(actor, current.id(), id, "INVENTORY_REVISED", Map.of(), version, version + 1);
-        return finish(current, "revise:" + id, key, version, input, clean(task(id, false)));
+        return finish(current, "revise:" + id, key, version, input, taskRow(id));
     }
 
-    public Map<String, Object> publish(
+    public InventoryViews.InventoryTaskRow publish(
             Actor actor, long id, long version, String key, InventoryInput.Publish input) {
         var current = admin(actor);
         var prior = replay(current, "publish:" + id, key, version, input);
@@ -192,8 +198,8 @@ public class InventoryService {
                                 + " asset_id",
                         List.of(id));
         if (input.expectedCount() < 1
-                || input.expectedCount() != ((Number) captured.get("count")).longValue()
-                || !input.previewDigest().equals(captured.get("digest"))) {
+                || input.expectedCount() != captured.count()
+                || !input.previewDigest().equals(captured.digest())) {
             throw new InventoryFailure(409, "INVENTORY_PREVIEW_CHANGED");
         }
         db.update(
@@ -207,11 +213,19 @@ public class InventoryService {
                 now(),
                 now(),
                 id);
-        event(actor, current.id(), id, "INVENTORY_PUBLISHED", captured, version, version + 1);
-        return finish(current, "publish:" + id, key, version, input, clean(task(id, false)));
+        event(
+                actor,
+                current.id(),
+                id,
+                "INVENTORY_PUBLISHED",
+                Map.of("count", captured.count(), "digest", captured.digest()),
+                version,
+                version + 1);
+        return finish(current, "publish:" + id, key, version, input, taskRow(id));
     }
 
-    public Map<String, Object> start(Actor actor, long id, long version, String key) {
+    public InventoryViews.InventoryTaskRow start(
+            Actor actor, long id, long version, String key) {
         var current = admin(actor);
         var prior = replay(current, "start:" + id, key, version, Map.of());
         if (prior != null) {
@@ -227,10 +241,10 @@ public class InventoryService {
                 Map.of("source", "MANUAL"),
                 version,
                 version + 1);
-        return finish(current, "start:" + id, key, version, Map.of(), clean(task(id, false)));
+        return finish(current, "start:" + id, key, version, Map.of(), taskRow(id));
     }
 
-    public Map<String, Object> end(
+    public InventoryViews.InventoryTaskRow end(
             Actor actor,
             long id,
             long version,
@@ -290,10 +304,10 @@ public class InventoryService {
                 Map.of("reason", input.reason()),
                 version,
                 version + 1);
-        return finish(current, action + ":" + id, key, version, input, clean(task(id, false)));
+        return finish(current, action + ":" + id, key, version, input, taskRow(id));
     }
 
-    public Map<String, Object> assign(
+    public InventoryViews.InventoryTaskRow assign(
             Actor actor, long id, long version, String key, InventoryInput.Assign input) {
         var current = admin(actor);
         var prior = replay(current, "assign:" + id, key, version, input);
@@ -395,10 +409,10 @@ public class InventoryService {
                         input.recheck()),
                 version,
                 version + 1);
-        return finish(current, "assign:" + id, key, version, input, clean(task(id, false)));
+        return finish(current, "assign:" + id, key, version, input, taskRow(id));
     }
 
-    public Map<String, Object> list(Actor actor, int page, int size) {
+    public InventoryViews.InventoryTaskPage list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String where =
                 current.has(Role.ASSET_ADMIN)
@@ -425,20 +439,15 @@ public class InventoryService {
                                 + where
                                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                         args.toArray());
-        return Map.of(
-                "items",
+        return new InventoryViews.InventoryTaskPage(
                 rows.stream().map(row -> taskView(row, current.has(Role.ASSET_ADMIN))).toList(),
-                "total",
                 Objects.requireNonNull(total),
-                "page",
                 page,
-                "pageSize",
                 size,
-                "canManage",
                 current.has(Role.ASSET_ADMIN));
     }
 
-    public Map<String, Object> detail(Actor actor, long id, int page, int size) {
+    public InventoryViews.InventoryTaskDetail detail(Actor actor, long id, int page, int size) {
         var current = actors.revalidateLocked(actor);
         var task = task(id, false);
         if ("DELETED".equals(task.get("task_status"))) {
@@ -476,18 +485,12 @@ public class InventoryService {
                                 + where
                                 + " ORDER BY id LIMIT ? OFFSET ?",
                         args.toArray());
-        return Map.of(
-                "task",
+        return new InventoryViews.InventoryTaskDetail(
                 taskView(task, admin),
-                "items",
-                items.stream().map(this::clean).toList(),
-                "total",
+                items.stream().map(row -> InventoryViews.inventoryItemRow(json, row)).toList(),
                 total,
-                "page",
                 page,
-                "pageSize",
                 size,
-                "canManage",
                 admin);
     }
 
@@ -589,69 +592,27 @@ public class InventoryService {
         }
     }
 
-    private Map<String, Object> taskView(Map<String, Object> row, boolean admin) {
-        var result = clean(row);
-        if (!admin) {
-            for (String field :
-                    List.of(
-                            "range_json",
-                            "creator_account_id",
-                            "publisher_account_id",
-                            "end_reason",
-                            "expected_count",
-                            "captured_result_count")) {
-                result.remove(field);
-            }
-        }
+    /**
+     * The body every inventory write exit returns and persists as its idempotency reply: the clean
+     * projection of the just-written task row.
+     */
+    private InventoryViews.InventoryTaskRow taskRow(long id) {
+        return InventoryViews.inventoryTaskRow(json, task(id, false));
+    }
+
+    /**
+     * The frozen taskView projection: the clean row plus the derived overdue flag. The legacy code
+     * removed the six admin-only keys for an executor caller, so the role decides which of the two
+     * {@link InventoryViews.InventoryTaskView} records is built.
+     */
+    private InventoryViews.InventoryTaskView taskView(Map<String, Object> row, boolean admin) {
+        var projected = InventoryViews.inventoryTaskRow(json, row);
         Instant due = instant(row.get("due_at"));
-        result.put(
-                "overdue",
-                "IN_PROGRESS".equals(row.get("task_status")) && !due.isAfter(clock.instant()));
-        return result;
-    }
-
-    private String rangeJson(InventoryInput.Range range) {
-        var snapshot = new LinkedHashMap<String, Object>();
-        snapshot.put("usingOrganizationId", identifier(range.usingOrganizationId()));
-        snapshot.put("owningOrganizationId", identifier(range.owningOrganizationId()));
-        snapshot.put("categoryId", identifier(range.categoryId()));
-        snapshot.put("warehouseId", identifier(range.warehouseId()));
-        snapshot.put("locationId", identifier(range.locationId()));
-        snapshot.put("responsibleEmployeeId", identifier(range.responsibleEmployeeId()));
-        snapshot.put("lifecycle", range.lifecycle());
-        snapshot.put("exception", range.exception());
-        return json.writeValueAsString(snapshot);
-    }
-
-    private String identifier(Long id) {
-        return id == null ? null : id.toString();
-    }
-
-    private Map<String, Object> clean(Map<String, Object> row) {
-        var result = new LinkedHashMap<String, Object>();
-        row.forEach(
-                (key, raw) -> {
-                    Object value = raw;
-                    if (value != null && key.equals("range_json")) {
-                        value =
-                                json.readTree(
-                                        rangeJson(
-                                                json.readValue(
-                                                        value instanceof CharSequence
-                                                                ? value.toString()
-                                                                : json.writeValueAsString(value),
-                                                        InventoryInput.Range.class)));
-                    } else if (value != null && key.endsWith("_json")) {
-                        value = json.readTree(value.toString());
-                    } else if (value instanceof Timestamp
-                            || value instanceof java.time.LocalDateTime) {
-                        value = instant(value).toString();
-                    } else if (value != null && (key.equals("id") || key.endsWith("_id"))) {
-                        value = value.toString();
-                    }
-                    result.put(key, value);
-                });
-        return result;
+        boolean overdue =
+                "IN_PROGRESS".equals(row.get("task_status")) && !due.isAfter(clock.instant());
+        return admin
+                ? InventoryViews.inventoryTaskAdminView(projected, overdue)
+                : InventoryViews.inventoryTaskExecutorView(projected, overdue);
     }
 
     private Instant instant(Object value) {
@@ -660,7 +621,12 @@ public class InventoryService {
                 : ((java.time.LocalDateTime) value).toInstant(java.time.ZoneOffset.UTC);
     }
 
-    private Map<String, Object> digest(String sql, List<Object> args) {
+    /**
+     * Row-set digest of a range: the /preview exit shape and the publication guard source at the
+     * same time. The INVENTORY_PUBLISHED audit payload keeps its own Map.of so the stored
+     * detail_json text stays exactly as before.
+     */
+    private InventoryViews.InventoryPreviewDigest digest(String sql, List<Object> args) {
         MessageDigest digest = sha();
         long[] count = {0};
         db.query(
@@ -677,7 +643,8 @@ public class InventoryService {
                     count[0]++;
                 },
                 args.toArray());
-        return Map.of("count", count[0], "digest", HexFormat.of().formatHex(digest.digest()));
+        return new InventoryViews.InventoryPreviewDigest(
+                count[0], HexFormat.of().formatHex(digest.digest()));
     }
 
     private MessageDigest sha() {
@@ -699,7 +666,12 @@ public class InventoryService {
                                                 .getBytes(StandardCharsets.UTF_8)));
     }
 
-    private Map<String, Object> replay(
+    /**
+     * Replay of a stored inventory write reply. Every operation in this service stores the same
+     * shape (the clean task row), so one typed exit replaces the generic Class-parameter replay of
+     * the earlier domains.
+     */
+    private InventoryViews.InventoryTaskRow replay(
             Current current, String operation, String key, long version, Object input) {
         var rows =
                 db.queryForList(
@@ -719,19 +691,20 @@ public class InventoryService {
         if (!fingerprint(version, input).equals(row.get("payload_sha256"))) {
             throw new InventoryFailure(409, "INVENTORY_IDEMPOTENCY_CONFLICT");
         }
-        return clean(
-                json.readValue(
-                        row.get("response_body_json").toString(),
-                        new tools.jackson.core.type.TypeReference<Map<String, Object>>() {}));
+        // The stored body is the clean projection of an earlier run; the same projection factory
+        // re-reads it, so a legacy receipt normalizes range_json exactly as before.
+        return InventoryViews.inventoryTaskRow(
+                json,
+                json.readValue(row.get("response_body_json").toString(), WIRE_MAP));
     }
 
-    private Map<String, Object> finish(
+    private InventoryViews.InventoryTaskRow finish(
             Current current,
             String operation,
             String key,
             long version,
             Object input,
-            Map<String, Object> result) {
+            InventoryViews.InventoryTaskRow result) {
         db.update(
                 "INSERT INTO"
                     + " fams_idempotency_record(actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,"
@@ -742,8 +715,8 @@ public class InventoryService {
                 key,
                 fingerprint(version, input),
                 json.writeValueAsString(result),
-                Long.parseLong(result.get("id").toString()),
-                ((Number) result.get("version")).longValue(),
+                Long.parseLong(result.id()),
+                result.version(),
                 now(),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(86400)));

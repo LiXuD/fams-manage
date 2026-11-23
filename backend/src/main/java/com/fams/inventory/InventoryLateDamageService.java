@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /** Damage and the existing supplemental recheck have independent versions, histories and todos. */
@@ -55,7 +56,7 @@ public class InventoryLateDamageService {
         this.clock = clock;
     }
 
-    public Map<String, Object> detail(
+    public InventoryViews.InventoryLateDamageDetail detail(
             Actor actor, long taskId, long observation, int page, int size) {
         admin(actor);
         var task = task(taskId);
@@ -63,19 +64,12 @@ public class InventoryLateDamageService {
         var state = state(observation);
         long asset = asset(source);
         var context = assets.contexts(List.of(asset), clock.instant()).get(asset);
-        var result = new LinkedHashMap<String, Object>();
-        result.put("taskId", Long.toString(taskId));
-        result.put("taskVersion", number(task, "version"));
-        result.put("observationId", Long.toString(observation));
-        result.put("assetId", Long.toString(asset));
-        result.put("currentAsset", context == null ? null : json.readTree(context.snapshotJson()));
-        result.put("damage", wire(state));
-        result.put("originalEvidence", json.readTree(source.get("snapshot_json").toString()));
-        result.put(
-                "history",
-                Map.of(
-                        "items",
-                        wire(
+        // Legacy read order: task, case+observation source, damage state FOR UPDATE, asset
+        // contexts, the decision page rows, then its COUNT, then recheck result, then the todo
+        // probe. The page materializes here only so the two queries keep running in that order.
+        var history =
+                new InventoryViews.InventoryLateDamageDecisionPage(
+                        InventoryViews.inventoryLateDamageDecisions(
                                 db.queryForList(
                                         "SELECT * FROM fams_inventory_late_damage_decision WHERE"
                                             + " observation_id=? ORDER BY after_version LIMIT ?"
@@ -83,24 +77,30 @@ public class InventoryLateDamageService {
                                         observation,
                                         size,
                                         (page - 1) * size)),
-                        "page",
                         page,
-                        "pageSize",
                         size,
-                        "total",
-                        db.queryForObject(
-                                "SELECT COUNT(*) FROM fams_inventory_late_damage_decision WHERE"
-                                    + " observation_id=?",
-                                Long.class,
-                                observation)));
-        result.put("recheckResult", recheckResult(observation));
-        result.put("todoOpen", todoOpen(observation));
-        result.put("supplementOnly", true);
-        result.put("originalReportChanged", false);
-        return result;
+                        Objects.requireNonNull(
+                                db.queryForObject(
+                                        "SELECT COUNT(*) FROM fams_inventory_late_damage_decision"
+                                                + " WHERE observation_id=?",
+                                        Long.class,
+                                        observation)));
+        return new InventoryViews.InventoryLateDamageDetail(
+                Long.toString(taskId),
+                number(task, "version"),
+                Long.toString(observation),
+                Long.toString(asset),
+                context == null ? null : json.readTree(context.snapshotJson()),
+                InventoryViews.inventoryLateDamage(state),
+                json.readTree(source.get("snapshot_json").toString()),
+                history,
+                recheckResult(observation),
+                todoOpen(observation),
+                true,
+                false);
     }
 
-    public Map<String, Object> decide(
+    public InventoryViews.InventoryLateDamageDecisionReceipt decide(
             Actor actor,
             long taskId,
             long observation,
@@ -130,7 +130,7 @@ public class InventoryLateDamageService {
             }
             return json.readValue(
                     prior.getFirst().get("response_json").toString(),
-                    new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    InventoryViews.InventoryLateDamageDecisionReceipt.class);
         }
         var source = source(taskId, observation);
         var state = state(observation);
@@ -290,20 +290,24 @@ public class InventoryLateDamageService {
                     observation,
                     now);
         }
-        var response = new LinkedHashMap<String, Object>();
-        response.put("taskId", Long.toString(taskId));
-        response.put("observationId", Long.toString(observation));
-        response.put("version", version + 1);
-        response.put("method", input.method());
-        response.put("damageStatus", status);
-        response.put("repairId", linked.repairId());
-        response.put("repairStatus", linked.status());
-        response.put("recheckResult", recheckResult(observation));
-        response.put("todoOpen", todoOpen(observation));
-        response.put("processedBy", current.username());
-        response.put("processedAt", now.toInstant().toString());
-        response.put("supplementOnly", true);
-        response.put("originalReportChanged", false);
+        // Declaration order is the legacy put order (recheckResult then todoOpen run their FOR
+        // SHARE reads exactly where the legacy assembly ran them), so the receipt text stored in
+        // fams_inventory_review_receipt.response_json stays byte-identical.
+        var response =
+                new InventoryViews.InventoryLateDamageDecisionReceipt(
+                        Long.toString(taskId),
+                        Long.toString(observation),
+                        version + 1,
+                        input.method(),
+                        status,
+                        linked.repairId(),
+                        linked.status(),
+                        recheckResult(observation),
+                        todoOpen(observation),
+                        current.username(),
+                        now.toInstant().toString(),
+                        true,
+                        false);
         audit(actor, current, task, "INVENTORY_LATE_DAMAGE_DECIDED", response);
         db.update(
                 "INSERT INTO"
@@ -479,29 +483,6 @@ public class InventoryLateDamageService {
                 task.get("version"),
                 now,
                 value);
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> source) {
-            var result = new LinkedHashMap<String, Object>();
-            source.forEach(
-                    (key, item) ->
-                            result.put(
-                                    key.toString(),
-                                    item != null
-                                                    && (key.toString().equals("id")
-                                                            || key.toString().endsWith("_id"))
-                                            ? item.toString()
-                                            : wire(item)));
-            return result;
-        }
-        if (value instanceof List<?> rows) {
-            return rows.stream().map(this::wire).toList();
-        }
-        if (value instanceof Timestamp || value instanceof java.time.LocalDateTime) {
-            return instant(value);
-        }
-        return value;
     }
 
     private long number(Map<String, Object> row, String field) {

@@ -51,7 +51,7 @@ public class InventoryLateService {
         this.clock = clock;
     }
 
-    public Map<String, Object> list(Actor actor, long taskId, int page, int size) {
+    public InventoryViews.InventoryLateCasePage list(Actor actor, long taskId, int page, int size) {
         admin(actor);
         var task = task(taskId);
         var rows =
@@ -61,35 +61,33 @@ public class InventoryLateService {
                         taskId,
                         size,
                         (page - 1) * size);
-        return Map.of(
-                "task",
-                wire(task),
-                "items",
-                rows.stream().map(this::view).toList(),
-                "page",
+        // The legacy Map.of evaluated the case items (each running its own three FOR SHARE reads)
+        // before the COUNT query, so items materialize first and the lock read order is unchanged.
+        var items = rows.stream().map(this::view).toList();
+        return new InventoryViews.InventoryLateCasePage(
+                InventoryViews.inventoryLateTaskHeader(json, task),
+                items,
                 page,
-                "pageSize",
                 size,
-                "total",
                 Objects.requireNonNull(
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM fams_inventory_late_case WHERE task_id=? FOR"
                                         + " SHARE",
                                 Long.class,
                                 taskId)),
-                "supplementOnly",
                 true);
     }
 
-    public Map<String, Object> detail(
+    public InventoryViews.InventoryLateCaseDetail detail(
             Actor actor, long taskId, long observationId, int page, int size) {
         admin(actor);
         var task = task(taskId);
         var row = lateCase(taskId, observationId);
+        // Read order of the legacy assembly: decision page (rows, then COUNT), then the case view
+        // (latest decision, damage row, todo probe). Not one query moved.
         var history =
-                Map.of(
-                        "items",
-                        wire(
+                new InventoryViews.InventoryLateDecisionPage(
+                        InventoryViews.inventoryLateDecisions(
                                 db.queryForList(
                                         "SELECT * FROM fams_inventory_late_decision WHERE"
                                             + " observation_id=? ORDER BY decision_version LIMIT ?"
@@ -97,26 +95,38 @@ public class InventoryLateService {
                                         observationId,
                                         size,
                                         (page - 1) * size)),
-                        "page",
                         page,
-                        "pageSize",
                         size,
-                        "total",
                         Objects.requireNonNull(
                                 db.queryForObject(
                                         "SELECT COUNT(*) FROM fams_inventory_late_decision WHERE"
                                                 + " observation_id=? FOR SHARE",
                                         Long.class,
                                         observationId)));
-        return Map.of(
-                "task", wire(task), "case", view(row), "history", history, "supplementOnly", true);
+        var previous = latest(observationId);
+        var damage = damageRow(observationId);
+        return new InventoryViews.InventoryLateCaseDetail(
+                InventoryViews.inventoryLateTaskHeader(json, task),
+                InventoryViews.inventoryLateCaseView(
+                        json, row, previous, damage, todoOpen(observationId)),
+                history,
+                true);
     }
 
-    public Map<String, Object> prepare(Actor actor, long taskId, long version, UUID key) {
+    public InventoryViews.InventoryLatePrepareReceipt prepare(
+            Actor actor, long taskId, long version, UUID key) {
         var current = admin(actor);
         var task = task(taskId);
         String payload = hash("prepare\n" + version);
-        var prior = original(actor, current, task, "PREPARE_LATE", key, payload);
+        var prior =
+                original(
+                        actor,
+                        current,
+                        task,
+                        "PREPARE_LATE",
+                        key,
+                        payload,
+                        InventoryViews.InventoryLatePrepareReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -136,23 +146,14 @@ public class InventoryLateService {
             evidence.append(InventoryLateEvidencePort.Task.fromRow(task), number(row, "id"));
         }
         var response =
-                Map.<String, Object>of(
-                        "taskId",
-                        Long.toString(taskId),
-                        "prepared",
-                        rows.size(),
-                        "moreMayRemain",
-                        rows.size() == 100,
-                        "taskVersion",
-                        version,
-                        "supplementOnly",
-                        true);
+                new InventoryViews.InventoryLatePrepareReceipt(
+                        Long.toString(taskId), rows.size(), rows.size() == 100, version, true);
         audit(actor, current, task, "INVENTORY_LATE_PREPARED", response);
         receipt(current, taskId, "PREPARE_LATE", key, payload, response);
         return response;
     }
 
-    public Map<String, Object> decide(
+    public InventoryViews.InventoryLateDecisionReceipt decide(
             Actor actor,
             long taskId,
             long observationId,
@@ -163,7 +164,15 @@ public class InventoryLateService {
         var task = task(taskId);
         String payload =
                 hash(observationId + "\n" + version + "\n" + json.writeValueAsString(input));
-        var prior = original(actor, current, task, "LATE_DECISION", key, payload);
+        var prior =
+                original(
+                        actor,
+                        current,
+                        task,
+                        "LATE_DECISION",
+                        key,
+                        payload,
+                        InventoryViews.InventoryLateDecisionReceipt.class);
         if (prior != null) {
             return prior;
         }
@@ -222,7 +231,7 @@ public class InventoryLateService {
                                                         .getBytes(StandardCharsets.UTF_8))
                                         .toString(),
                                 input.recheck());
-                linked = Long.valueOf(draft.get("id").toString());
+                linked = Long.valueOf(draft.id());
                 result = "FOLLOWUP_OPEN";
             }
             case "CONFIRM_RECHECK" -> {
@@ -269,17 +278,20 @@ public class InventoryLateService {
                     now,
                     observationId);
         }
-        var response = new LinkedHashMap<String, Object>();
-        response.put("taskId", Long.toString(taskId));
-        response.put("observationId", Long.toString(observationId));
-        response.put("version", version + 1);
-        response.put("result", result);
-        response.put("method", input.method());
-        response.put("linkedTaskId", linked == null ? null : linked.toString());
-        response.put("processedBy", current.username());
-        response.put("processedAt", now.toInstant().toString());
-        response.put("supplementOnly", true);
-        response.put("originalReportChanged", false);
+        // Declaration order is the legacy LinkedHashMap put order, so the receipt text written
+        // into fams_inventory_review_receipt.response_json stays byte-identical.
+        var response =
+                new InventoryViews.InventoryLateDecisionReceipt(
+                        Long.toString(taskId),
+                        Long.toString(observationId),
+                        version + 1,
+                        result,
+                        input.method(),
+                        linked == null ? null : linked.toString(),
+                        current.username(),
+                        now.toInstant().toString(),
+                        true,
+                        false);
         audit(actor, current, task, "INVENTORY_LATE_DECIDED", response);
         receipt(current, taskId, "LATE_DECISION", key, payload, response);
         return response;
@@ -315,36 +327,31 @@ public class InventoryLateService {
         }
     }
 
-    private Map<String, Object> view(Map<String, Object> row) {
+    /** One late case row plus its three FOR SHARE companion reads, in the legacy order. */
+    private InventoryViews.InventoryLateCaseView view(Map<String, Object> row) {
         long observation = number(row, "observation_id");
         var previous = latest(observation);
-        var damage =
+        var damage = damageRow(observation);
+        return InventoryViews.inventoryLateCaseView(
+                json, row, previous, damage, todoOpen(observation));
+    }
+
+    private Map<String, Object> damageRow(long observation) {
+        var rows =
                 db.queryForList(
                         "SELECT * FROM fams_inventory_late_damage WHERE observation_id=? FOR SHARE",
                         observation);
-        return Map.of(
-                "evidence",
-                wire(row),
-                "review",
-                previous.isEmpty()
-                        ? Map.of(
-                                "decision_version",
-                                0,
-                                "result",
-                                Boolean.TRUE.equals(row.get("needs_review"))
-                                        ? "OPEN"
-                                        : "INFORMATION")
-                        : wire(previous),
-                "damageFollowup",
-                damage.isEmpty() ? Map.of() : wire(damage.getFirst()),
-                "todoOpen",
-                !db.queryForList(
-                                "SELECT id FROM fams_todo WHERE business_type='INVENTORY_LATE' AND"
-                                    + " business_id=? AND todo_type IN"
-                                    + " ('LATE_EVIDENCE_REVIEW','LATE_DAMAGE_REPAIR') AND closed_at"
-                                    + " IS NULL FOR SHARE",
-                                observation)
-                        .isEmpty());
+        return rows.isEmpty() ? null : rows.getFirst();
+    }
+
+    private boolean todoOpen(long observation) {
+        return !db.queryForList(
+                        "SELECT id FROM fams_todo WHERE business_type='INVENTORY_LATE' AND"
+                            + " business_id=? AND todo_type IN"
+                            + " ('LATE_EVIDENCE_REVIEW','LATE_DAMAGE_REPAIR') AND closed_at"
+                            + " IS NULL FOR SHARE",
+                        observation)
+                .isEmpty();
     }
 
     private Map<String, Object> latest(long observation) {
@@ -393,13 +400,18 @@ public class InventoryLateService {
         return row;
     }
 
-    private Map<String, Object> original(
+    /**
+     * Stored-reply replay. The two operations of this service store different bodies, so the caller
+     * names the type to replay into (JAVA-11a/15 {@code Class<T>} blueprint).
+     */
+    private <T> T original(
             Actor actor,
             Current current,
             Map<String, Object> task,
             String operation,
             UUID key,
-            String payload) {
+            String payload,
+            Class<T> type) {
         var rows =
                 db.queryForList(
                         "SELECT payload_sha256,CAST(response_json AS CHAR) AS response FROM"
@@ -415,9 +427,7 @@ public class InventoryLateService {
         if (!payload.equals(rows.getFirst().get("payload_sha256"))) {
             conflict(actor, current, task, Map.of(), "INVENTORY_LATE_IDEMPOTENCY_CONFLICT");
         }
-        return json.readValue(
-                rows.getFirst().get("response").toString(),
-                new tools.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        return json.readValue(rows.getFirst().get("response").toString(), type);
     }
 
     private void receipt(
@@ -426,7 +436,7 @@ public class InventoryLateService {
             String operation,
             UUID key,
             String payload,
-            Map<String, Object> response) {
+            Object response) {
         db.update(
                 "INSERT INTO"
                     + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
@@ -498,33 +508,6 @@ public class InventoryLateService {
                 task.get("version"),
                 now,
                 value);
-    }
-
-    private Object wire(Object value) {
-        if (value instanceof Map<?, ?> source) {
-            var result = new LinkedHashMap<String, Object>();
-            source.forEach(
-                    (key, item) -> {
-                        String field = key.toString();
-                        Object content =
-                                field.endsWith("_json") && item instanceof String text
-                                        ? json.readValue(text, Object.class)
-                                        : item;
-                        result.put(
-                                field,
-                                item != null && (field.equals("id") || field.endsWith("_id"))
-                                        ? item.toString()
-                                        : wire(content));
-                    });
-            return result;
-        }
-        if (value instanceof List<?> rows) {
-            return rows.stream().map(this::wire).toList();
-        }
-        if (value instanceof Timestamp || value instanceof java.time.LocalDateTime) {
-            return instant(value);
-        }
-        return value;
     }
 
     private long number(Map<String, Object> row, String field) {

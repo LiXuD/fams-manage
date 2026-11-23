@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Map;
 import java.util.UUID;
 
 @Validated
@@ -36,7 +35,7 @@ class InventoryLateController {
     }
 
     @GetMapping("/tasks/{task}")
-    Map<String, Object> list(
+    InventoryViews.InventoryLateCasePage list(
             @PathVariable @Positive long task,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
@@ -44,7 +43,7 @@ class InventoryLateController {
     }
 
     @PostMapping("/tasks/{task}/prepare")
-    Map<String, Object> prepare(
+    InventoryViews.InventoryLatePrepareReceipt prepare(
             @PathVariable @Positive long task,
             @RequestHeader("Idempotency-Key") UUID key,
             @RequestHeader("If-Match-Version") @PositiveOrZero long version) {
@@ -52,7 +51,7 @@ class InventoryLateController {
     }
 
     @GetMapping("/tasks/{task}/observations/{observation}")
-    Map<String, Object> detail(
+    InventoryViews.InventoryLateCaseDetail detail(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
@@ -61,7 +60,7 @@ class InventoryLateController {
     }
 
     @PostMapping("/tasks/{task}/observations/{observation}/decisions")
-    Map<String, Object> decide(
+    InventoryViews.InventoryLateDecisionReceipt decide(
             @PathVariable @Positive long task,
             @PathVariable @Positive long observation,
             @RequestHeader("Idempotency-Key") UUID key,
