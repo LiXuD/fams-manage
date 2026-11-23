@@ -21,7 +21,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **fams-root** (23401 symbols, 56821 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **fams-manage** (24028 symbols, 58404 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
@@ -45,10 +45,10 @@ This project is indexed by GitNexus as **fams-root** (23401 symbols, 56821 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/fams-root/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/fams-root/clusters` | All functional areas |
-| `gitnexus://repo/fams-root/processes` | All execution flows |
-| `gitnexus://repo/fams-root/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/fams-manage/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/fams-manage/clusters` | All functional areas |
+| `gitnexus://repo/fams-manage/processes` | All execution flows |
+| `gitnexus://repo/fams-manage/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 
