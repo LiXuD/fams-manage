@@ -10,8 +10,19 @@
     python3 scripts/check-controller-transaction-coverage.py [--root backend/src/main/java/com/fams]
 
 退出码：0 = 无缺口；1 = 存在缺口（逐条打印 文件:行 方法名 可见性 读写）；2 = 用法错误。
-口径与人工复核的差异：本脚本用"Controller 字段类型名"解析调用点，不解析接口方法/反射调用；
-新增非 Controller 入口（定时任务、消息监听）需另行覆盖。
+已知局限（不得当作完备判据）：
+1. 调用点用"Controller 字段类型名"解析，不覆盖接口方法、反射调用，以及定时任务/消息监听等非
+   Controller 入口。
+2. **DB 操作只统计方法体内文本可见的调用**。经同类 private 辅助方法（require/visible/one/receipt
+   等）或 *Store 字段间接产生的多语句读不会被计入，因此本脚本对这类缺口是**低报**的。
+   CONV-08 即由代理读码发现 8 处此类真缺口（AssetService.get/resolve/tag、
+   InboundService.getDetail、AuthApplicationService.loadPermissions、
+   BusinessParameterService.current、NotificationChannelConfigService.current、
+   TransferService.reassignment），脚本当时判为"单语句读"。
+   曾两次尝试让脚本跟随同类调用图（先递归后 BFS），均因 METHOD_DECL/CALL 正则会命中非声明行
+   与常见 token 而严重过度计数（同一方法真值 1 却算出 3 与 32），故明确放弃：**调用图判定交给人
+   工/代理读码，脚本只负责机械可判的部分**。任何据本脚本得出的"缺口为 0"都必须读作
+   "文本可见缺口为 0"。
 """
 
 from __future__ import annotations
@@ -57,7 +68,8 @@ INTENTIONAL = {
 # 单条语句的读没有可保护的原子性，加事务只是白占连接，不判为缺口。
 DB_OP = re.compile(
     r"\bdb\.(queryForObject|queryForList|queryForMap|query|update|execute|batchUpdate)\(|"
-    r"(?<![\w.])(\w*(?:repository|Repository|mapper|Mapper|port|Port))\s*\.\s*\w+\s*\(")
+    r"(?<![\w.])(\w*(?:[Rr]epository|[Mm]apper|[Pp]ort|[Ss]tore))\s*\.\s*\w+\s*\(")
+CALL = re.compile(r"(?<![.\w])([a-z]\w*)\s*\(")
 
 
 
@@ -149,6 +161,11 @@ def scan(root: str) -> list[str]:
             )
             class_tx = bool(TX_ANN.search("\n".join(lines[:class_line])))
             ann_of = member_annotations(lines)
+            bodies: dict[str, list[int]] = {}
+            for j, ln in enumerate(lines):
+                mm = METHOD_DECL.match(ln)
+                if mm and not mm.group(3).isupper() and mm.group(3) != cls:
+                    bodies.setdefault(mm.group(3), []).append(j)
             decls: list[tuple[str, bool, bool]] = []
             for j, ln in enumerate(lines):
                 mm = METHOD_DECL.match(ln)
@@ -173,10 +190,10 @@ def scan(root: str) -> list[str]:
                     continue  # 接口/抽象方法声明（无方法体），代理不读取其注解
                 if f"{cls}.{method}" not in calls.get(domain, set()):
                     continue
-                ops = DB_OP.findall(body) if (body := method_body(lines, i)) else []
+                body = method_body(lines, i)
                 writes = bool(WRITE.search(body))
-                if not writes and len(ops) < 2:
-                    continue  # 单语句读：无原子性可保护
+                if not writes and len(DB_OP.findall(body)) < 2:
+                    continue  # 方法体内可见的 DB 操作少于两条：无原子性可保护
                 keys = {f"{cls}.{method}",
                         f"{rel[:-5] if rel.endswith('.java') else rel}.{method}"}
                 if keys & set(INTENTIONAL):
