@@ -139,3 +139,43 @@ JAVA 系列已冻结存储形状）用 `// CHECKSTYLE:OFF` / `// CHECKSTYLE:ON` 
 - 6 处 SQL 拼接续行由既有"+4 深缩进"对齐到实参缩进（纯去空白），其中 2 行恰为 120 字符。
 - 主代理自办的 `report/` 域 OFF 包裹曾因 `'\n'.join()` 丢掉文件末尾换行触发
   `NewlineAtEndOfFile`，已补回；后续任何脚本化改文件都必须保留末尾换行。
+
+## 8. A6 剩余面（标签完整性）与两个工具的口径对账
+
+`MissingJavadocType` / `MissingJavadocMethod` 只判**存在性**，判不出"有 Javadoc 但缺 `@param`/
+`@return`"。用 checkstyle 的 `JavadocMethod(accessModifiers=public, allowMissing*=false)` 实测
+全仓 **603 条**；用本仓 `scripts/check-javadoc-quality.py`（按**方法**计）实测
+**177 个方法缺 `@param` + 54 个方法缺 `@return`**。两个数字互为佐证：177 × 平均约 3 个参数
++ 54 ≈ 585 ≈ 603，差异来自每方法缺失标签数不同。按域（检查器口径）：`asset` 76、
+`inventory` 75、`loss` 34、`scrap` 14、`auth` 7，其余分散。
+
+检查器自身也修过一处保守低报：原正则要求参数表在同一行，而本仓大量签名跨多行
+（`asset/AssetFactoryRepairPort.recordPartsObservation` 十个参数逐行排列），这些方法被整体跳过，
+使 asset 的 T1/T2 只报 13/9 而 checkstyle 报 143。改为**括号配平向后收集参数表 + 按尖括号与
+圆括号深度数顶层逗号**后才与 checkstyle 量级吻合。
+
+**裁决**：`JavadocMethod` 本批**不启用**。理由不是工作量，而是口径——它会把 record 紧凑构造器、
+以及本仓有意的电报体注释一并判红，而"存在性 + 无空话（T3）+ 无占位（T4）+ 未闭合（T6）"
+已覆盖真正有价值的部分。标签完整性列为 A6 的**剩余面**，单独排期。
+
+## 9. 启用硬门禁的确切步骤（收口清单）
+
+前置条件（全部满足才可执行第 3 步）：
+
+1. 全仓 `LineLength` 违规 = 0。当前进度：`requisition`/`loan`/`masterdata`/`transfer`/`report`/
+   `reminder` 已归零；`inventory`、`loss`/`auth`/`assetimport`/`inbound`、`asset`/`scrap` 三档在途。
+2. 全仓文本块内超长行已全部 `CHECKSTYLE.OFF/ON` 包裹，且验收通过：
+   全仓标记行号 ∉ 文本块行号集合、每块恰好一对 OFF/ON。已完成 `report`(7 对)、`reminder`(8 对)、
+   `repair`(3 对)；待补 `asset`(11 行)、`scrap`(4 行)、`loss`(2 行)。
+   包裹脚本 `/tmp/wrap_tb.py`（**必须**用向下翻转状态机；改文件后保留末尾换行）。
+3. `MissingJavadocType(scope=public)` 与 `MissingJavadocMethod(scope=public)` 均 = 0。
+
+执行：把 `/tmp/cs-final.xml` 的内容写入 `config/checkstyle/checkstyle.xml`（该草案已含原有 10 条规则
++ `LineLength(120)` + `SuppressWithPlainTextCommentFilter` + 只对 `.*/src/test/.*` 抑制 `LineLength`
+的 `SuppressionSingleFilter` + 两条 `MissingJavadoc*`，并已验证可解析、抑制生效）。
+注意草案里 `MissingJavadocType` 写了 `scope=public` 与 `scope=package` 两条，**入库时只保留
+`scope=public` 那一条**（§4 裁决：对 201 个包私有顶层类型与大量 `*Views`/`*Input` 内嵌 record
+逐条要求注释是噪声而非收益）。
+
+验收：`./mvnw -pl backend test`（默认生命周期已含 checkstyle）必须 BUILD SUCCESS，
+并在 `git archive HEAD` 纯净副本上复跑一次全量测试与 ArchUnit（当前 7 条规则）。
