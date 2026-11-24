@@ -52,7 +52,8 @@ public final class InboundAttachmentController {
 
     @PostMapping(value = "/api/v1/inbound-receipts/{receiptId}/attachments/{objectId}/corrections",
             consumes = "multipart/form-data")
-    ResponseEntity<InboundViews.AttachmentReceipt> correct(@PathVariable long receiptId, @PathVariable java.util.UUID objectId,
+    ResponseEntity<InboundViews.AttachmentReceipt> correct(@PathVariable long receiptId,
+            @PathVariable java.util.UUID objectId,
             @RequestHeader("Idempotency-Key") String key, @RequestHeader("If-Match-Version") long version,
             @RequestParam("reason") String reason, @RequestPart("file") MultipartFile file) throws IOException {
         try (var source = file.getInputStream()) {

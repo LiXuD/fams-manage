@@ -219,7 +219,8 @@ class InboundReassignmentService {
 
     private RequisitionActorContext.Current admin(Actor actor) {
         var current = actors.revalidateLocked(actor);
-        if (!current.has(Role.ASSET_ADMIN)) { throw new InboundFailure("INBOUND_FORBIDDEN", "Asset administrator required", 403); }
+        if (!current.has(Role.ASSET_ADMIN)) { throw new InboundFailure("INBOUND_FORBIDDEN",
+                "Asset administrator required", 403); }
         return current;
     }
 
@@ -239,7 +240,8 @@ class InboundReassignmentService {
     }
 
     private List<Map<String, Object>> checks(long id) {
-        var rows = db.queryForList("SELECT * FROM fams_inbound_receipt_item WHERE receipt_id=? ORDER BY id FOR UPDATE", id);
+        var rows = db.queryForList(
+                "SELECT * FROM fams_inbound_receipt_item WHERE receipt_id=? ORDER BY id FOR UPDATE", id);
         List<Map<String, Object>> result = new ArrayList<>();
         for (var row : rows) {
             var asset = db.queryForMap("SELECT version FROM fams_asset WHERE id=? FOR UPDATE", row.get("asset_id"));

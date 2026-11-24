@@ -57,7 +57,8 @@ public class LossInitialPort {
      *         factory references are missing, the lifecycle is unsupported or drifted from the
      *         snapshot, or the last-seen/confirmed/opening timestamps are out of order
      */
-    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, String timezone, Long repair, Long round) {
+    public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, String timezone, Long repair,
+            Long round) {
         boolean factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle());
         AssetLossPort.Snapshot snapshot = factory
                 ? assets.factorySubmission(opening.asset(), 0) : assets.initialLossSnapshot(opening.asset());
@@ -77,6 +78,7 @@ public class LossInitialPort {
                 "responsibilityEvidence", facts.evidence());
         String custodyJson = json.writeValueAsString(custody);
         String confirmationJson = json.writeValueAsString(confirmation);
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update("""
                 INSERT INTO fams_loss_report(asset_id,creator_account_id,using_organization_id,responsible_employee_id,
                     shared_responsible_employee_id,asset_version,source_snapshot_json,last_seen_at,last_location,
@@ -84,14 +86,17 @@ public class LossInitialPort {
                     ownership_version,next_review_date,created_at,updated_at)
                 VALUES (?,?,?,?,?,0,?,?,?,?,'CONFIRMED_LOST',?,?,?,1,?,?,?)
                 """, opening.asset(), opening.actorId(), snapshot.usingOrganizationId(), snapshot.responsibleEmployeeId(),
+        // CHECKSTYLE.ON: LineLength
                 snapshot.departmentResponsibleEmployeeId(), custodyJson, facts.lastSeenAt(),
                 facts.lastLocation(), opening.reason(), facts.confirmedAt(), confirmationJson,
                 opening.actorId(), businessDate.plusDays(30), opening.time(), opening.time());
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update("""
                 INSERT INTO fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)
                 VALUES ('WAREHOUSE_OPERATOR',?,'LOST_REPORT',?,'LOST_FOLLOW_UP','OPEN',?)
                 """, opening.actorId(), id, opening.time());
+        // CHECKSTYLE.ON: LineLength
         var schedule = new LinkedHashMap<String, Object>(provenance);
         schedule.put("reviewDate", businessDate.plusDays(30).toString());
         schedule.put("reviewTimezone", timezone);

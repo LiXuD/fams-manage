@@ -71,7 +71,8 @@ class MiniBindingController implements MiniBindingApi {
     }
 
     @Override
-    public ResponseEntity<MiniBindingResult> miniVerifyBinding(String key, Long version, MiniBindingVerifyRequest input) {
+    public ResponseEntity<MiniBindingResult> miniVerifyBinding(String key, Long version,
+            MiniBindingVerifyRequest input) {
         if (version != 0) {
             throw AuthOperationException.versionConflict();
         }

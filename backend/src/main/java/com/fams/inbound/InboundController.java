@@ -45,7 +45,8 @@ class InboundController {
     ResponseEntity<InboundViews.Receipt> create(
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestBody Map<String, Object> body) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.createDetail(actors.requireWarehouse(), key, body));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(service.createDetail(actors.requireWarehouse(), key, body));
     }
 
     @GetMapping("/{receiptId}")

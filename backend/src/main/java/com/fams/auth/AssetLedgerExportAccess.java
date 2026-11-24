@@ -37,7 +37,8 @@ public class AssetLedgerExportAccess {
      */
     public void require(RequisitionActorContext.Actor actor) {
         var current = identities.revalidateLocked(actor);
-        if (!current.globalApplicant() || !accounts.loadPermissions(current.id()).fieldPermissions().contains("BULK_EXPORT")) {
+        if (!current.globalApplicant()
+                || !accounts.loadPermissions(current.id()).fieldPermissions().contains("BULK_EXPORT")) {
             throw AuthOperationException.forbidden();
         }
     }

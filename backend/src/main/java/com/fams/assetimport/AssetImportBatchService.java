@@ -112,8 +112,8 @@ public class AssetImportBatchService {
         UUID id = UUID.randomUUID();
         var now = Timestamp.from(clock.instant());
         db.update("INSERT INTO fams_asset_import_batch (id,actor_account_id,upload_key,source_sha256,"
-                + "source_bytes,source_xlsx,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)", id.toString(), actorId, uploadKey,
-                digest, xlsx.length, xlsx, now, now);
+                + "source_bytes,source_xlsx,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)", id.toString(), actorId,
+                uploadKey, digest, xlsx.length, xlsx, now, now);
         db.update("INSERT INTO fams_asset_import_event (batch_id,actor_account_id,action,detail_json,occurred_at) "
                 + "VALUES (?,?,'ASSET_IMPORT_UPLOADED',?,?)", id.toString(), actorId,
                 toJson(Map.of("sourceBytes", xlsx.length)), now);

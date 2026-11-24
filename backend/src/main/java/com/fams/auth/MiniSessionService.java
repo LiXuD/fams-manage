@@ -119,7 +119,8 @@ class MiniSessionService {
 
     private List<Binding> bindings(String predicate, Object argument) {
         return jdbc.query("SELECT id, account_id, identity_hash, version FROM fams_mini_binding WHERE " + predicate,
-                (row, ignored) -> new Binding(row.getLong(1), row.getLong(2), row.getString(3), row.getLong(4)), argument);
+                (row, ignored) -> new Binding(row.getLong(1), row.getLong(2), row.getString(3), row.getLong(4)),
+                argument);
     }
 
     private Session findSession(String hash, boolean lock) {

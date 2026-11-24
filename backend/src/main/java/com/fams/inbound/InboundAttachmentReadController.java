@@ -46,7 +46,8 @@ public final class InboundAttachmentReadController {
                 ((Number) issued.get("expiresAtEpochSecond")).longValue());
     }
     @GetMapping("/api/v1/attachments/{objectId}/content")
-    ResponseEntity<byte[]> content(@PathVariable UUID objectId, @RequestParam("grant") String grant) throws IOException {
+    ResponseEntity<byte[]> content(@PathVariable UUID objectId, @RequestParam("grant") String grant)
+            throws IOException {
         var content = service.read(objectId, grant);
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(content.mime()))
                 .contentLength(content.bytes().length).cacheControl(CacheControl.noStore())

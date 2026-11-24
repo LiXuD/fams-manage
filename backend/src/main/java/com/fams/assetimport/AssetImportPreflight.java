@@ -195,7 +195,8 @@ public final class AssetImportPreflight {
                 custodyState = preRepairState;
                 if (!List.of("在库", "在用个人", "在用公用", "借出").contains(preRepairState)) {
                     if (!preRepairState.isBlank()) {
-                        errors.add(error(row, mapping, "preRepairState", preRepairState, "UNSUPPORTED_PRE_REPAIR_STATE"));
+                        errors.add(error(row, mapping, "preRepairState", preRepairState,
+                                "UNSUPPORTED_PRE_REPAIR_STATE"));
                     }
                     custodyState = null;
                 }
@@ -204,17 +205,22 @@ public final class AssetImportPreflight {
             if (pendingScrap) {
                 proposedDisposition = required(row, mapping, "proposedDisposition", errors);
                 boolean lossDisposition = List.of("遗失核销", "LOSS_WRITTEN_OFF").contains(proposedDisposition);
-                if (lossDisposition && (factoryOpening || List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState))) {
+                if (lossDisposition && (factoryOpening
+                        || List.of("在库", "在用个人", "在用公用", "借出").contains(preScrapState))) {
                     loss = lossFacts(row, mapping, now, errors);
                     if (factoryOpening && loss.lastSeenAt() != null && repair.factory().dispatchedAt() != null
                             && loss.lastSeenAt().isBefore(repair.factory().dispatchedAt())) {
-                        errors.add(error(row, mapping, "lossLastSeenAt", loss.lastSeenAt().toString(), "INITIAL_LOSS_TIME_INVALID"));
+                        errors.add(error(row, mapping, "lossLastSeenAt", loss.lastSeenAt().toString(),
+                                "INITIAL_LOSS_TIME_INVALID"));
                     }
-                } else if (factoryOpening && List.of("FACTORY_RETAINED", "FACTORY_DESTROYED").contains(proposedDisposition)) {
+                } else if (factoryOpening
+                        && List.of("FACTORY_RETAINED", "FACTORY_DESTROYED").contains(proposedDisposition)) {
                     Instant occurred = instant(row, mapping, "factoryDispositionAt", errors);
                     Instant dispatched = repair.factory().dispatchedAt();
-                    if (occurred != null && (occurred.isAfter(now) || dispatched != null && occurred.isBefore(dispatched))) {
-                        errors.add(error(row, mapping, "factoryDispositionAt", occurred.toString(), "INITIAL_FACTORY_DISPOSITION_TIME_INVALID"));
+                    if (occurred != null && (occurred.isAfter(now)
+                            || dispatched != null && occurred.isBefore(dispatched))) {
+                        errors.add(error(row, mapping, "factoryDispositionAt", occurred.toString(),
+                                "INITIAL_FACTORY_DISPOSITION_TIME_INVALID"));
                     }
                     factoryDisposition = new InitialScrapPort.FactoryDisposition(proposedDisposition, occurred,
                             repairText(row, mapping, "factoryDispositionEvidence", 2000, errors));
@@ -287,7 +293,8 @@ public final class AssetImportPreflight {
         Instant occurred = instant(row, mapping, "repairOccurredAt", errors);
         Instant accepted = instant(row, mapping, "repairAcceptedAt", errors);
         if (occurred != null && accepted != null && accepted.isBefore(occurred)) {
-            errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
+            errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(),
+                    "INITIAL_REPAIR_TIME_ORDER_INVALID"));
         }
         if (accepted != null && accepted.isAfter(now)) {
             errors.add(error(row, mapping, "repairAcceptedAt", accepted.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
@@ -314,10 +321,12 @@ public final class AssetImportPreflight {
         String destination = repairText(row, mapping, "factoryDestination", 500, errors);
         Instant dispatch = instant(row, mapping, "factoryDispatchedAt", errors);
         if (accepted != null && dispatch != null && dispatch.isBefore(accepted)) {
-            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_ORDER_INVALID"));
+            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(),
+                    "INITIAL_REPAIR_TIME_ORDER_INVALID"));
         }
         if (dispatch != null && dispatch.isAfter(now)) {
-            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(), "INITIAL_REPAIR_TIME_IN_FUTURE"));
+            errors.add(error(row, mapping, "factoryDispatchedAt", dispatch.toString(),
+                    "INITIAL_REPAIR_TIME_IN_FUTURE"));
         }
         var due = date(row, mapping, "factoryDue", errors);
         String evidence = repairText(row, mapping, "factoryDispatchEvidence", 2000, errors);
@@ -333,7 +342,8 @@ public final class AssetImportPreflight {
                 && !(("UNLIMITED".equals(policy) && amount.isBlank()) || limit != null && limit.signum() > 0)) {
             errors.add(error(row, mapping, "factoryCostPolicy", policy, "INVALID_INITIAL_FACTORY_COST_POLICY"));
         }
-        return new InitialRepairPort.Factory(round, provider, contact, phone, destination, dispatch, evidence, due, policy, limit);
+        return new InitialRepairPort.Factory(round, provider, contact, phone, destination, dispatch, evidence, due,
+                policy, limit);
     }
 
     private static String repairText(AssetImportWorkbook.DataRow row, Map<String, String> mapping,

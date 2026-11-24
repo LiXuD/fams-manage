@@ -516,7 +516,9 @@ public class LossService {
         var snapshot = json.readTree(source);
         db.update(
                 "INSERT INTO"
-                    + " fams_loss_report(asset_id,creator_account_id,using_organization_id,responsible_employee_id,shared_responsible_employee_id,asset_version,source_snapshot_json,last_seen_at,last_location,circumstances,created_at,updated_at)"
+                    + " fams_loss_report(asset_id,creator_account_id,using_organization_id,responsible_employee_id,"
+                    + "shared_responsible_employee_id,asset_version,source_snapshot_json,last_seen_at,last_location,"
+                    + "circumstances,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 input.assetId(),
                 current.id(),
@@ -570,8 +572,9 @@ public class LossService {
         }
         var internal = origin.path("internalRepairSource");
         if (!internal.isMissingNode()) {
-            internalRepairs.resumeFromLoss(actor, actors.revalidateLocked(actor), Long.parseLong(internal.path("repairId").asText()),
-                    number(row, "asset_id"), Long.parseLong(internal.path("processorAccountId").asText()),
+            internalRepairs.resumeFromLoss(actor, actors.revalidateLocked(actor),
+                    Long.parseLong(internal.path("repairId").asText()), number(row, "asset_id"),
+                    Long.parseLong(internal.path("processorAccountId").asText()),
                     number(row, "id"), number(row, "id"), null);
             return;
         }
@@ -627,7 +630,8 @@ public class LossService {
         frozen.put("reason", input.reason());
         frozen.put("photos", photos == null ? List.of() : photoProjection(photos.list("LOST_REPORT", id)));
         if (approve) {
-            assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"), retainedRepairLifecycle(row));
+            assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"),
+                    retainedRepairLifecycle(row));
             if (photos == null || photos.list("LOST_REPORT", id).isEmpty()) {
                 throw new LossFailure(409, "LOSS_PHOTO_REQUIRED");
             }
@@ -740,7 +744,8 @@ public class LossService {
         assets.requireSubmitted(number(row, "asset_id"), number(row, "asset_version"), retainedRepairLifecycle(row));
         db.update(
                 "UPDATE fams_loss_report SET"
-                    + " report_status='VERIFYING',processor_account_id=?,ownership_version=ownership_version+1,version=version+1,updated_at=?"
+                    + " report_status='VERIFYING',processor_account_id=?,"
+                    + "ownership_version=ownership_version+1,version=version+1,updated_at=?"
                     + " WHERE id=?",
                 current.id(),
                 now(),
@@ -804,7 +809,8 @@ public class LossService {
         }
         long assetVersion =
                 assets.searching(
-                        number(row, "asset_id"), input.assetVersion(), id, current.id(), now(), retainedRepairLifecycle(row));
+                        number(row, "asset_id"), input.assetVersion(), id, current.id(), now(),
+                        retainedRepairLifecycle(row));
         db.update(
                 "UPDATE fams_loss_report SET"
                     + " report_status='SEARCHING',asset_version=?,next_review_date=?,version=version+1,updated_at=?"
@@ -929,7 +935,8 @@ public class LossService {
         LocalDate reviewDate = LocalDate.now(clock.withZone(reviewZone)).plusDays(30);
         long next =
                 assets.confirmedLost(
-                        number(row, "asset_id"), input.assetVersion(), id, current.id(), now(), retainedRepairLifecycle(row));
+                        number(row, "asset_id"), input.assetVersion(), id, current.id(), now(),
+                        retainedRepairLifecycle(row));
         db.update(
                 "UPDATE fams_loss_report SET report_status='CONFIRMED_LOST',asset_version=?,"
                         + "confirmed_lost_at=?,confirmation_snapshot_json=?,next_review_date=?,"
@@ -1060,7 +1067,8 @@ public class LossService {
         long next = restoreOriginal(row, input.assetVersion(), "SEARCHING", current, input.facts());
         db.update(
                 "UPDATE fams_loss_report SET"
-                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,version=version+1,updated_at=?"
+                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,"
+                    + "version=version+1,updated_at=?"
                     + " WHERE id=?",
                 next,
                 input.facts().foundAt(),
@@ -1142,7 +1150,8 @@ public class LossService {
         var snapshot = Map.of("execution", input, "repairId", repair.id());
         db.update(
                 "UPDATE fams_loss_report SET"
-                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,version=version+1,updated_at=?"
+                    + " report_status='RECOVERED',asset_version=?,recovered_at=?,recovery_snapshot_json=?,"
+                    + "version=version+1,updated_at=?"
                     + " WHERE id=?",
                 next,
                 facts.foundAt(),
@@ -1202,7 +1211,8 @@ public class LossService {
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestRepairRecovery(
             Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
-        return requestRecovery(actor, id, version, key, new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, null);
+        return requestRecovery(actor, id, version, key,
+                new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), true, null);
     }
 
     private LossViews.LossReportWithRecovery requestRecovery(
@@ -1216,7 +1226,12 @@ public class LossService {
         if (!applicant(current)) {
             throw new LossFailure(403, "LOSS_ROLE_REQUIRED");
         }
-        String operation = (internal ? "RECOVERY_INTERNAL_REPAIR_REQUEST:" : factory ? "RECOVERY_FACTORY_REQUEST:" : transferring ? "RECOVERY_TRANSFER_REQUEST:" : returning ? "RECOVERY_RETURN_REQUEST:" : damaged ? "RECOVERY_REPAIR_REQUEST:" : "RECOVERY_REQUEST:") + id,
+        String operation = (internal ? "RECOVERY_INTERNAL_REPAIR_REQUEST:"
+                : factory ? "RECOVERY_FACTORY_REQUEST:"
+                : transferring ? "RECOVERY_TRANSFER_REQUEST:"
+                : returning ? "RECOVERY_RETURN_REQUEST:"
+                : damaged ? "RECOVERY_REPAIR_REQUEST:"
+                : "RECOVERY_REQUEST:") + id,
                 hash = LossPayloads.fingerprint(json, operation, version, input);
         var prior = replay(current, operation, key, hash, LossViews.LossReportWithRecovery.class);
         if (prior != null) {
@@ -1254,13 +1269,16 @@ public class LossService {
             var asset = transferring
                     ? assets.validateTransferRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
                             row.get("source_snapshot_json").toString(), input.facts().observedAssetCode(),
-                            input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion())
+                            input.facts().observedSerialNumber(), input.facts().locationId(),
+                            input.facts().locationVersion())
                     : returning ? assets.validateReturnRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
                             row.get("source_snapshot_json").toString(), input.facts().observedAssetCode(),
-                            input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion())
+                            input.facts().observedSerialNumber(), input.facts().locationId(),
+                            input.facts().locationVersion())
                     : assets.validateOriginalRecovery(number(row, "asset_id"), input.assetVersion(), "LOST",
                             row.get("source_snapshot_json").toString(), input.facts().observedAssetCode(),
-                            input.facts().observedSerialNumber(), input.facts().locationId(), input.facts().locationVersion());
+                            input.facts().observedSerialNumber(), input.facts().locationId(),
+                            input.facts().locationVersion());
             loans.requireRecovery(
                     number(row, "asset_id"),
                     asset.lifecycleStatus(),
@@ -1276,14 +1294,16 @@ public class LossService {
         }
         db.update(
                 "INSERT INTO"
-                    + " fams_loss_recovery(report_id,asset_id,creator_account_id,asset_version,request_snapshot_json,created_at,updated_at)"
+                    + " fams_loss_recovery(report_id,asset_id,creator_account_id,asset_version,"
+                    + "request_snapshot_json,created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 id,
                 row.get("asset_id"),
                 current.id(),
                 input.assetVersion(),
                 json.writeValueAsString(destination != null
-                        ? Map.of("assetVersion", input.assetVersion(), "facts", input.facts(), "destination", destination)
+                        ? Map.of("assetVersion", input.assetVersion(), "facts", input.facts(),
+                                "destination", destination)
                         : input),
                 now(),
                 now());
@@ -1477,7 +1497,8 @@ public class LossService {
         requireRequestedRecoveryAsset(row, request);
         db.update(
                 "UPDATE fams_loss_recovery SET"
-                    + " recovery_status='VERIFYING',processor_account_id=?,ownership_version=ownership_version+1,version=version+1,updated_at=?"
+                    + " recovery_status='VERIFYING',processor_account_id=?,"
+                    + "ownership_version=ownership_version+1,version=version+1,updated_at=?"
                     + " WHERE id=?",
                 current.id(),
                 now(),
@@ -1796,7 +1817,8 @@ public class LossService {
                 input.facts().observedAssetCode(), input.facts().observedSerialNumber(),
                 input.facts().locationId(), input.facts().locationVersion(), number(row, "id"), current.id(), now());
         var linked = returns.create(actor, key, number(row, "asset_id"), next, input.facts().evidence(),
-                new com.fams.loan.LossReturnPort.Source(Long.toString(number(row, "id")), Long.toString(closed ? id : number(row, "id")),
+                new com.fams.loan.LossReturnPort.Source(Long.toString(number(row, "id")),
+                        Long.toString(closed ? id : number(row, "id")),
                         input.lockVersion(), json.writeValueAsString(input)));
         var snapshot = Map.of("execution", input, "returnId", linked.id(),
                 "destination", "ASSET_RETURN");
@@ -2064,8 +2086,8 @@ public class LossService {
      *         INTERNAL_REPAIR
      */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
-    public LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(Actor actor, long id, long version, UUID key,
-            LossInput.ExplicitRecoveryExecution input) {
+    public LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(Actor actor, long id, long version,
+            UUID key, LossInput.ExplicitRecoveryExecution input) {
         return recoverToRetainedRepair(actor, id, version, key, input, true, true,
                 LossViews.LossReportWithRecovery.class);
     }
@@ -2119,8 +2141,10 @@ public class LossService {
             internalRepairs.resumeFromLoss(actor, current, Long.parseLong(repairId), assetId, owner, report, id, next);
         } else {
             next = assets.recoverForFactory(assetId, input.assetVersion(), exception, facts.observedAssetCode(),
-                    facts.observedSerialNumber(), facts.locationId(), facts.locationVersion(), report, current.id(), now());
-            factoryRepairs.resumeAfterLoss(actor, Long.parseLong(repairId), Long.parseLong(source.path("roundId").asText()),
+                    facts.observedSerialNumber(), facts.locationId(), facts.locationVersion(), report, current.id(),
+                    now());
+            factoryRepairs.resumeAfterLoss(actor, Long.parseLong(repairId),
+                    Long.parseLong(source.path("roundId").asText()),
                     assetId, report, id, next);
         }
         var snapshot = Map.of("execution", input, "repairId", repairId, "destination", destination);
@@ -2166,7 +2190,8 @@ public class LossService {
         if (!"INTACT".equals(facts.condition())
                 || facts.stillOriginalCustodian()
                         && java.util.Objects.equals(Long.toString(facts.locationId()),
-                                json.readTree(row.get("source_snapshot_json").toString()).path("locationId").asText())) {
+                                json.readTree(row.get("source_snapshot_json").toString())
+                                        .path("locationId").asText())) {
             throw new LossFailure(409, "LOSS_TRANSFER_RECOVERY_REQUIRED");
         }
     }
@@ -2518,7 +2543,8 @@ public class LossService {
             Object result) {
         db.update(
                 "INSERT INTO"
-                    + " fams_loss_receipt(actor_account_id,operation,request_id,report_id,payload_sha256,response_json,created_at)"
+                    + " fams_loss_receipt(actor_account_id,operation,request_id,report_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 current.id(),
                 operation,
@@ -2598,7 +2624,8 @@ public class LossService {
     private void todo(long id, String kind, String pool, Long owner) {
         db.update(
                 "INSERT INTO"
-                    + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                    + " fams_todo(pool_type,assignee_account_id,business_type,business_id,"
+                    + "todo_type,todo_status,opened_at)"
                     + " VALUES (?,?,'LOST_REPORT',?,?,'OPEN',?)",
                 pool,
                 owner,
@@ -2626,7 +2653,8 @@ public class LossService {
         String body = json.writeValueAsString(detail);
         db.update(
                 "INSERT INTO"
-                    + " fams_loss_event(report_id,action,before_version,after_version,actor_account_id,actor_username,actor_role,detail_json,occurred_at)"
+                    + " fams_loss_event(report_id,action,before_version,after_version,actor_account_id,"
+                    + "actor_username,actor_role,detail_json,occurred_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?)",
                 row.get("id"),
                 action,
@@ -2639,7 +2667,8 @@ public class LossService {
                 now());
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,?,?,'LOST_REPORT',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

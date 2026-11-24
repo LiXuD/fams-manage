@@ -33,7 +33,8 @@ class ReturnLossOpening implements ReturnLossOpeningPort {
         } catch (LossFailure failure) {
             throw new Failure(failure.getMessage(), failure.status());
         }
-        db.update("INSERT INTO fams_loss_return_source(report_id,followup_id) VALUES (?,?)", reportId, opening.followupId());
+        db.update("INSERT INTO fams_loss_return_source(report_id,followup_id) VALUES (?,?)", reportId,
+                opening.followupId());
         return reportId;
     }
 
