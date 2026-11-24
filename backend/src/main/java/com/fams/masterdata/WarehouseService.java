@@ -19,6 +19,7 @@ import com.fams.product.contract.model.PageWarehouse;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,13 +47,15 @@ class WarehouseService {
         this.clock = authClock;
     }
 
-    PageWarehouse list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageWarehouse list(int page, int pageSize) {
         List<Warehouse> items = warehouseRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toWarehouse).toList();
         return new PageWarehouse(page, pageSize, warehouseRepository.count(), items);
     }
 
-    WarehouseActiveReferencePage listActive(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public WarehouseActiveReferencePage listActive(int page, int pageSize) {
         List<WarehouseActiveReference> items = warehouseRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(row -> new WarehouseActiveReference(
@@ -61,7 +64,8 @@ class WarehouseService {
         return new WarehouseActiveReferencePage(page, pageSize, warehouseRepository.countActive(), items);
     }
 
-    Warehouse get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Warehouse get(long id) {
         return toWarehouse(require(id));
     }
 

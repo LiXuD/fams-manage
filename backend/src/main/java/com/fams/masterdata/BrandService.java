@@ -18,6 +18,7 @@ import com.fams.product.contract.model.PageBrand;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -48,20 +49,23 @@ class BrandService {
         this.clock = authClock;
     }
 
-    PageBrand list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageBrand list(int page, int pageSize) {
         List<Brand> items = brandRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toBrand).toList();
         return new PageBrand(page, pageSize, brandRepository.count(), items);
     }
 
-    MasterdataViews.Page<MasterdataViews.BrandActiveReference> listActive(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public MasterdataViews.Page<MasterdataViews.BrandActiveReference> listActive(int page, int pageSize) {
         List<MasterdataViews.BrandActiveReference> items = brandRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(MasterdataViews::brandActiveReference).toList();
         return new MasterdataViews.Page<>(items, brandRepository.countActive(), page, pageSize);
     }
 
-    Brand get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Brand get(long id) {
         return toBrand(require(id));
     }
 

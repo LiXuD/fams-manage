@@ -37,6 +37,31 @@ LOCK = re.compile(r"FOR\s+UPDATE|FOR\s+SHARE", re.I)
 TX_ANN = re.compile(r"@Transactional\b")
 FIELD_LIKE = re.compile(r"^\s{4}(?:public |protected |private |static |final )*\w[\w<>,.\[\]?\s]*\s+\w+\s*[;=]")
 # 明确不算业务入口的形态：生命周期回调、工厂、访问器
+# 有意的无事务入口：证据见理由文本，新增条目必须附代码级证据，不允许口头豁免。
+INTENTIONAL = {
+    "loss/LossPhotoService.upload": "AttachmentWriter 显式守卫：事务存在即抛 IllegalStateException，"
+        "外层事务可能在返回后回滚并孤立已落盘文件",
+    "scrap/ScrapAttachmentService.upload": "同上；register 为 MANDATORY，事务由 AttachmentWriter 的"
+        "TransactionTemplate 供给，外层提前开事务会后移加锁窗口",
+    "inventory/InventoryPhotoService.upload": "同上；且会把 fams_system_account FOR UPDATE 锁持有"
+        "窗口拉长到整个文件接收/扫描期间，结尾 storage.delete 依赖注册事务已提交",
+    "auth/AccountAdminService.listRoleConfigurations": "调用图零 SQL（Role 枚举 + AuthPolicy 静态"
+        "集合分页），加事务只是每次请求白起一个事务并占用一条连接，无原子性可保护",
+    "auth/AccountAdminService.getRoleConfiguration": "同上，纯静态权限集合查询",
+    "repair/RepairPhotoService.upload": "类注释原文 Scanning occurs without a business "
+        "transaction; registration rechecks current authority；经 AttachmentWriter 守卫",
+    "repair/RepairCollaborationPhotoService.upload": "同上，类注释与 AttachmentWriter 守卫一致",
+}
+
+# 缺陷的真实定义：多语句之间失去原子性，或写操作缺少回滚边界。
+# 单条语句的读没有可保护的原子性，加事务只是白占连接，不判为缺口。
+DB_OP = re.compile(
+    r"\bdb\.(queryForObject|queryForList|queryForMap|query|update|execute|batchUpdate)\(|"
+    r"(?<![\w.])(\w*(?:repository|Repository|mapper|Mapper|port|Port))\s*\.\s*\w+\s*\(")
+
+
+
+
 SKIP_ANNOTATION = ("@PostConstruct", "@PreDestroy", "@Bean", "@EventListener", "@Scheduled")
 
 
@@ -118,21 +143,43 @@ def scan(root: str) -> list[str]:
             domain = rel.split(os.sep)[0]
             cls = name[: -len(".java")]
             lines = open(path, encoding="utf-8").read().split("\n")
+            brace_depth = 0  # 用于识别内嵌接口/类里的抽象方法声明
             class_line = next(
                 (i for i, l in enumerate(lines) if CLASS_DECL.match(l)), len(lines)
             )
             class_tx = bool(TX_ANN.search("\n".join(lines[:class_line])))
             ann_of = member_annotations(lines)
+            decls: list[tuple[str, bool, bool]] = []
+            for j, ln in enumerate(lines):
+                mm = METHOD_DECL.match(ln)
+                if mm:
+                    decls.append((
+                        mm.group(3),
+                        (mm.group(1) or "").strip() == "public",
+                        bool(TX_ANN.search(ann_of.get(j, ""))) or class_tx,
+                    ))
             for i, line in enumerate(lines):
                 m = METHOD_DECL.match(line)
                 if not m:
                     continue
                 visibility, ret_type, method = m.group(1), m.group(2), m.group(3)
+                if (visibility or "").strip() == "private":
+                    continue  # private 永远不可能是代理入口，跑在外层事务里，不是缺陷
                 if not re.search(r"[A-Za-z_>\]]", ret_type or ""):
                     continue
                 if method.isupper() or method == cls:
                     continue
+                if line.rstrip().endswith(";"):
+                    continue  # 接口/抽象方法声明（无方法体），代理不读取其注解
                 if f"{cls}.{method}" not in calls.get(domain, set()):
+                    continue
+                ops = DB_OP.findall(body) if (body := method_body(lines, i)) else []
+                writes = bool(WRITE.search(body))
+                if not writes and len(ops) < 2:
+                    continue  # 单语句读：无原子性可保护
+                keys = {f"{cls}.{method}",
+                        f"{rel[:-5] if rel.endswith('.java') else rel}.{method}"}
+                if keys & set(INTENTIONAL):
                     continue
                 own = ann_of.get(i, "")
                 if any(a in own for a in SKIP_ANNOTATION):
@@ -141,8 +188,14 @@ def scan(root: str) -> list[str]:
                 public = (visibility or "").strip() == "public"
                 if annotated and public:
                     continue
-                body = method_body(lines, i)
-                kind = "W" if WRITE.search(body) else ("R-lock" if LOCK.search(body) else "R")
+                # 同名重载：本类若已存在 public + 已标注的同名声明，其余视为中间重载委托。
+                # 调用方只能按名字匹配，无法区分重载；已存在合格入口即不重复报缺口。
+                if any(
+                    other_name == method and other_public and other_tx
+                    for other_name, other_public, other_tx in decls
+                ):
+                    continue
+                kind = "W" if writes else ("R-lock" if LOCK.search(body) else "R")
                 reason = []
                 if not annotated:
                     reason.append("无事务属性")
@@ -173,6 +226,9 @@ def main() -> int:
     for g in gaps:
         print(f"  {g}")
     if gaps:
+        print("以上每条都需人工判定：同名重载会按方法名过度命中，"
+              "只有确为 Controller 直达代理入口的才需补注解；有意无事务设计请加入 INTENTIONAL 并附证据。",
+              file=sys.stderr)
         print(
             "结论：以上入口被 Controller 经代理直达，却不满足 Spring 的 public + @Transactional"
             " 双条件，其多段写会跑在多次 autocommit 上。",

@@ -30,6 +30,7 @@ import com.fams.product.contract.model.PageOrganization;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -63,7 +64,8 @@ class IdentityMasterDataService {
         this.events = events;
     }
 
-    PageOrganization listOrganizations(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageOrganization listOrganizations(int page, int pageSize) {
         return new PageOrganization(
                 page,
                 pageSize,
@@ -73,7 +75,8 @@ class IdentityMasterDataService {
                         .toList());
     }
 
-    PageEmployee listEmployees(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageEmployee listEmployees(int page, int pageSize) {
         return new PageEmployee(
                 page,
                 pageSize,
@@ -83,15 +86,18 @@ class IdentityMasterDataService {
                         .toList());
     }
 
-    Organization getOrganization(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Organization getOrganization(long id) {
         return toOrganization(requireOrganization(id));
     }
 
-    Employee getEmployee(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Employee getEmployee(long id) {
         return toEmployee(requireEmployee(id));
     }
 
-    OrganizationActiveReferencePage listActiveOrganizations(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public OrganizationActiveReferencePage listActiveOrganizations(int page, int pageSize) {
         List<OrganizationActiveReference> items = identityMasterDataRepository
                 .listOrganizations((page - 1) * pageSize, pageSize).stream()
                 .filter(row -> "ACTIVE".equals(row.status()))

@@ -33,6 +33,7 @@ import com.fams.product.contract.model.SystemAccountStatusChangeRequest;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -67,7 +68,8 @@ class AccountAdminService {
         this.events = events;
     }
 
-    PageSystemAccount listAccounts(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageSystemAccount listAccounts(int page, int pageSize) {
         int offset = Math.multiplyExact(page - 1, pageSize);
         List<SystemAccount> items = accountAdminRepository.listAccounts(offset, pageSize).stream()
                 .map(this::toContract)
@@ -75,7 +77,8 @@ class AccountAdminService {
         return new PageSystemAccount(page, pageSize, accountAdminRepository.countAccounts(), items);
     }
 
-    SystemAccount getAccount(long accountId) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public SystemAccount getAccount(long accountId) {
         return toContract(requireAccount(accountId));
     }
 
@@ -326,7 +329,8 @@ class AccountAdminService {
         return result;
     }
 
-    SystemAccountAuthorization getAuthorization(long accountId, Role role) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public SystemAccountAuthorization getAuthorization(long accountId, Role role) {
         SystemAccountAdminRow account = requireAccount(accountId);
         if (accountAdminRepository.countRole(accountId, role) == 0) {
             throw AuthOperationException.relationConflict("The account does not have the requested role.");

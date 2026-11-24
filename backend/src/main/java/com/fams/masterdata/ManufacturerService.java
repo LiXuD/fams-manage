@@ -19,6 +19,7 @@ import com.fams.product.contract.model.PageManufacturer;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,13 +47,15 @@ class ManufacturerService {
         this.clock = authClock;
     }
 
-    PageManufacturer list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageManufacturer list(int page, int pageSize) {
         List<Manufacturer> items = manufacturerRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toManufacturer).toList();
         return new PageManufacturer(page, pageSize, manufacturerRepository.count(), items);
     }
 
-    ManufacturerActiveReferencePage listActive(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public ManufacturerActiveReferencePage listActive(int page, int pageSize) {
         List<ManufacturerActiveReference> items = manufacturerRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(row -> new ManufacturerActiveReference(
@@ -61,7 +64,8 @@ class ManufacturerService {
         return new ManufacturerActiveReferencePage(page, pageSize, manufacturerRepository.countActive(), items);
     }
 
-    Manufacturer get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Manufacturer get(long id) {
         return toManufacturer(require(id));
     }
 

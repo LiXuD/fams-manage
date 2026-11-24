@@ -18,6 +18,7 @@ import com.fams.product.contract.model.AssetSavedFilterUpdateRequest;
 import com.fams.product.contract.model.PageAssetSavedFilter;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -37,7 +38,8 @@ class AssetPreferenceService {
         this.clock = authClock;
     }
 
-    PageAssetSavedFilter list(Actor actor, int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageAssetSavedFilter list(Actor actor, int page, int pageSize) {
         return new PageAssetSavedFilter(page, pageSize, assetRepository.savedFilterCount(actor.id()),
                 assetRepository.savedFilters(actor.id(), pageSize, (page - 1) * pageSize)
                         .stream().map(this::toFilter).toList());

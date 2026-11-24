@@ -23,6 +23,7 @@ import com.fams.product.contract.model.NotificationEscalationThresholds;
 import com.fams.product.contract.model.PageBusinessParameterVersion;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -47,13 +48,15 @@ class BusinessParameterService {
         this.clock = authClock;
     }
 
-    PageBusinessParameterVersion list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageBusinessParameterVersion list(int page, int pageSize) {
         List<BusinessParameterVersion> items = businessParameterRepository.list((page - 1) * pageSize, pageSize)
                 .stream().map(this::toVersion).toList();
         return new PageBusinessParameterVersion(page, pageSize, businessParameterRepository.count(), items);
     }
 
-    BusinessParameterVersion get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public BusinessParameterVersion get(long id) {
         BusinessParameterRow row = businessParameterRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The business-parameter version");
@@ -61,7 +64,8 @@ class BusinessParameterService {
         return toVersion(row);
     }
 
-    BusinessParameterVersion current() {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public BusinessParameterVersion current() {
         BusinessParameterState state = businessParameterRepository.state();
         if (state == null || state.currentVersionId() == null) {
             throw MasterDataOperationException.notFound("The current business-parameter version");

@@ -23,6 +23,7 @@ import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,13 +48,15 @@ class NumberingRuleService {
         this.clock = authClock;
     }
 
-    PageNumberingRule list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageNumberingRule list(int page, int pageSize) {
         List<NumberingRule> items = numberingRuleRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toRule).toList();
         return new PageNumberingRule(page, pageSize, numberingRuleRepository.count(), items);
     }
 
-    NumberingRule get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public NumberingRule get(long id) {
         return toRule(require(id));
     }
 

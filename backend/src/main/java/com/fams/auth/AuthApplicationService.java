@@ -11,6 +11,7 @@ import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Profile("fams-product")
@@ -164,7 +165,8 @@ class AuthApplicationService {
                 .orElseThrow(AuthOperationException::sessionInvalid);
     }
 
-    PermissionSnapshot loadPermissions(long accountId) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PermissionSnapshot loadPermissions(long accountId) {
         requireCurrentAccount(accountId);
         return accountStore.loadPermissions(accountId);
     }

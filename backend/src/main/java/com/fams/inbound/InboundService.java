@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
@@ -49,7 +50,8 @@ class InboundService {
         this.clock = authClock;
     }
 
-    InboundViews.Page<InboundViews.Receipt> list(Actor actor, int page, int size, String status, String number) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public InboundViews.Page<InboundViews.Receipt> list(Actor actor, int page, int size, String status, String number) {
         if (status != null && !List.of("DRAFT", "PENDING_ADMIN_DECISION", "REJECTED",
                 "WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "COMPLETED", "CANCELLED")
                 .contains(status)) { throw InboundFailure.invalid("INBOUND_FILTER_INVALID"); }
@@ -429,7 +431,8 @@ class InboundService {
         return json.convertValue(getDetail(actor, receiptId), WIRE_MAP);
     }
 
-    InboundViews.Receipt getDetail(Actor actor, long receiptId) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public InboundViews.Receipt getDetail(Actor actor, long receiptId) {
         Map<String, Object> header = one("SELECT * FROM fams_inbound_receipt WHERE id=?", receiptId);
         if (header == null) { throw InboundFailure.missing(); }
         String status = text(header, "receipt_status");

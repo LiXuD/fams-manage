@@ -19,6 +19,7 @@ import com.fams.product.contract.model.PageLocation;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -47,20 +48,23 @@ class LocationService {
         this.clock = authClock;
     }
 
-    PageLocation list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageLocation list(int page, int pageSize) {
         List<Location> items = locationRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toLocation).toList();
         return new PageLocation(page, pageSize, locationRepository.count(), items);
     }
 
-    MasterdataViews.Page<MasterdataViews.LocationActiveReference> listActive(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public MasterdataViews.Page<MasterdataViews.LocationActiveReference> listActive(int page, int pageSize) {
         List<MasterdataViews.LocationActiveReference> items = locationRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
                 .map(MasterdataViews::locationActiveReference).toList();
         return new MasterdataViews.Page<>(items, locationRepository.countActive(), page, pageSize);
     }
 
-    Location get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Location get(long id) {
         return toLocation(require(id));
     }
 

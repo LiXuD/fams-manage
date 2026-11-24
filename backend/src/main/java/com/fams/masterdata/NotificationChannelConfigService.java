@@ -15,6 +15,7 @@ import com.fams.product.contract.model.NotificationChannelConfig;
 import com.fams.product.contract.model.NotificationChannelConfigReplaceRequest;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -42,7 +43,8 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
         this.clock = authClock;
     }
 
-    NotificationChannelConfig current() {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public NotificationChannelConfig current() {
         NotificationChannelState state = notificationChannelRepository.state();
         if (state == null || state.currentVersionId() == null) {
             return new NotificationChannelConfig("", "", 0L);

@@ -49,6 +49,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -176,7 +177,8 @@ class AssetService {
         }
     }
 
-    Asset get(Actor actor, long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public Asset get(Actor actor, long id) {
         return toAsset(visible(actor, id, false));
     }
 
@@ -391,7 +393,8 @@ class AssetService {
         return result;
     }
 
-    PageAssetTimelineEvent timeline(Actor actor, long id, int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageAssetTimelineEvent timeline(Actor actor, long id, int page, int pageSize) {
         visible(actor, id, false);
         List<AssetTimelineEvent> events = assetRepository.timeline(id, pageSize, (page - 1) * pageSize)
                 .stream().map(row -> new AssetTimelineEvent(
@@ -403,7 +406,8 @@ class AssetService {
         return new PageAssetTimelineEvent(page, pageSize, assetRepository.timelineCount(id), events);
     }
 
-    AssetTag tag(Actor actor, long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public AssetTag tag(Actor actor, long id) {
         Map<String, Object> row = visible(actor, id, false);
         Map<String, Object> tag = assetRepository.tag(id);
         if (tag == null) { throw AssetOperationException.notFound(); }
@@ -411,7 +415,8 @@ class AssetService {
         return new AssetTag(enterpriseName, text(row, "name"), text(row, "asset_code"), token, token);
     }
 
-    AssetQrAccessResult resolve(Actor actor, String token) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public AssetQrAccessResult resolve(Actor actor, String token) {
         if (token == null || !token.matches("[A-Za-z0-9_-]{43}")) {
             throw AssetOperationException.notFound();
         }
@@ -543,7 +548,8 @@ class AssetService {
         return result;
     }
 
-    AssetTagPrintJobResult printJob(Actor actor, long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public AssetTagPrintJobResult printJob(Actor actor, long id) {
         Map<String, Object> job = assetRepository.printJob(id, actor.id());
         if (job == null) { throw AssetOperationException.notFound(); }
         List<Map<String, Object>> rows = assetRepository.printItems(id);

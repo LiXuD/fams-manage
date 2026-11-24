@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import tools.jackson.databind.ObjectMapper;
@@ -333,7 +334,11 @@ class TransferService {
         return id;
     }
 
-    TransferViews.Detail action(Actor actor, long id, long version, String key, String action) {
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Detail action(Actor actor, long id, long version, String key, String action) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         visible(current, request);
@@ -443,7 +448,11 @@ class TransferService {
         }
     }
 
-    TransferViews.Detail decide(
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Detail decide(
             Actor actor, long id, long version, String key, TransferController.Decision input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -486,7 +495,11 @@ class TransferService {
         return finish(current, "decision", key, hash, detail(request(id)));
     }
 
-    TransferViews.Detail physical(
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Detail physical(
             Actor actor,
             long id,
             long itemId,
@@ -593,7 +606,8 @@ class TransferService {
         return finish(current, action, key, hash, detail(request(id)));
     }
 
-    TransferViews.Page<TransferViews.PendingReceipt> pending(Actor actor, int page, int size, Long itemId) {
+    @Transactional(propagation = Propagation.REQUIRED, isolation = Isolation.READ_COMMITTED)
+    public TransferViews.Page<TransferViews.PendingReceipt> pending(Actor actor, int page, int size, Long itemId) {
         var current = actors.revalidateLocked(actor);
         String scope = " WHERE i.receiver_employee_id=? AND i.item_status='DELIVERED' AND (? IS NULL OR i.id=?)";
         var rows =
@@ -619,7 +633,11 @@ class TransferService {
                 rows.stream().map(TransferViews::pendingReceipt).toList(), total, page, size);
     }
 
-    TransferViews.Grant grant(Actor actor, long itemId) {
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Grant grant(Actor actor, long itemId) {
         var current = actors.revalidateLocked(actor);
         var located = one("SELECT request_id FROM fams_transfer_item WHERE id=?", itemId);
         var request = request(number(located, "request_id"));
@@ -652,7 +670,11 @@ class TransferService {
                 clock.instant().plusSeconds(300).toString());
     }
 
-    TransferViews.Item receipt(
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Item receipt(
             Actor actor,
             long itemId,
             long version,
@@ -966,7 +988,8 @@ class TransferService {
         return assets.snapshot(number(item, "asset_id"), number(item, "asset_version"));
     }
 
-    TransferViews.ReassignmentSnapshot reassignment(Actor actor, long id) {
+    @Transactional(propagation = Propagation.REQUIRED, isolation = Isolation.READ_COMMITTED)
+    public TransferViews.ReassignmentSnapshot reassignment(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         var row = request(id);
@@ -992,7 +1015,11 @@ class TransferService {
                 declared);
     }
 
-    TransferViews.Detail reassign(Actor actor, long id, long version, String key,
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.Detail reassign(Actor actor, long id, long version, String key,
             TransferController.Reassignment input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -1065,7 +1092,11 @@ class TransferService {
         return finish(current, "reassign", key, hash, detail(request(id)));
     }
 
-    TransferViews.UnavailableReceipt declareUnavailable(Actor actor, long id, long version, String key,
+    @Transactional(
+            propagation = Propagation.REQUIRED,
+            isolation = Isolation.READ_COMMITTED,
+            rollbackFor = Exception.class)
+    public TransferViews.UnavailableReceipt declareUnavailable(Actor actor, long id, long version, String key,
             TransferController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);

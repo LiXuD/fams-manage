@@ -19,6 +19,7 @@ import com.fams.product.contract.model.PageAssetCategory;
 import com.fams.product.contract.model.ReferenceStatus;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
 
@@ -46,13 +47,15 @@ class AssetCategoryService {
         this.clock = authClock;
     }
 
-    PageAssetCategory list(int page, int pageSize) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public PageAssetCategory list(int page, int pageSize) {
         List<AssetCategory> items = assetCategoryRepository.list((page - 1) * pageSize, pageSize).stream()
                 .map(this::toCategory).toList();
         return new PageAssetCategory(page, pageSize, assetCategoryRepository.count(), items);
     }
 
-    MasterdataViews.Page<MasterdataViews.AssetCategoryActiveReference> listActive(
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public MasterdataViews.Page<MasterdataViews.AssetCategoryActiveReference> listActive(
             int page, int pageSize) {
         List<MasterdataViews.AssetCategoryActiveReference> items = assetCategoryRepository
                 .listActive((page - 1) * pageSize, pageSize).stream()
@@ -60,7 +63,8 @@ class AssetCategoryService {
         return new MasterdataViews.Page<>(items, assetCategoryRepository.countActive(), page, pageSize);
     }
 
-    AssetCategory get(long id) {
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public AssetCategory get(long id) {
         return toCategory(require(id));
     }
 
