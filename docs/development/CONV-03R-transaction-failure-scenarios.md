@@ -112,3 +112,36 @@ CONV-02 保留的那 8 处 `CannotAcquireLockException` 重试环也在非事务
 - CONV-03 §3「224/224」加限定语，见 §3。
 - CONV-06 日志批里 `LoanReminderService.refresh` 被 L-C 判为"CONV-03 分类缺口"——按本文件，
   它更可能是"注解本就无效"而非"漏标"，需在 CONV-06 收口时一并复核。
+
+## 6. 数字更正（2026-11-24 复测，推翻本文 §5 与本系列两处旧口径）
+
+旧口径两处都错，错因都是**检测器正则**，不是代码：
+
+- 本文 §5 写的"190 个非 public 无注解入口"**虚高**：其中混入大量 `audit()` / `insertItems()` /
+  `progress()` 这类 **private 辅助方法**，它们本就跑在调用方事务里，不是缺陷。
+- 修第一版时的"R1b = 0"**是假阴性**：方法声明匹配要求 `head` 以"标识符+空格"结尾，
+  而实际 `    PageWarehouse list(int page, int pageSize) {` 切出的 head 末尾无空格，
+  于是把所有"返回类型+方法名"形式的声明**全部误杀**。
+
+改用"Controller 字段名→Bean 类型"映射（解析出 444 个 Controller 调用点）后的**已验证口径**：
+
+| 项 | 数量 | 抽样复核 |
+|---|---|---|
+| A. Controller 直达、**完全没有事务属性**的 Service/Port 入口 | **70**，其中 **35 个含写** | `masterdata/WarehouseService.java:49 PageWarehouse list(...)` 包私有、无注解、被 `WarehouseController` 直达 |
+| B. Controller 直达、带注解但非 public（场景一残留） | 报 16，**判为检测器假阳性** | ArchUnit `TRANSACTIONAL_METHODS_ARE_PUBLIC` 在主树 7/7 通过，按注解属性权威判定为 **0** |
+
+A 按域分布：`masterdata` 32（写 18）、`transfer` 9（写 6，即
+`action/decide/physical/pending/grant/receipt/reassignment/reassign/declareUnavailable`）、
+`report` 8（写 7）、`asset` 7（写 0）、`auth` 6（写 0）、`repair` 3（写 2）、
+`inbound` 2、`loss`/`scrap`/`inventory` 各 1。
+
+**对 CONV-07 结论的影响**：CONV-07 的"138/138 完成、场景一归零"**仍然成立**——依据不是同一个
+正则，而是 ArchUnit 按真实注解属性判定 + 反向对照 `was violated (138 times)`。但 CONV-03 的
+"逐 public 方法标注"分母只数了 `public` 方法，因此**漏掉了 A 这 70 个入口**：它们从来就没有注解，
+提 public 也不会得到事务。这是比场景一更根本的一类缺口。
+
+**R2 的严重性下修**：30 个类级 `MANDATORY` 的 Port/Service 中确有大量包私有方法
+（`asset/AssetRepairPort.java:28` 类级 MANDATORY + 包私有方法为实证），但 MANDATORY 只是
+**断言**"调用方必须已开事务"，不是开启事务的机制。CONV-07 之后调用方 Service 入口已真正进事务，
+因此实际写操作的原子性并不依赖它；R2 缺的是这道防护网（未来新增无事务调用方时不会被拦下），
+优先级低于 A。
