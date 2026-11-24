@@ -29,6 +29,17 @@ public class OperationLogAccess {
         this.clock = authClock;
     }
 
+    /**
+     * Revalidates the captured session against the account row locked FOR UPDATE, rejecting
+     * stale authority versions and accounts that still owe an initial password change, then
+     * applies the role rules of this gate.
+     *
+     * @return the revalidated account id
+     * @throws AuthOperationException with a session-invalid failure when the account vanished,
+     *         the session is no longer current or the initial password is still required, and
+     *         with a forbidden failure when the account is neither a system admin nor an audit
+     *         reader holding the {@code SYSTEM_OPERATION_LOG} field permission
+     */
     public long require() {
         AuthAccount captured = AuthRequestContext.account(request);
         AuthSession session = AuthRequestContext.session(request);

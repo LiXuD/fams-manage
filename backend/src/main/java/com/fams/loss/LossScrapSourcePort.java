@@ -29,16 +29,47 @@ public class LossScrapSourcePort {
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
+    /**
+     * Wires the port to the loss tables and the mapper used to interpret stored snapshots.
+     *
+     * @param db JDBC template reading {@code fams_loss_report} and closing follow-up todos
+     * @param json mapper parsing the report's source snapshot JSON
+     */
     public LossScrapSourcePort(JdbcTemplate db, ObjectMapper json) {
         this.db = db;
         this.json = json;
     }
 
+    /**
+     * Factory origin of a confirmed loss: the repair and round ids plus the processor account
+     * recorded in the frozen source snapshot, present only when the report still points at that
+     * round.
+     */
     public record FactorySource(long repairId, long roundId, long processorAccountId) {}
 
+    /**
+     * Evidence bundle handed to the scrap workflow: the lost asset with its frozen lifecycle and
+     * source snapshot, the confirmation timestamp and snapshot, and the factory origin when the
+     * loss was reported from a factory repair round.
+     */
     public record ConfirmedLoss(long assetId, String lifecycle, String sourceJson,
             Instant confirmedAt, String confirmationJson, FactorySource factory) {}
 
+    /**
+     * Locks the loss report and returns its confirmed-loss evidence for a scrap submission. The
+     * caller must be authorized for the report (asset admin, the assigned warehouse processor, a
+     * responsible employee or the using organization's department asset manager) and the report
+     * must still be an unrecovered confirmed loss whose version matches the caller's view.
+     *
+     * @param current revalidated actor requesting the scrap submission evidence
+     * @param id loss report id
+     * @param version expected report version (If-Match) held by the scrap caller
+     * @return the confirmed-loss evidence bundle for the scrap workflow
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} if the report does not exist,
+     *         {@code SCRAP_LOSS_SOURCE_FORBIDDEN} when the caller lacks access to the report, or
+     *         {@code SCRAP_LOSS_SOURCE_CHANGED} when the version drifted or the report no longer
+     *         qualifies as a confirmed scrap source
+     */
     public ConfirmedLoss requireSubmissionEvidence(Current current, long id, long version) {
         LOG.debug("Locked fams_loss_report row {} for scrap submission evidence.", id);
         var row = lockedReport(id);
@@ -76,11 +107,27 @@ public class LossScrapSourcePort {
                 ? new FactorySource(repair, round, processor) : null;
     }
 
-    /** The scrap workflow has already authorized its processor independently of the old loss processor. */
+    /**
+     * Returns the confirmed-loss evidence for a scrap execution, locking the loss report row first.
+     *
+     * <p>The scrap workflow has already authorized its processor independently of the old loss
+     * processor, so this port only re-reads the locked report and validates its version.
+     *
+     * @param reportId identifier of the confirmed loss report to lock and read
+     * @param version  ownership version the caller observed; a mismatch is rejected by the caller
+     * @return the confirmed loss evidence projected from the locked report row
+     */
     public ConfirmedLoss requireExecutionEvidence(long reportId, long version) {
         return confirmedSource(lockedReport(reportId), version);
     }
 
+    /**
+     * Closes the open follow-up todo of a loss report when the scrap workflow takes over, so the
+     * periodic loss follow-up queue no longer lists an asset that is being scrapped.
+     *
+     * @param reportId loss report id whose follow-up todo is closed
+     * @param time timestamp recorded as the todo's close time
+     */
     public void closeFollowUp(long reportId, Instant time) {
         LOG.debug("UPDATE fams_todo closed follow-up of loss report {}.", reportId);
         db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOST_REPORT'"

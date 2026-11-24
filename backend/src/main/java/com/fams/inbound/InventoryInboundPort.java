@@ -17,6 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryInboundPort {
     private static final Logger LOG = LoggerFactory.getLogger(InventoryInboundPort.class);
+    /**
+     * Locked read model of one submitted receipt line for the inventory flow: receipt identity,
+     * version and status together with the referenced asset's identity, version, card stage, line
+     * execution status and whether an acceptance row already exists for it.
+     */
     public record Context(
             String receiptId,
             long version,
@@ -31,11 +36,30 @@ public class InventoryInboundPort {
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
 
+    /**
+     * Wires the port to the inbound tables and the actor revalidation used to enforce the
+     * inventory-administrator role.
+     *
+     * @param db JDBC template reading receipts, items, assets and acceptances under row locks
+     * @param actors context revalidating the caller and checking the asset-admin role
+     */
     public InventoryInboundPort(JdbcTemplate db, RequisitionActorContext actors) {
         this.db = db;
         this.actors = actors;
     }
 
+    /**
+     * Resolves a submitted receipt line by receipt number and asset code (shared lock) and returns
+     * its full context. Only submitted receipts match, so creator-private drafts stay invisible to
+     * the inventory flow.
+     *
+     * @param actor inventory actor, must hold the asset-admin role
+     * @param receiptNumber receipt number to look up
+     * @param assetCode asset code identifying the line within the receipt
+     * @return the locked context of the matching line, or null when no submitted receipt contains
+     *         that asset code
+     * @throws IllegalArgumentException when the actor does not hold the asset-admin role
+     */
     public Context find(
             RequisitionActorContext.Actor actor, String receiptNumber, String assetCode) {
         LOG.debug("Inbound receipt lookup by number {} asset code {}.", receiptNumber, assetCode);
@@ -58,6 +82,18 @@ public class InventoryInboundPort {
                         ((Number) rows.getFirst().get("asset_id")).longValue());
     }
 
+    /**
+     * Loads the locked context of one submitted receipt line by id. Both the receipt and the line
+     * are read {@code FOR UPDATE} so the inventory caller can safely link against them; submitted
+     * receipts with exactly one matching line only produce a context.
+     *
+     * @param actor inventory actor, must hold the asset-admin role
+     * @param receiptId inbound receipt id
+     * @param assetId asset id of the line within that receipt
+     * @return the locked context, or null when the receipt is unsubmitted/unknown or the line does
+     *         not match exactly once
+     * @throws IllegalArgumentException when the actor does not hold the asset-admin role
+     */
     public Context context(RequisitionActorContext.Actor actor, long receiptId, long assetId) {
         if (!actors.revalidateLocked(actor).has(Role.ASSET_ADMIN)) {
             throw new IllegalArgumentException("Inventory administrator required");

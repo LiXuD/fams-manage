@@ -22,14 +22,35 @@ import java.util.Map;
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryLossPort {
     private static final Logger LOG = LoggerFactory.getLogger(InventoryLossPort.class);
+    /**
+     * Identifies the inventory missing-reason row that a loss report is created from: the counting
+     * task and item being resolved plus the immutable reason id and its recheck generation.
+     */
     public record Source(long taskId, long itemId, long reasonId, long recheckGeneration) {}
 
+    /**
+     * Loss-report progress joined back onto an inventory reason, used to render whether the reason
+     * has been handed over to the loss workflow and whether resubmission is allowed.
+     */
     public record Progress(String reportId, String status, String processorAccountId, LocalDate nextReviewDate) {
+        /**
+         * Reports whether the reason has effectively transferred to loss handling: a processor is
+         * assigned, a next review date exists, and the report is in SEARCHING, CONFIRMED_LOST or
+         * RECOVERED status.
+         *
+         * @return true when the inventory reason is considered owned by the loss report
+         */
         public boolean transferred() {
             return processorAccountId != null && nextReviewDate != null
                     && List.of("SEARCHING", "CONFIRMED_LOST", "RECOVERED").contains(status);
         }
 
+        /**
+         * Reports whether a new loss submission may be attempted for this reason, which is only the
+         * case when the previous report ended as REJECTED or CANCELLED.
+         *
+         * @return true when resubmission is allowed
+         */
         public boolean canRetry() {
             return "REJECTED".equals(status) || "CANCELLED".equals(status);
         }
@@ -43,6 +64,18 @@ public class InventoryLossPort {
         this.reports = reports;
     }
 
+    /**
+     * Creates a loss report for an inventory missing reason through {@link LossService} and records
+     * the report-to-reason link in {@code fams_loss_inventory_source} so later progress queries can
+     * join back. Runs inside the caller's mandatory transaction.
+     *
+     * @param actor requisition actor context captured for permission and identity checks
+     * @param source inventory reason the report is submitted from
+     * @param input validated submission payload for the loss report
+     * @return id of the created loss report as a string
+     * @throws LossFailure if the underlying submission is rejected (for example duplicate or
+     *         invalid source data)
+     */
     public String submit(Actor actor, Source source, LossInput.Submission input) {
         String report = reports.submitInventory(actor, source, input);
         db.update("INSERT INTO fams_loss_inventory_source(report_id,reason_id) VALUES (?,?)",
@@ -51,6 +84,13 @@ public class InventoryLossPort {
         return report;
     }
 
+    /**
+     * Looks up the latest loss-report progress for the given inventory reason ids in batches of
+     * 200, joining {@code fams_loss_inventory_source} with {@code fams_loss_report}.
+     *
+     * @param reasons inventory missing-reason ids to resolve progress for
+     * @return map from reason id to its loss-report progress; reasons without a report are absent
+     */
     public Map<Long, Progress> progress(List<Long> reasons) {
         LOG.debug("Loss progress queried for submitted reasons.");
         var result = new HashMap<Long, Progress>();

@@ -29,21 +29,35 @@ public final class InboundViews {
 
     /** Responses persisted in fams_idempotency_record expose the receipt resource version. */
     public sealed interface Reply permits Receipt, AcceptResult {
+        /**
+         * Returns the receipt resource version an idempotent replay must compare against.
+         *
+         * @return receipt version carried by this reply
+         */
         long version();
     }
 
+    /** Generic list page envelope: page items plus total count and the requested page parameters. */
     public record Page<T>(List<T> items, long total, int page, int pageSize) {
+        /**
+         * Defensively copies the item list so the published page cannot be mutated afterwards;
+         * an explicit null list is preserved to keep the wire shape unchanged.
+         */
         public Page {
             items = items == null ? null : List.copyOf(items);
         }
     }
 
+    /** Account identity projection: stringified account id with the username snapshot. */
     public record Identity(String id, String username) {
     }
 
+    /** Versioned entity reference: stringified id plus the optimistic version. */
     public record Ref(String id, long version) {
     }
 
+    /** Frozen inbound parameter snapshot: the parameter version with the business date, review
+     *  timezone and the three deadline workday budgets copied onto the receipt. */
     public record Snapshot(
             String parameterVersionId,
             String businessDate,
@@ -53,6 +67,7 @@ public final class InboundViews {
             long warehouseFirstExecutionDeadlineWorkdays) {
     }
 
+    /** Asset code and name snapshot frozen onto the receipt item at creation time. */
     public record AssetSnapshot(String assetCode, String assetName) {
     }
 
@@ -70,6 +85,7 @@ public final class InboundViews {
             String acquiredAt) {
     }
 
+    /** Storage custody projection: custody type with versioned warehouse and location refs. */
     public record StorageCustody(String custodyType, Ref warehouse, Ref location) {
     }
 
@@ -90,6 +106,11 @@ public final class InboundViews {
             @JsonInclude(JsonInclude.Include.NON_NULL) String notes) {
     }
 
+    /**
+     * Receipt line projection: execution status, asset and target references with their frozen
+     * snapshots, plus the conditional businessLock and acceptance keys (NON_NULL-guarded legacy
+     * puts).
+     */
     public record Item(
             String id,
             String executionStatus,
@@ -103,10 +124,17 @@ public final class InboundViews {
             @JsonInclude(JsonInclude.Include.NON_NULL) Acceptance acceptance) {
     }
 
+    /** One approved line of a decision scope: the receipt item with its approved asset, warehouse
+     *  and location references and versions. */
     public record ScopeItem(String receiptItemId, Ref asset, Ref targetWarehouse, Ref targetLocation) {
     }
 
+    /** Decision scope: the receipt version the decision was made against plus its approved lines. */
     public record Scope(long receiptVersion, List<ScopeItem> items) {
+        /**
+         * Defensively copies the scope item list so the published scope cannot be mutated
+         * afterwards; an explicit null list is preserved to keep the wire shape unchanged.
+         */
         public Scope {
             items = items == null ? null : List.copyOf(items);
         }
@@ -171,11 +199,16 @@ public final class InboundViews {
             @JsonInclude(JsonInclude.Include.NON_NULL) Decision decision,
             @JsonInclude(JsonInclude.Include.NON_NULL) CurrentProcessor currentProcessor)
             implements Reply {
+        /**
+         * Defensively copies the item list so the published receipt cannot be mutated afterwards;
+         * an explicit null list is preserved to keep the wire shape unchanged.
+         */
         public Receipt {
             items = items == null ? null : List.copyOf(items);
         }
     }
 
+    /** Asset state projected after accept: lifecycle/exception/cardStage plus current custody. */
     public record AcceptedAsset(
             String id,
             String assetCode,
@@ -195,6 +228,10 @@ public final class InboundViews {
         }
     }
 
+    /**
+     * Reassignment inspect line: receipt item identity and status with the asset, warehouse and
+     * location versions an executor must match when reassigning.
+     */
     public record ReassignmentItem(
             String id,
             long version,
@@ -206,6 +243,7 @@ public final class InboundViews {
             String locationId) {
     }
 
+    /** Candidate reassignment target operator: account id and display name. */
     public record Operator(String id, String name) {
     }
 
@@ -222,6 +260,10 @@ public final class InboundViews {
             List<ReassignmentItem> items,
             List<Operator> operators,
             @JsonInclude(JsonInclude.Include.NON_NULL) String unavailableReason) {
+        /**
+         * Defensively copies the item and operator lists so the published snapshot cannot be
+         * mutated afterwards; explicit null lists are preserved to keep the wire shape unchanged.
+         */
         public ReassignmentSnapshot {
             items = items == null ? null : List.copyOf(items);
             operators = operators == null ? null : List.copyOf(operators);
@@ -244,6 +286,10 @@ public final class InboundViews {
 
     /** Envelope of the attachment list exit (pre-batch {@code Map.of("items", ...)}). */
     public record AttachmentListPage(List<AttachmentEvidence> items) {
+        /**
+         * Defensively copies the evidence list so the published page cannot be mutated
+         * afterwards; an explicit null list is preserved to keep the wire shape unchanged.
+         */
         public AttachmentListPage {
             items = items == null ? null : List.copyOf(items);
         }

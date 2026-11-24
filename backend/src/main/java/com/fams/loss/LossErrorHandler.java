@@ -18,6 +18,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Translates exceptions raised by {@link LossController} and {@link LossPhotoController} into
+ * {@link ErrorResponse} bodies. Domain failures ({@link LossFailure}, handover/loan/repair/
+ * return/transfer port failures, attachment access failures) keep their own status and code;
+ * infrastructure races, storage faults, oversized uploads and unreadable payloads are mapped to
+ * fixed loss error codes (for example {@code LOSS_WRITE_CONFLICT} or {@code LOSS_PHOTO_TOO_LARGE})
+ * and logged with the request id.
+ */
 @Profile("fams-product")
 @Order(-3)
 @RestControllerAdvice(assignableTypes = {LossController.class, LossPhotoController.class})

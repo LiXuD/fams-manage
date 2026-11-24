@@ -16,17 +16,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Profile("fams-product")
 public class AssetInitializationWindowService {
+    /** Window projection: stringified id, OPEN/CLOSED status, assigned operator and UTC expiry. */
     public record Window(String id, String status, String assignedOperatorId, Instant expiresAt) { }
+    /** Assignable operator option: stringified account id and username. */
     public record EligibleOperator(String id, String username) { }
 
     private final JdbcTemplate db;
     private final Clock clock;
 
+    /**
+     * Wires the service to the window tables and its expiry clock.
+     *
+     * @param db JDBC template for the window and account tables
+     * @param clock timestamp source for expiry validation
+     */
     public AssetInitializationWindowService(JdbcTemplate db, Clock clock) {
         this.db = db;
         this.clock = clock;
     }
 
+    /**
+     * Lists the operators eligible for window assignment: enabled accounts holding the
+     * warehouse-operator role, ordered by username then account id.
+     *
+     * @return eligible operator options
+     */
     @Transactional(readOnly = true)
     public List<EligibleOperator> operators() {
         return db.query("SELECT a.id,a.username FROM fams_system_account a "
@@ -36,6 +50,14 @@ public class AssetInitializationWindowService {
                         Long.toString(result.getLong("id")), result.getString("username")));
     }
 
+    /**
+     * Loads the single currently usable window. An OPEN row whose expiry has passed is reported
+     * as absent rather than stale, so callers never act on an expired window.
+     *
+     * @return projection of the open, unexpired window
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_WINDOW_NOT_FOUND} when no open
+     *         window exists or the open window has expired
+     */
     @Transactional(readOnly = true)
     public Window current() {
         var rows = db.queryForList("SELECT id,assigned_operator_id,expires_at FROM "
@@ -50,6 +72,22 @@ public class AssetInitializationWindowService {
                 row.get("assigned_operator_id").toString(), expiry);
     }
 
+    /**
+     * Opens a new initialization window for one eligible warehouse operator. At most one window
+     * may be alive: a still-unexpired open window blocks the call, while an expired one is
+     * closed first as part of the same transaction.
+     *
+     * @param administratorId system-admin account opening the window, recorded as opener
+     * @param operatorId warehouse operator the window is assigned to
+     * @param reason mandatory opening reason, at most 500 characters after trimming
+     * @param expiresAt expiry instant, strictly in the future and at most 30 days ahead
+     * @return projection of the newly opened window
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_WINDOW_INVALID} for bad
+     *         ids, reason or expiry bounds, or {@code ASSET_IMPORT_OPERATOR_INVALID} when the
+     *         operator is not an enabled warehouse operator
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_WINDOW_OPEN} when an unexpired
+     *         window is already open
+     */
     @Transactional
     public Window open(long administratorId, long operatorId, String reason, Instant expiresAt) {
         Instant now = clock.instant();
@@ -84,6 +122,17 @@ public class AssetInitializationWindowService {
         return new Window(id.toString(), "OPEN", Long.toString(operatorId), expiresAt);
     }
 
+    /**
+     * Closes an open window ahead of its expiry, recording the closing administrator and time.
+     *
+     * @param administratorId system-admin account closing the window
+     * @param windowId window to close
+     * @return projection of the window with status CLOSED
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_WINDOW_INVALID} for a bad
+     *         administrator or window id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_WINDOW_NOT_FOUND} when the
+     *         window does not exist, or {@code ASSET_IMPORT_WINDOW_CLOSED} when it is not open
+     */
     @Transactional
     public Window close(long administratorId, long windowId) {
         if (administratorId < 1 || windowId < 1) {

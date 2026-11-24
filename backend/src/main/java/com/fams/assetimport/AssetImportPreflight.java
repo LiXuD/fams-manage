@@ -16,11 +16,17 @@ import java.util.Set;
 
 /** Deterministic preview: reference snapshots and existing identities are supplied by the application transaction. */
 public final class AssetImportPreflight {
+    /**
+     * Generic master-data reference row; {@code scopeId} carries the parent constraint (the
+     * warehouse of a location, the organization of an employee) or null when unscoped.
+     */
     public record Reference(long id, String code, String name, String status, Long scopeId) { }
+    /** Immutable preflight input: every reference list plus the already-used identities. */
     public record Catalog(List<Reference> categories, List<Reference> organizations,
                           List<Reference> warehouses, List<Reference> locations,
                           List<Reference> employees, Set<String> existingAssetCodes,
                           Set<String> existingSerialNumbers) {
+        /** Defensively copies all lists and sets so a snapshot cannot be mutated afterwards. */
         public Catalog {
             categories = List.copyOf(categories);
             organizations = List.copyOf(organizations);
@@ -31,6 +37,11 @@ public final class AssetImportPreflight {
             existingSerialNumbers = Set.copyOf(existingSerialNumbers);
         }
     }
+    /**
+     * Fully resolved row that passed every check: validated literals, resolved reference ids and
+     * the embedded repair, loss and factory-disposition facts needed to publish the opening
+     * state.
+     */
     public record ReadyRow(int sheetRow, String assetCode, String name, long categoryId,
                            long organizationId, String model, String unit, String serialNumber,
                            String state, Long warehouseId, Long locationId, Long usingOrganizationId,
@@ -40,7 +51,9 @@ public final class AssetImportPreflight {
                            String preRepairState, InitialRepairPort.Facts repairFacts,
                            InitialScrapPort.LossFacts lossFacts,
                            InitialScrapPort.FactoryDisposition factoryDisposition) { }
+    /** Outcome of one preflight run: publishable rows plus every cell error, parse errors included. */
     public record Result(List<ReadyRow> ready, List<AssetImportWorkbook.CellError> errors) {
+        /** Defensively copies both lists so a published result cannot be mutated afterwards. */
         public Result {
             ready = List.copyOf(ready);
             errors = List.copyOf(errors);
@@ -72,6 +85,17 @@ public final class AssetImportPreflight {
 
     private AssetImportPreflight() { }
 
+    /**
+     * Builds the effective field-to-column mapping: default template headers apply for every
+     * canonical field whose default column exists in the sheet, then the caller's selections
+     * override them.
+     *
+     * @param parsed workbook parse result supplying the actual sheet headers
+     * @param selectedColumns caller-chosen overrides keyed by canonical field name
+     * @return immutable field-to-column mapping
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_MAPPING_INVALID} for unknown
+     *         field keys, mappings to columns absent from the sheet or duplicate column targets
+     */
     public static Map<String, String> columns(AssetImportWorkbook.Parsed parsed,
             Map<String, String> selectedColumns) {
         if (parsed == null || selectedColumns == null
@@ -90,6 +114,23 @@ public final class AssetImportPreflight {
         return Map.copyOf(mapping);
     }
 
+    /**
+     * Deterministically validates every populated row against the supplied catalog snapshot:
+     * required fields and length limits, reference resolution by code or unique active name
+     * (respecting the parent scope), duplicate and already-existing asset codes and serial
+     * numbers, and the custody-state specific rules for stock, in-use, borrowed, pending-scrap
+     * (including loss write-off and factory disposition timestamps) and repair or factory-repair
+     * openings. A row becomes ready only when it produced no error at all.
+     *
+     * @param parsed workbook parse result
+     * @param selectedColumns caller-chosen mapping overrides
+     * @param catalog snapshot of references and existing identities for this run
+     * @param now validation instant; future-dated timestamps are rejected against it
+     * @return ready rows and the full ordered error list
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_CATALOG_MISSING} when no
+     *         catalog snapshot was supplied, or {@code ASSET_IMPORT_MAPPING_INVALID} via
+     *         {@link #columns} for a broken mapping
+     */
     public static Result check(AssetImportWorkbook.Parsed parsed, Map<String, String> selectedColumns,
             Catalog catalog, Instant now) {
         if (catalog == null) { throw new IllegalArgumentException("ASSET_IMPORT_CATALOG_MISSING"); }

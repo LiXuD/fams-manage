@@ -11,6 +11,19 @@ import java.util.Map;
 public final class LossPayloads {
     private LossPayloads() {}
 
+    /**
+     * Computes the idempotency fingerprint of a loss write operation: the operation name, expected
+     * version and canonicalized body are joined under the {@code F1} scheme and hashed with
+     * SHA-256, so a replayed request with an identical payload produces the same hex digest while
+     * any field change produces a different one.
+     *
+     * @param json mapper used to serialize and canonicalize the body
+     * @param operation logical operation name included in the hashed preimage
+     * @param version expected aggregate version included in the hashed preimage
+     * @param body request payload to canonicalize (null members dropped, object keys sorted)
+     * @return lowercase hex SHA-256 digest of the canonical {@code F1} preimage
+     * @throws IllegalStateException if the SHA-256 algorithm is unavailable in the JVM
+     */
     public static String fingerprint(
             ObjectMapper json, String operation, long version, Object body) {
         try {

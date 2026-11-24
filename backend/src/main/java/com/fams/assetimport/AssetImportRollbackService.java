@@ -21,7 +21,12 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Profile("fams-product")
 public class AssetImportRollbackService {
+    /** Rollback state projection: status, request round version and the queued job id once submitted. */
     public record Rollback(UUID batchId, String status, long version, UUID jobId) { }
+    /**
+     * One administrator work-queue entry: batch identity, published asset count, requesting
+     * operator with the request reason and its timestamp.
+     */
     public record Pending(UUID batchId, long version, int assetCount, String operatorUsername,
                           String reason, Instant requestedAt) { }
 
@@ -31,6 +36,16 @@ public class AssetImportRollbackService {
     private final ObjectMapper json;
     private final Clock clock;
 
+    /**
+     * Wires the service to its persistence, asset-cancellation, job, JSON and clock
+     * collaborators.
+     *
+     * @param db JDBC template for the batch, rollback, publication and event tables
+     * @param assets port that reverses the published initial assets
+     * @param jobs durable job service receiving the rollback task on queueing
+     * @param json mapper used for audit event details
+     * @param clock timestamp source for expiry and audit stamps
+     */
     public AssetImportRollbackService(JdbcTemplate db, AssetInitialPublicationPort assets,
             DurableJobService jobs, ObjectMapper json, Clock clock) {
         this.db = db;
@@ -40,6 +55,15 @@ public class AssetImportRollbackService {
         this.clock = clock;
     }
 
+    /**
+     * Loads the rollback state of a batch owned by the calling operator.
+     *
+     * @param operatorId owning operator account id
+     * @param batchId batch whose rollback is loaded
+     * @return current rollback projection
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_ROLLBACK_NOT_FOUND} when no
+     *         rollback exists or the batch belongs to another operator
+     */
     @Transactional(readOnly = true)
     public Rollback getOwned(long operatorId, UUID batchId) {
         var rows = db.queryForList("SELECT r.rollback_status,r.version,r.job_id FROM "
@@ -52,6 +76,15 @@ public class AssetImportRollbackService {
                         : UUID.fromString((String) row.get("job_id")));
     }
 
+    /**
+     * Pages the administrator work queue of PENDING rollback requests, ordered by request time
+     * then batch id, 50 entries per page.
+     *
+     * @param page 1-based page number, at most 1,000,000
+     * @return the pending entries of the requested page
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for an
+     *         out-of-range page number
+     */
     @Transactional(readOnly = true)
     public List<Pending> pending(int page) {
         if (page < 1 || page > 1_000_000) {
@@ -69,6 +102,23 @@ public class AssetImportRollbackService {
                         result.getTimestamp("requested_at").toInstant()), (page - 1) * 50);
     }
 
+    /**
+     * Requests rollback of a published batch whose assets are still untouched. A PENDING request
+     * replayed with the identical reason is idempotent; only a REJECTED request may be repeated,
+     * which increments the rollback version.
+     *
+     * @param operatorId requesting operator account id, must own the batch
+     * @param batchId published batch to roll back
+     * @param reason mandatory request reason, at most 500 characters after trimming
+     * @return rollback projection with status PENDING
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_ROLLBACK_REASON_INVALID}
+     *         for a missing or oversized reason
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when unowned,
+     *         {@code ASSET_IMPORT_ROLLBACK_NOT_PUBLISHED} when the batch is not published or has
+     *         no publication rows, {@code ASSET_IMPORT_ROLLBACK_DOWNSTREAM} when any published
+     *         asset changed after publication, or {@code ASSET_IMPORT_ROLLBACK_LOCKED} when a
+     *         non-rejected request already exists
+     */
     @Transactional
     public Rollback request(long operatorId, UUID batchId, String reason) {
         requireReason(reason);
@@ -109,6 +159,24 @@ public class AssetImportRollbackService {
         return new Rollback(batchId, "PENDING", version, null);
     }
 
+    /**
+     * Records the administrator decision on a PENDING rollback request. The deciding
+     * administrator must differ from the requesting operator, and approval re-proves that no
+     * published asset acquired downstream changes.
+     *
+     * @param administratorId deciding asset-admin account id
+     * @param batchId batch under rollback review
+     * @param approve true to approve the rollback, false to reject it
+     * @param reason mandatory decision reason, at most 500 characters after trimming
+     * @return rollback projection with the recorded decision
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_ROLLBACK_REASON_INVALID}
+     *         for a missing or oversized reason
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} or
+     *         {@code ASSET_IMPORT_ROLLBACK_NOT_PUBLISHED} for a missing or unpublished batch,
+     *         {@code ASSET_IMPORT_ROLLBACK_LOCKED} when no PENDING request exists or the
+     *         administrator is the requester, or {@code ASSET_IMPORT_ROLLBACK_DOWNSTREAM} when
+     *         approving despite changed assets
+     */
     @Transactional
     public Rollback decide(long administratorId, UUID batchId, boolean approve, String reason) {
         requireReason(reason);
@@ -132,6 +200,20 @@ public class AssetImportRollbackService {
                 ((Number) row.get("version")).longValue(), null);
     }
 
+    /**
+     * Submits the durable rollback job for an APPROVED request; only the original requesting
+     * operator may queue it, and the untouched-asset proof is repeated at queueing time. The
+     * job is fenced by the batch source digest.
+     *
+     * @param operatorId requesting operator account id
+     * @param batchId batch whose approved rollback is queued
+     * @return rollback projection with status QUEUED and the submitted job id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} or
+     *         {@code ASSET_IMPORT_ROLLBACK_NOT_PUBLISHED} for a missing or unpublished batch,
+     *         {@code ASSET_IMPORT_ROLLBACK_LOCKED} when the rollback is not APPROVED or belongs
+     *         to another operator, or {@code ASSET_IMPORT_ROLLBACK_DOWNSTREAM} when any
+     *         published asset changed after publication
+     */
     @Transactional
     public Rollback queue(long operatorId, UUID batchId) {
         var batch = lockPublished(batchId);
@@ -149,6 +231,22 @@ public class AssetImportRollbackService {
         return new Rollback(batchId, "QUEUED", ((Number) rows.getFirst().get("version")).longValue(), job.id());
     }
 
+    /**
+     * Executes one queued rollback inside the fenced job-completion transaction. Verifies the
+     * claim against the stored job id and processor, rechecks both actors' current roles with
+     * row locks, re-proves that every published asset is still untouched, then cancels the
+     * assets through the port, retires the publication rows and completes batch and rollback
+     * with an audit event.
+     *
+     * @param claim durable job claim whose business reference is the batch id
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_ROLLBACK_JOB_INVALID} when
+     *         the claim is not an ASSET_IMPORT_ROLLBACK job
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_ROLLBACK_JOB_INVALID} when the
+     *         batch, rollback status, job id or processor no longer match the claim,
+     *         {@code ASSET_IMPORT_AUTH_REVOKED} when a required current role was lost,
+     *         {@code ASSET_IMPORT_ROLLBACK_NOT_PUBLISHED} when the batch left the published
+     *         state, or {@code ASSET_IMPORT_ROLLBACK_DOWNSTREAM} when an asset changed
+     */
     public void rollback(DurableJobService.Claim claim) {
         if (!"ASSET_IMPORT_ROLLBACK".equals(claim.kind())) {
             throw new IllegalArgumentException("ASSET_IMPORT_ROLLBACK_JOB_INVALID");
@@ -181,6 +279,15 @@ public class AssetImportRollbackService {
                 Map.of("assetCount", assetIds.size()));
     }
 
+    /**
+     * Records a rollback failure on the job and, for permanent failures, on the rollback row.
+     * Transient data-access failures are marked retryable and leave the rollback QUEUED for
+     * lease recovery; permanent failures extract the {@code ASSET_IMPORT_*} code from the
+     * exception when present and move the rollback from QUEUED to FAILED.
+     *
+     * @param claim durable job claim that failed
+     * @param failure the exception that aborted the rollback
+     */
     @Transactional
     public void recordFailure(DurableJobService.Claim claim, RuntimeException failure) {
         boolean retryable = failure instanceof TransientDataAccessException;

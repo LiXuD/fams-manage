@@ -25,17 +25,28 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Profile("fams-product")
 public class AssetImportBatchService {
+    /** Batch handle returned to the owner: id, lifecycle status, preview version and mapping. */
     public record Ticket(UUID id, String status, long previewVersion, JsonNode mapping) { }
+    /**
+     * Preflight summary produced by a preview run: row counters plus at most the first 100 cell
+     * errors, with {@code moreErrors} signalling that the error list was truncated.
+     */
     public record Preview(UUID id, long version, int totalRows, int readyRows, int errorRows,
                           List<AssetImportWorkbook.CellError> errors, boolean moreErrors) {
+        /** Defensively copies the error list so a published preview cannot be mutated. */
         public Preview { errors = List.copyOf(errors); }
     }
+    /** One persisted preview row: sheet position, READY/ERROR status, source and resolved JSON. */
     public record PreviewRow(int sheetRow, String status, JsonNode source,
                              JsonNode resolved, JsonNode errors) { }
+    /** Page of persisted preview rows ordered by sheet row, with the unfiltered total count. */
     public record RowPage(int total, List<PreviewRow> items) {
+        /** Defensively copies the item list so a published page cannot be mutated. */
         public RowPage { items = List.copyOf(items); }
     }
+    /** Workbook header list used to drive the column-mapping step. */
     public record ColumnList(List<String> columns) {
+        /** Defensively copies the column list so a published header set cannot be mutated. */
         public ColumnList { columns = List.copyOf(columns); }
     }
 
@@ -45,6 +56,14 @@ public class AssetImportBatchService {
     private final ObjectMapper json;
     private final Clock clock;
 
+    /**
+     * Wires the service to its persistence, catalog, JSON and clock collaborators.
+     *
+     * @param db JDBC template for the batch, row and event tables
+     * @param catalog duplicate-check snapshot source for asset codes and serial numbers
+     * @param json mapper used to persist and project mapping/source/resolved JSON
+     * @param clock timestamp source for audit events
+     */
     public AssetImportBatchService(JdbcTemplate db, AssetImportCatalogRepository catalog,
             ObjectMapper json, Clock clock) {
         this.db = db;
@@ -53,6 +72,21 @@ public class AssetImportBatchService {
         this.clock = clock;
     }
 
+    /**
+     * Registers an uploaded workbook as an import batch, keyed by (actor, uploadKey) for
+     * idempotent retries: a replay with byte-identical content returns the existing ticket, while
+     * different content under the same key is a conflict. The workbook is parse-validated and the
+     * actor row is locked before anything is stored.
+     *
+     * @param actorId owning account id, locked FOR UPDATE during registration
+     * @param uploadKey client-chosen idempotency key, 16-128 printable ASCII characters
+     * @param xlsx raw workbook bytes, stored verbatim as the immutable import source
+     * @return ticket of the created or replayed batch with status UPLOADED on first upload
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id or upload key, or {@code ASSET_IMPORT_INVALID_XLSX} when parsing fails
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_UPLOAD_CONFLICT} when the key
+     *         was already used with different content
+     */
     @Transactional
     public Ticket upload(long actorId, String uploadKey, byte[] xlsx) {
         if (actorId < 1 || uploadKey == null || uploadKey.length() < 16 || uploadKey.length() > 128
@@ -86,6 +120,18 @@ public class AssetImportBatchService {
         return new Ticket(id, "UPLOADED", 0, null);
     }
 
+    /**
+     * Loads the caller's own ticket for a batch; batches of other actors are reported as not
+     * found so ownership is not disclosed.
+     *
+     * @param actorId owning account id
+     * @param batchId batch to load
+     * @return current ticket with status, preview version and stored mapping
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id or null batch id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when the actor owns
+     *         no such batch
+     */
     @Transactional(readOnly = true)
     public Ticket get(long actorId, UUID batchId) {
         if (actorId < 1 || batchId == null) {
@@ -99,6 +145,17 @@ public class AssetImportBatchService {
                 ((Number) row.get("preview_version")).longValue(), jsonOrNull((String) row.get("mapping_json")));
     }
 
+    /**
+     * Re-parses the stored workbook and returns its sheet headers for the column-mapping step.
+     *
+     * @param actorId owning account id
+     * @param batchId batch whose source workbook is read
+     * @return ordered header list of the first sheet
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id or null batch id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when the actor owns
+     *         no such batch
+     */
     @Transactional(readOnly = true)
     public ColumnList columns(long actorId, UUID batchId) {
         if (actorId < 1 || batchId == null) {
@@ -110,6 +167,24 @@ public class AssetImportBatchService {
         return new ColumnList(AssetImportWorkbook.parse((byte[]) rows.getFirst().get("source_xlsx")).columns());
     }
 
+    /**
+     * Runs the preflight against the selected column mapping and replaces the persisted preview
+     * rows. Requires the batch to be in UPLOADED or PREVIEWED state with no live review, and the
+     * caller to present the current preview version (optimistic concurrency). The stored mapping
+     * and counters are updated and the preview version is incremented.
+     *
+     * @param actorId owning account id
+     * @param batchId batch to preview
+     * @param expectedVersion preview version the client last saw; must match the stored version
+     * @param selectedColumns column mapping chosen by the caller, keyed by canonical field
+     * @return preflight summary with row counters and at most the first 100 cell errors
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id, null batch id or negative expected version
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when unowned,
+     *         {@code ASSET_IMPORT_LOCKED} when the batch left the previewable states,
+     *         {@code ASSET_IMPORT_REVIEW_LOCKED} while a non-rejected review exists, or
+     *         {@code ASSET_IMPORT_VERSION_CONFLICT} on a stale expected version
+     */
     @Transactional
     public Preview preview(long actorId, UUID batchId, long expectedVersion,
             Map<String, String> selectedColumns) {
@@ -154,6 +229,21 @@ public class AssetImportBatchService {
                 result.errors().stream().limit(100).toList(), result.errors().size() > 100);
     }
 
+    /**
+     * Pages the persisted preview rows of a batch ordered by sheet row, optionally filtered to
+     * READY or ERROR rows.
+     *
+     * @param actorId owning account id
+     * @param batchId batch whose rows are read
+     * @param status optional row-status filter; null returns all rows
+     * @param page 1-based page number
+     * @param pageSize page size, at most 200
+     * @return page of rows plus the total count under the same filter
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for bad
+     *         paging arguments or an unknown status filter
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when the actor owns
+     *         no such batch
+     */
     @Transactional(readOnly = true)
     public RowPage rows(long actorId, UUID batchId, String status, int page, int pageSize) {
         if (actorId < 1 || batchId == null || page < 1 || pageSize < 1 || pageSize > 200
@@ -181,11 +271,35 @@ public class AssetImportBatchService {
         return new RowPage(total, items);
     }
 
+    /**
+     * Builds the BOM-prefixed UTF-8 CSV preflight report covering every persisted row with its
+     * source values and per-error detail lines. Available from PREVIEWED through ROLLED_BACK.
+     *
+     * @param actorId owning account id
+     * @param batchId batch to report on
+     * @return CSV report bytes
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id or null batch id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when unowned, or
+     *         {@code ASSET_IMPORT_LOCKED} before any preview ran
+     */
     @Transactional(readOnly = true)
     public byte[] preflightReport(long actorId, UUID batchId) {
         return report(actorId, batchId, false);
     }
 
+    /**
+     * Builds the final CSV report including the published asset codes, restricted to batches
+     * that reached PUBLISHED or ROLLED_BACK so the publication outcome is stable.
+     *
+     * @param actorId owning account id
+     * @param batchId batch to report on
+     * @return CSV report bytes
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         actor id or null batch id
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when unowned, or
+     *         {@code ASSET_IMPORT_LOCKED} unless the batch is published or rolled back
+     */
     @Transactional(readOnly = true)
     public byte[] finalReport(long actorId, UUID batchId) {
         return report(actorId, batchId, true);

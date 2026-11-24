@@ -15,6 +15,11 @@ import java.util.UUID;
 @Component
 @Profile("fams-product")
 public final class RequisitionActorContext {
+    /**
+     * Identity captured at request entry for later locked revalidation: account id, the session
+     * authority versions and absolute expiry seen at capture time, the mini token when the caller
+     * came from the mini program (null for PC sessions) and the idempotency request id.
+     */
     public record Actor(
             long id,
             long authEpoch,
@@ -23,16 +28,30 @@ public final class RequisitionActorContext {
             String miniToken,
             UUID requestId) {}
 
+    /** Revalidated business identity: account, employee and organization plus effective roles. */
     public record Current(
             long id, String username, long employeeId, long organizationId, Set<Role> roles) {
+        /** Defensively copies the role set so a revalidated identity cannot be mutated. */
         public Current {
             roles = Set.copyOf(roles);
         }
 
+        /**
+         * Checks one role against the revalidated effective roles.
+         *
+         * @param role role to check
+         * @return true when the identity currently holds the role
+         */
         public boolean has(Role role) {
             return roles.contains(role);
         }
 
+        /**
+         * Global-applicant test: asset admins and warehouse operators may act beyond their own
+         * organization, while ordinary employees stay organization-scoped.
+         *
+         * @return true when the identity holds the asset-admin or warehouse-operator role
+         */
         public boolean globalApplicant() {
             return has(Role.ASSET_ADMIN) || has(Role.WAREHOUSE_OPERATOR);
         }
@@ -57,6 +76,13 @@ public final class RequisitionActorContext {
         this.clock = clock;
     }
 
+    /**
+     * Captures the actor of the current request without taking locks. Mini-program requests take
+     * the expiry and token from the mini session attribute and header; PC requests take them from
+     * the authenticated session, leaving the mini token null.
+     *
+     * @return actor snapshot to be revalidated later inside the business transaction
+     */
     public Actor capture() {
         var account = AuthRequestContext.account(request);
         if (request.getRequestURI().startsWith("/api/v1/mini/")) {
@@ -80,6 +106,17 @@ public final class RequisitionActorContext {
                 AuthRequestContext.requestId(request));
     }
 
+    /**
+     * Standard business-identity revalidation with the account, employee and organization rows
+     * locked FOR UPDATE: the session must still be current, the initial password must have been
+     * changed, a mini token must still resolve to the same account, the identity must hold a
+     * business role and the employee plus organization must still be active.
+     *
+     * @param actor actor captured earlier by {@link #capture()}
+     * @return the revalidated identity
+     * @throws AuthOperationException with a session-invalid failure when any freshness or mini
+     *         token check fails, and with a forbidden failure when no business role is held
+     */
     public Current revalidateLocked(Actor actor) {
         return revalidateBusinessIdentity(actor, false, false);
     }

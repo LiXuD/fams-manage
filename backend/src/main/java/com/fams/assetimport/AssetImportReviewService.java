@@ -19,8 +19,13 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Profile("fams-product")
 public class AssetImportReviewService {
+    /**
+     * Review state projection: status, the preview version under review, the requesting
+     * processor, the deciding administrator and the queued publication job id once approved.
+     */
     public record Review(UUID batchId, String status, long previewVersion,
                          String processorAccountId, String decidedBy, UUID jobId) { }
+    /** One administrator work-queue entry: batch identity, row counters and requesting operator. */
     public record Pending(UUID batchId, long previewVersion, int readyRows, int errorRows,
                           String operatorUsername, java.time.Instant requestedAt) { }
 
@@ -29,6 +34,14 @@ public class AssetImportReviewService {
     private final ObjectMapper json;
     private final Clock clock;
 
+    /**
+     * Wires the service to its persistence, job, JSON and clock collaborators.
+     *
+     * @param db JDBC template for the batch, review, window and event tables
+     * @param jobs durable job service receiving the publication task on approval
+     * @param json mapper used to project stored row JSON and event details
+     * @param clock timestamp source for window expiry checks
+     */
     public AssetImportReviewService(JdbcTemplate db, DurableJobService jobs, ObjectMapper json, Clock clock) {
         this.db = db;
         this.jobs = jobs;
@@ -36,6 +49,15 @@ public class AssetImportReviewService {
         this.clock = clock;
     }
 
+    /**
+     * Loads the review state of a batch owned by the calling operator.
+     *
+     * @param operatorId owning operator account id
+     * @param batchId batch whose review is loaded
+     * @return current review projection
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_REVIEW_NOT_FOUND} when the
+     *         review does not exist or the batch belongs to another operator
+     */
     @Transactional(readOnly = true)
     public Review getOwned(long operatorId, UUID batchId) {
         var rows = db.queryForList("SELECT r.review_status,r.preview_version,r.processor_account_id,"
@@ -51,6 +73,15 @@ public class AssetImportReviewService {
                 row.get("job_id") == null ? null : UUID.fromString((String) row.get("job_id")));
     }
 
+    /**
+     * Pages the administrator work queue of PENDING reviews, ordered by request time then batch
+     * id, 50 entries per page.
+     *
+     * @param page 1-based page number, at most 1,000,000
+     * @return the pending entries of the requested page
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for an
+     *         out-of-range page number
+     */
     @Transactional(readOnly = true)
     public List<Pending> pending(int page) {
         if (page < 1 || page > 1_000_000) {
@@ -67,6 +98,20 @@ public class AssetImportReviewService {
                         result.getTimestamp("requested_at").toInstant()), (page - 1) * 50);
     }
 
+    /**
+     * Pages the persisted preview rows of a batch for the reviewing administrator, filtered to
+     * READY or ERROR rows, 50 entries per page ordered by sheet row. Only batches with a PENDING
+     * review are readable through this entrance.
+     *
+     * @param batchId batch under review
+     * @param status row-status filter, either READY or ERROR
+     * @param page 1-based page number, at most 1,000,000
+     * @return page of preview rows plus the total count under the same filter
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for bad
+     *         arguments or an unknown status filter
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_REVIEW_NOT_FOUND} when the
+     *         batch has no pending review
+     */
     @Transactional(readOnly = true)
     public AssetImportBatchService.RowPage rowsForAdmin(UUID batchId, String status, int page) {
         if (batchId == null || status == null || page < 1 || page > 1_000_000
@@ -94,6 +139,24 @@ public class AssetImportReviewService {
         return new AssetImportBatchService.RowPage(total, items);
     }
 
+    /**
+     * Submits a previewed batch for administrator review under the operator's currently open
+     * initialization window. A PENDING review at the same preview version is an idempotent
+     * replay; only a REJECTED review may be requested again.
+     *
+     * @param operatorId requesting operator account id, must own the batch and the open window
+     * @param batchId batch to submit
+     * @param expectedVersion preview version being submitted, must match the stored version
+     * @return review projection with status PENDING
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_REQUEST_INVALID} for a bad
+     *         operator id, null batch id or expected version below 1
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when unowned,
+     *         {@code ASSET_IMPORT_NOT_READY} when the batch is not PREVIEWED or has no ready
+     *         rows, {@code ASSET_IMPORT_VERSION_CONFLICT} on a stale version,
+     *         {@code ASSET_IMPORT_WINDOW_CLOSED} without an open unexpired window assigned to
+     *         the operator, or {@code ASSET_IMPORT_REVIEW_LOCKED} when a non-rejected review
+     *         already exists
+     */
     @Transactional
     public Review request(long operatorId, UUID batchId, long expectedVersion) {
         if (operatorId < 1 || batchId == null || expectedVersion < 1) {
@@ -144,6 +207,32 @@ public class AssetImportReviewService {
         return new Review(batchId, "PENDING", expectedVersion, Long.toString(operatorId), null, null);
     }
 
+    /**
+     * Records the administrator decision on a PENDING review. The decision reason is mandatory;
+     * the deciding administrator must differ from the requesting processor and the review must
+     * still target the current preview version. Approval additionally requires the operator's
+     * initialization window to be open and unexpired, an explicit sampling confirmation and
+     * both row counters to match the stored values; it submits the durable publication job
+     * fenced by the source digest and moves the batch to QUEUED.
+     *
+     * @param administratorId deciding asset-admin account id
+     * @param batchId batch under review
+     * @param approve true to approve and queue publication, false to reject
+     * @param reason mandatory decision reason, at most 500 characters after trimming
+     * @param confirmedReadyRows ready-row count the administrator confirmed, required to approve
+     * @param confirmedErrorRows error-row count the administrator confirmed, required to approve
+     * @param sampleVerified explicit confirmation that sample rows were verified, required to
+     *        approve
+     * @return review projection with the recorded decision and, on approval, the job id
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_DECISION_INVALID} for a
+     *         missing or oversized reason, or when approval confirmations are absent or the
+     *         counters disagree with the stored values
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_NOT_FOUND} when the batch does
+     *         not exist, {@code ASSET_IMPORT_REVIEW_LOCKED} when no PENDING review exists, the
+     *         batch left PREVIEWED, the administrator is the processor or the version moved on,
+     *         or {@code ASSET_IMPORT_WINDOW_CLOSED} when approving outside an open unexpired
+     *         window
+     */
     @Transactional
     public Review decide(long administratorId, UUID batchId, boolean approve, String reason,
             Integer confirmedReadyRows, Integer confirmedErrorRows, boolean sampleVerified) {

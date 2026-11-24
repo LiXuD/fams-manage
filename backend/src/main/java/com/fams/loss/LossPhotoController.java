@@ -23,6 +23,13 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Upload and download endpoints for loss-report photo evidence, active only when the attachment
+ * quarantine storage is configured. Uploads stream the multipart file into {@link LossPhotoService}
+ * without materializing it in memory; downloads are two-step: a grant token is issued for the
+ * caller's own URI prefix ({@code /api/v1} or {@code /api/v1/mini}), then the content endpoint
+ * serves the bytes as a non-cached attachment with {@code nosniff}.
+ */
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 @Validated
@@ -32,6 +39,12 @@ public class LossPhotoController {
     private final LossPhotoService photos;
     private final RequisitionActorContext actors;
 
+    /**
+     * Wires the controller to the photo service and the actor context used to resolve the caller.
+     *
+     * @param photos service performing quarantine-aware upload, grant and read operations
+     * @param actors context capturing the current requisition actor per request
+     */
     public LossPhotoController(LossPhotoService photos, RequisitionActorContext actors) {
         this.photos = photos;
         this.actors = actors;

@@ -24,6 +24,10 @@ import tools.jackson.databind.ObjectMapper;
 @Transactional(propagation = Propagation.MANDATORY)
 public class LossInitialPort {
     private static final Logger LOG = LoggerFactory.getLogger(LossInitialPort.class);
+    /**
+     * Result of opening an initial confirmed-loss report: the new report id plus the serialized
+     * custody and confirmation snapshots that were persisted with it.
+     */
     public record Confirmed(long id, String custodyJson, String confirmationJson) { }
 
     private final JdbcTemplate db;
@@ -36,6 +40,23 @@ public class LossInitialPort {
         this.json = json;
     }
 
+    /**
+     * Opens a confirmed-loss report directly from an asset-import opening row: captures the asset
+     * snapshot (factory-repair source when the opening lifecycle is FACTORY_REPAIR), validates the
+     * loss facts timeline, inserts the report in CONFIRMED_LOST status with a follow-up todo and a
+     * review date 30 days after the business date, and writes the LOSS_INITIAL_OPENED event.
+     *
+     * @param opening import opening context (asset, actor, batch, row, reason and opening time)
+     * @param facts verified loss facts with last-seen/confirmed timestamps and responsibility evidence
+     * @param businessDate import business date used to derive the 30-day review date
+     * @param timezone review timezone recorded in the event schedule detail
+     * @param repair factory repair id, required when the opening lifecycle is FACTORY_REPAIR
+     * @param round factory repair round id, required together with {@code repair}
+     * @return the created report id with its persisted custody and confirmation JSON snapshots
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_INITIAL_LOSS_INVALID} if the
+     *         factory references are missing, the lifecycle is unsupported or drifted from the
+     *         snapshot, or the last-seen/confirmed/opening timestamps are out of order
+     */
     public Confirmed open(Opening opening, LossFacts facts, LocalDate businessDate, String timezone, Long repair, Long round) {
         boolean factory = "FACTORY_REPAIR".equals(opening.beforeLifecycle());
         AssetLossPort.Snapshot snapshot = factory
@@ -79,6 +100,18 @@ public class LossInitialPort {
         return new Confirmed(id, custodyJson, confirmationJson);
     }
 
+    /**
+     * Rolls back an initial confirmed-loss report during import rollback: cancels the report only
+     * while it is still untouched (CONFIRMED_LOST, version 0, not recovered), closes its follow-up
+     * todo and records the LOSS_INITIAL_ROLLED_BACK event.
+     *
+     * @param report loss report id to cancel
+     * @param asset asset id the report must still be bound to
+     * @param actor account id recorded on the rollback event
+     * @param time timestamp written to the report, todo and event rows
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_ROLLBACK_DOWNSTREAM} if the report
+     *         was already modified downstream and can no longer be cancelled safely
+     */
     public void cancel(long report, long asset, long actor, Instant time) {
         if (db.update("""
                 UPDATE fams_loss_report SET report_status='CANCELLED',version=1,updated_at=?

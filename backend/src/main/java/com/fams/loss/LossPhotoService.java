@@ -30,6 +30,14 @@ public class LossPhotoService {
     private final AttachmentStorage storage;
     private final AttachmentEvidencePort evidence;
 
+    /**
+     * Wires the photo service to the loss domain checks and the attachment infrastructure.
+     *
+     * @param reports loss service providing uploader/access authority checks and photo registration
+     * @param writer attachment writer performing quarantine storage and malware scanning
+     * @param storage attachment storage used to delete orphaned objects after a failed registration
+     * @param evidence attachment evidence port issuing download grants and reading content
+     */
     public LossPhotoService(
             LossService reports,
             AttachmentWriter writer,
@@ -41,6 +49,26 @@ public class LossPhotoService {
         this.evidence = evidence;
     }
 
+    /**
+     * Uploads one photo for a loss report awaiting the admin decision. The creator check runs in
+     * its own transaction first; the bytes are then quarantined and scanned outside any business
+     * transaction, and the registration callback re-checks authority and report state under lock.
+     * When the returned receipt references a different object (an idempotent replay of an earlier
+     * upload), the freshly stored duplicate is deleted so no orphan remains; the writer itself
+     * removes quarantined bytes when registration rejects them.
+     *
+     * @param actor captured actor, must be the report creator
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this upload attempt
+     * @param filename original filename as supplied by the uploader
+     * @param mime declared content type of the upload
+     * @param bytes stream of the uploaded file, consumed by the quarantine writer
+     * @return receipt with the report id, attachment object id and the new report version
+     * @throws IOException if reading the upload stream or writing to quarantine storage fails
+     * @throws LossFailure with the authority, state, scan or format codes raised by
+     *         {@link LossService#registerPhoto}
+     */
     public LossViews.PhotoReceipt upload(
             Actor actor,
             long id,
@@ -69,6 +97,19 @@ public class LossPhotoService {
         return result;
     }
 
+    /**
+     * Issues a short-lived download grant for one photo after checking that the report is visible
+     * to the caller. The grant identity binds the photo object together with the caller's account
+     * id, auth epoch and authorization version, so the evidence port can tie the token to the
+     * session state it was issued under.
+     *
+     * @param actor captured actor whose report visibility is revalidated
+     * @param id loss report id owning the photo
+     * @param object attachment object id of the photo
+     * @return grant token with its expiry epoch second
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} or {@code LOSS_NOT_VISIBLE} when the
+     *         report is unknown or outside the caller's visibility scope
+     */
     @Transactional
     public AttachmentGrantSigner.Grant grant(Actor actor, long id, UUID object) {
         LOG.debug("Loss photo grant requested for report {}.", id);
@@ -76,6 +117,20 @@ public class LossPhotoService {
         return evidence.grant("LOST_REPORT", id, identity(actor, object));
     }
 
+    /**
+     * Reads one photo's bytes under a previously issued grant, after re-checking that the report
+     * is still visible to the caller. Grant validation and byte retrieval are delegated to the
+     * attachment evidence port.
+     *
+     * @param actor captured actor whose report visibility is revalidated
+     * @param id loss report id owning the photo
+     * @param object attachment object id of the photo
+     * @param token grant token issued by {@link #grant}
+     * @return content bundle with the bytes, mime type and filename for the response
+     * @throws IOException if reading the object from storage fails
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} or {@code LOSS_NOT_VISIBLE} when the
+     *         report is unknown or outside the caller's visibility scope
+     */
     @Transactional
     public AttachmentReadService.Content read(Actor actor, long id, UUID object, String token)
             throws IOException {

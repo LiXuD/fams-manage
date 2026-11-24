@@ -21,6 +21,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.UUID;
 import java.util.function.Supplier;
 
+/**
+ * REST surface for loss reports shared by the web console and the mini program
+ * ({@code /api/v1/loss-reports} and {@code /api/v1/mini/loss-reports}). Endpoints delegate to
+ * {@link LossService} with an actor captured from {@link RequisitionActorContext}; write endpoints
+ * require {@code If-Match-Version} and {@code Idempotency-Key} headers and retry once on database
+ * lock conflicts before surfacing {@code LOSS_WRITE_CONFLICT}.
+ */
 @Profile("fams-product")
 @Validated
 @RestController
@@ -29,6 +36,13 @@ public class LossController {
     private final LossService reports;
     private final RequisitionActorContext actors;
 
+    /**
+     * Wires the controller to the loss domain service and the actor context used to resolve the
+     * calling account for every request.
+     *
+     * @param reports loss report service performing all business operations
+     * @param actors context capturing and revalidating the current requisition actor
+     */
     public LossController(LossService reports, RequisitionActorContext actors) {
         this.reports = reports;
         this.actors = actors;

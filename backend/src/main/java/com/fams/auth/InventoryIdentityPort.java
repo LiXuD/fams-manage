@@ -13,6 +13,15 @@ public final class InventoryIdentityPort {
         this.sessions = sessions;
     }
 
+    /**
+     * Resolves the mini binding id behind the actor's mini token, so the inventory domain can
+     * scope data by binding without seeing the token itself.
+     *
+     * @param actor authenticated actor of the current request
+     * @return the binding id, or null when the actor authenticated without a mini token
+     * @throws AuthOperationException when the token has no current session or the session belongs
+     *         to a different account than the actor
+     */
     public Long bindingId(RequisitionActorContext.Actor actor) {
         if (actor.miniToken() == null) {
             return null;

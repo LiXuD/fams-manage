@@ -14,9 +14,28 @@ public final class InboundActorContext {
         this.request = request;
     }
 
+    /**
+     * Gate for inbound operations restricted to warehouse operators.
+     *
+     * @return actor projection carrying the warehouse-operator role name
+     * @throws AuthOperationException when the account is not a warehouse operator
+     */
     public Actor requireWarehouse() { return require(Role.WAREHOUSE_OPERATOR); }
+    /**
+     * Gate for inbound decisions restricted to asset admins.
+     *
+     * @return actor projection carrying the asset-admin role name
+     * @throws AuthOperationException when the account is not an asset admin
+     */
     public Actor requireAdmin() { return require(Role.ASSET_ADMIN); }
 
+    /**
+     * Read gate for inbound receipts: warehouse operators take precedence over asset admins when
+     * an account holds both roles.
+     *
+     * @return actor projection carrying the matched role name
+     * @throws AuthOperationException when the account holds neither allowed role
+     */
     public Actor requireReader() {
         AuthAccount account = AuthRequestContext.account(request);
         if (account.roles().contains(Role.WAREHOUSE_OPERATOR)) {
@@ -39,5 +58,6 @@ public final class InboundActorContext {
                 AuthRequestContext.requestId(request).toString());
     }
 
+    /** Actor projection handed to the inbound domain: identity, matched role and request id. */
     public record Actor(long id, String username, String role, String requestId) { }
 }

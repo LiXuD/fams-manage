@@ -23,6 +23,13 @@ public class AssetImportWorker {
     private final AssetImportPublicationService publication;
     private final AssetImportRollbackService rollbacks;
 
+    /**
+     * Wires the worker to the durable job queue and the two processing services.
+     *
+     * @param jobs durable job service used for claiming and completing leases
+     * @param publication service executing claimed publication jobs
+     * @param rollbacks service executing claimed rollback jobs
+     */
     public AssetImportWorker(DurableJobService jobs, AssetImportPublicationService publication,
             AssetImportRollbackService rollbacks) {
         this.jobs = jobs;
@@ -30,6 +37,11 @@ public class AssetImportWorker {
         this.rollbacks = rollbacks;
     }
 
+    /**
+     * Claims at most one publication job and one rollback job per run with a 45-minute lease and
+     * executes them; failures are recorded on the batch, and a failure that cannot even be
+     * recorded is left to lease expiry so another instance can reclaim the job.
+     */
     @Scheduled(fixedDelayString = "${fams.asset-import.worker.delay-ms:5000}",
             initialDelayString = "${fams.asset-import.worker.initial-delay-ms:5000}")
     public void poll() {

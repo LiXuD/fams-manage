@@ -17,11 +17,22 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Read endpoints for inbound receipt evidence, active only when the attachment quarantine storage
+ * is configured: lists the evidence of one receipt, issues a download grant and serves the granted
+ * content as a non-cached attachment with {@code nosniff}. All access decisions are delegated to
+ * the shared {@link AttachmentReadService}, which consults the inbound business port.
+ */
 @RestController
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public final class InboundAttachmentReadController {
     private final AttachmentReadService service;
+    /**
+     * Wires the controller to the shared attachment read service.
+     *
+     * @param service attachment read service performing listing, grant issuance and content reads
+     */
     public InboundAttachmentReadController(AttachmentReadService service) { this.service = service; }
     @GetMapping("/api/v1/inbound-receipts/{receiptId}/attachments")
     InboundViews.AttachmentListPage list(@PathVariable long receiptId) {

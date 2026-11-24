@@ -17,10 +17,25 @@ public class AssetImportCatalogRepository {
     private static final int IDENTITY_BATCH = 500;
     private final JdbcTemplate db;
 
+    /**
+     * Wires the repository to the master-data and asset tables.
+     *
+     * @param db JDBC template for the snapshot queries
+     */
     public AssetImportCatalogRepository(JdbcTemplate db) {
         this.db = db;
     }
 
+    /**
+     * Loads the single consistent catalog snapshot used by one preflight run: all reference
+     * tables (locations scoped to their warehouse, employees to their organization) plus the
+     * subset of the given asset codes and serial numbers that already exist, queried in batches
+     * of 500.
+     *
+     * @param assetCodes asset codes appearing in the workbook
+     * @param serialNumbers serial numbers appearing in the workbook
+     * @return immutable catalog snapshot for {@link AssetImportPreflight#check}
+     */
     @Transactional(readOnly = true)
     public AssetImportPreflight.Catalog snapshot(Set<String> assetCodes, Set<String> serialNumbers) {
         return new AssetImportPreflight.Catalog(

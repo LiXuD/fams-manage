@@ -7,6 +7,11 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Read-only port answering which accounts may act as inventory executors: an enabled account
+ * without an initial-password obligation, an active employee and organization, and at least one
+ * of the executor roles (employee, department asset manager, asset admin, warehouse operator).
+ */
 @Component
 @Profile("fams-product")
 public final class InventoryExecutorPort {
@@ -36,15 +41,35 @@ public final class InventoryExecutorPort {
                 + " ('EMPLOYEE','DEPARTMENT_ASSET_MANAGER','ASSET_ADMIN','WAREHOUSE_OPERATOR'))";
     private final JdbcTemplate db;
 
+    /**
+     * Wires the port to the account, employee and organization tables.
+     *
+     * @param db JDBC template used for the eligibility queries
+     */
     public InventoryExecutorPort(JdbcTemplate db) {
         this.db = db;
     }
 
+    /**
+     * Checks executor eligibility of one account, holding a shared lock on the account row so a
+     * concurrent status change cannot slip in after the check.
+     *
+     * @param accountId account to check
+     * @return true when the account satisfies every executor eligibility condition
+     */
     public boolean eligible(long accountId) {
         return !db.queryForList("SELECT a.id" + ELIGIBLE + " AND a.id=? FOR SHARE", accountId)
                 .isEmpty();
     }
 
+    /**
+     * Paged list of eligible executor options ordered by account id, returned verbatim as the
+     * executors HTTP body.
+     *
+     * @param page 1-based page number
+     * @param size page size
+     * @return the executor choices for the requested page
+     */
     public List<ExecutorChoice> choices(int page, int size) {
         return db.queryForList(
                         "SELECT CAST(a.id AS CHAR) AS id,e.name,CAST(e.organization_id AS CHAR) AS"

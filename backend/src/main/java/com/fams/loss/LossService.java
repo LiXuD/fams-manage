@@ -53,6 +53,23 @@ public class LossService {
     private final ObjectProvider<AttachmentRegistry> attachments;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
+    /**
+     * Wires the loss service to its database, serialization, time and cross-domain collaborators.
+     *
+     * @param db JDBC template for loss report, recovery, event, todo, lock and receipt tables
+     * @param json mapper used to serialize snapshots and canonicalize idempotency fingerprints
+     * @param clock time source for timestamps and review-date arithmetic
+     * @param actors context revalidating the captured actor under pessimistic locking
+     * @param assets asset-domain port validating and mutating asset lifecycle/exception state
+     * @param repairs port creating the linked repair application for damaged recovered assets
+     * @param loans loan port enforcing recovery preconditions and refreshing liability
+     * @param returns return port restoring missing follow-ups and creating linked returns
+     * @param transfers transfer port creating linked transfers for recovered assets
+     * @param factoryRepairs factory repair service supplying loss sources, handoff and restoration
+     * @param internalRepairs internal repair service supplying loss sources and handoff/resume hooks
+     * @param attachments provider of the attachment registry used to register photo evidence
+     * @param evidence provider of the attachment evidence port used to list and grant photo access
+     */
     public LossService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -82,12 +99,32 @@ public class LossService {
         this.evidence = evidence;
     }
 
+    /**
+     * Pages the assets the caller is currently allowed to report as lost. Scope filtering and
+     * eligibility rules live in the asset domain port; the actor is revalidated under lock first.
+     *
+     * @param actor captured actor whose identity and permissions are revalidated
+     * @param page 1-based page number
+     * @param size maximum number of rows per page
+     * @return page of loss-eligible asset rows with the total count
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.EligiblePage eligible(Actor actor, int page, int size) {
         LOG.debug("Eligible loss assets requested page {} size {}.", page, size);
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
+    /**
+     * Pages the loss reports visible to the caller: asset admins see all reports; other callers
+     * see reports they created or that name their employee as (shared) responsible; department
+     * asset managers also see their organization's reports and warehouse operators see reports
+     * that already carry an approval snapshot.
+     *
+     * @param actor captured actor whose visibility scope is derived from roles and identity
+     * @param page 1-based page number
+     * @param size maximum number of rows per page
+     * @return page of report views ordered by descending report id, with the total count
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.Page<LossViews.LossReport> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
@@ -122,6 +159,18 @@ public class LossService {
                 size);
     }
 
+    /**
+     * Loads the full detail of one loss report: header, active business-lock version, photo
+     * evidence list, the 100 most recent events, the confirmation snapshot, recovery requests,
+     * the recovery asset view when recovery is still open, and the caller-specific action flags
+     * deciding which operations the UI may offer.
+     *
+     * @param actor captured actor used for visibility and per-action role checks
+     * @param id loss report id to load
+     * @return assembled detail view for the report
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} if the report does not exist, or
+     *         {@code LOSS_NOT_VISIBLE} if the caller is outside the report's visibility scope
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.LossDetail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
@@ -258,6 +307,20 @@ public class LossService {
                 actions);
     }
 
+    /**
+     * Submits a new loss report for an ordinary asset: replays a stored receipt when the same
+     * idempotency key and payload fingerprint were already processed, otherwise validates the
+     * last-seen timestamp, freezes the asset submission snapshot, opens the report in
+     * PENDING_ADMIN_DECISION, acquires the asset business lock and files the approval todo.
+     *
+     * @param actor captured actor revalidated as the report creator
+     * @param key idempotency key identifying this submission attempt
+     * @param input validated submission payload (asset reference, last-seen facts)
+     * @return the created report view, or the remembered view of an identical earlier submission
+     * @throws LossFailure with code {@code LOSS_TIME_INVALID} if the last-seen timestamp has
+     *         sub-millisecond precision or lies in the future, or with the code raised by the
+     *         asset port when the asset cannot be submitted for loss
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submit(Actor actor, UUID key, LossInput.Submission input) {
         var current = actors.revalidateLocked(actor);
@@ -273,6 +336,20 @@ public class LossService {
         return remember(current, "SUBMIT", key, hash, row);
     }
 
+    /**
+     * Submits a loss report on behalf of an inventory missing reason. Runs inside the inventory
+     * caller's transaction and requires the asset-admin role; the inventory task, item, reason and
+     * recheck generation are embedded into the stored source snapshot as {@code inventorySource}.
+     * No idempotency receipt is written because the enclosing import flow owns retry semantics.
+     *
+     * @param actor captured actor, must hold the asset-admin role
+     * @param inventory source reference identifying the counted task item and reason
+     * @param input validated submission payload for the loss report
+     * @return id of the created report as a string
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED} if the actor is not an asset admin,
+     *         {@code LOSS_TIME_INVALID} for a malformed last-seen timestamp, or the code raised by
+     *         the asset port when the asset cannot be submitted for loss
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public String submitInventory(Actor actor, InventoryLossPort.Source inventory,
             LossInput.Submission input) {
@@ -308,6 +385,24 @@ public class LossService {
         return row;
     }
 
+    /**
+     * Reports an asset lost from a factory repair round. Requires the warehouse-operator role,
+     * resolves the repair source under the caller-supplied optimistic versions, freezes the asset
+     * snapshot with the factory origin, opens the report and hands the repair round off to loss so
+     * the repair side releases its custody.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param repairId factory repair id the asset was dispatched under
+     * @param roundId repair round id within that repair
+     * @param repairVersion expected repair version for optimistic concurrency on the repair row
+     * @param key idempotency key identifying this submission attempt
+     * @param input factory submission payload (round/asset/ownership/lock versions and facts)
+     * @return the created report view, or the remembered view of an identical earlier submission
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED} if the actor is not a warehouse
+     *         operator, {@code LOSS_FACTORY_TIME_INVALID} if the last-seen timestamp predates the
+     *         factory dispatch, {@code LOSS_TIME_INVALID} for a malformed timestamp, or the code
+     *         raised by the repair or asset ports on version/state conflicts
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submitFactory(Actor actor, long repairId, long roundId, long repairVersion,
             UUID key, LossInput.FactorySubmission input) {
@@ -343,6 +438,22 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Reports an asset lost from an internal repair order. Requires the warehouse-operator role,
+     * resolves the repair source under the caller-supplied optimistic versions, freezes the asset
+     * snapshot together with the repair handling context and hands the repair off to loss.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param repairId internal repair id the asset was accepted under
+     * @param repairVersion expected repair version for optimistic concurrency on the repair row
+     * @param key idempotency key identifying this submission attempt
+     * @param input internal-repair submission payload (asset/ownership/lock versions and facts)
+     * @return the created report view, or the remembered view of an identical earlier submission
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED} if the actor is not a warehouse
+     *         operator, {@code LOSS_INTERNAL_REPAIR_TIME_INVALID} if the last-seen timestamp
+     *         predates repair acceptance, {@code LOSS_TIME_INVALID} for a malformed timestamp, or
+     *         the code raised by the repair or asset ports on version/state conflicts
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport submitInternalRepair(Actor actor, long repairId, long repairVersion, UUID key,
             LossInput.InternalRepairSubmission input) {
@@ -473,6 +584,24 @@ public class LossService {
                 Long.parseLong(source.path("roundId").asText()), number(row, "asset_id"), number(row, "id"));
     }
 
+    /**
+     * Records the asset-admin decision on a pending report. Approval freezes the report and photo
+     * evidence into the approval snapshot, requires the asset to still be in the submitted loss
+     * state and at least one uploaded photo, then moves the report to WAITING_WAREHOUSE_CLAIM and
+     * files the claim todo. Rejection restores the originating source (return follow-up, internal
+     * repair, factory round or plain asset lock) and marks the report REJECTED.
+     *
+     * @param actor captured actor, must hold the asset-admin role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this decision attempt
+     * @param input decision payload with result APPROVE or REJECT and a reason
+     * @return the updated report view, or the remembered view of an identical earlier decision
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift, {@code LOSS_LOCK_CHANGED} when
+     *         the business lock moved, {@code LOSS_DECISION_INVALID} for a result other than
+     *         APPROVE/REJECT, or {@code LOSS_PHOTO_REQUIRED} when approving without photo evidence
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport decide(
             Actor actor, long id, long version, UUID key, LossInput.Decision input) {
@@ -522,6 +651,21 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Cancels a report that is still awaiting the admin decision. Only the creator or an asset
+     * admin may cancel; the originating source is restored exactly as on rejection, todos are
+     * closed and the report is marked CANCELLED.
+     *
+     * @param actor captured actor, must be the report creator or hold the asset-admin role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this cancellation attempt
+     * @param input payload carrying the cancellation reason
+     * @return the updated report view, or the remembered view of an identical earlier cancellation
+     * @throws LossFailure with code {@code LOSS_CREATOR_REQUIRED} when the caller is neither the
+     *         creator nor an asset admin, {@code LOSS_NOT_FOUND}, {@code LOSS_REPORT_CHANGED} on
+     *         version/status drift, or {@code LOSS_LOCK_CHANGED} when the business lock moved
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport cancel(
             Actor actor, long id, long version, UUID key, LossInput.Reason input) {
@@ -550,6 +694,24 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Claims an approved report for warehouse verification. When the report originated from a
+     * factory round, an internal repair or an asset return, only that source's processor may
+     * claim it. The report moves to VERIFYING, the caller becomes the processor, the ownership
+     * version advances and a verify todo is filed.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this claim attempt
+     * @return the updated report view, or the remembered view of an identical earlier claim
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift, {@code LOSS_LOCK_CHANGED} when
+     *         the business lock moved, {@code LOSS_FACTORY_PROCESSOR_REQUIRED},
+     *         {@code LOSS_INTERNAL_REPAIR_PROCESSOR_REQUIRED} or
+     *         {@code LOSS_RETURN_PROCESSOR_REQUIRED} when a different processor claims a sourced
+     *         report
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport claim(Actor actor, long id, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
@@ -596,6 +758,25 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Starts the search phase for a claimed report: the assigned processor moves the asset into
+     * the SEARCHING exception state and schedules the next review date, which must not lie in the
+     * past of the active review timezone. The report moves to SEARCHING and a search todo is filed.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this search attempt
+     * @param input search payload (ownership/asset/lock versions, searched-at and review date)
+     * @return the updated report view, or the remembered view of an identical earlier request
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or the tracked versions
+     *         drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_TIME_INVALID} for a malformed timestamp, or
+     *         {@code LOSS_SEARCH_DATE_INVALID} when the searched-at predates the last-seen instant
+     *         or the review date is in the past
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport search(
             Actor actor, long id, long version, UUID key, LossInput.Search input) {
@@ -640,6 +821,17 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Pages the confirmed-lost reports that still require periodic follow-up: the report is in
+     * CONFIRMED_LOST status, the asset exception status is LOST and the asset is not scrapped or
+     * pending scrap. Visibility scoping matches {@link #list}, with warehouse operators always
+     * included; rows are ordered by the next review date so overdue reviews surface first.
+     *
+     * @param actor captured actor whose visibility scope filters the rows
+     * @param page 1-based page number
+     * @param size maximum number of rows per page
+     * @return page of report views ordered by next review date, with the total count
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public LossViews.Page<LossViews.LossReport> followUps(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
@@ -678,6 +870,27 @@ public class LossService {
                 size);
     }
 
+    /**
+     * Confirms the asset as lost after the search phase. The assigned processor must supply five
+     * substantive evidence fields (each at least 10 characters), the asset moves to the LOST
+     * exception state, the business lock is released, the confirmation snapshot is frozen, a
+     * follow-up todo is filed 30 days out and loan liability is refreshed.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this confirmation attempt
+     * @param input confirmation payload (ownership/asset/lock versions, evidence fields, dates)
+     * @return the updated report view, or the remembered view of an identical earlier confirmation
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or tracked versions
+     *         drifted, {@code LOSS_CONFIRMATION_EVIDENCE_REQUIRED} when any evidence field is
+     *         shorter than 10 characters, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_TIME_INVALID} for a malformed timestamp, or
+     *         {@code LOSS_CONFIRMATION_DATE_INVALID} when the search/confirmation timestamps are
+     *         out of order relative to the recorded timeline
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport confirmLost(
             Actor actor, long id, long version, UUID key, LossInput.Confirmation input) {
@@ -736,6 +949,26 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Records one periodic follow-up review on a confirmed-lost report. The processor must supply
+     * findings of at least 10 characters and a reason of at least 3; the reviewed-at timestamp may
+     * not precede the confirmation or the previous follow-up, and the next review date (defaulting
+     * to 30 days out) may not lie in the past of the active review timezone. The asset must still
+     * be in the LOST exception state.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this follow-up attempt
+     * @param input follow-up payload (ownership version, findings, reason and dates)
+     * @return the updated report view, or the remembered view of an identical earlier follow-up
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or ownership version
+     *         drifted, {@code LOSS_TIME_INVALID} for a malformed timestamp,
+     *         {@code LOSS_FOLLOW_UP_EVIDENCE_REQUIRED} when findings or reason are too short, or
+     *         {@code LOSS_REVIEW_DATE_INVALID} when the review timeline is out of order
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport followUp(
             Actor actor, long id, long version, UUID key, LossInput.FollowUp input) {
@@ -783,6 +1016,28 @@ public class LossService {
         }
     }
 
+    /**
+     * Recovers the asset while the report is still in the search phase, restoring it to its
+     * original lifecycle and custody. The processor must supply valid recovery facts (found-at
+     * within the recorded timeline, verified physical identity, substantive evidence, condition
+     * INTACT and the original custodian retained); the report moves to RECOVERED, the business
+     * lock is released and todos are closed.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this recovery attempt
+     * @param input recovery execution payload (ownership/asset/lock versions and recovery facts)
+     * @return the updated report view, or the remembered view of an identical earlier recovery
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or tracked versions
+     *         drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_RECOVERY_TIME_INVALID} / {@code LOSS_RECOVERY_EVIDENCE_REQUIRED} when
+     *         the recovery facts fail the timeline or evidence checks, or
+     *         {@code LOSS_LINKED_RECOVERY_REQUIRED} when the asset was not found intact with the
+     *         original custodian and a linked-recovery route must be used instead
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverSearching(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryExecution input) {
@@ -819,6 +1074,26 @@ public class LossService {
         return remember(current, operation, key, hash, header(id));
     }
 
+    /**
+     * Recovers a damaged asset during the search phase by restoring its original state and
+     * immediately creating a linked repair application, which adopts the still-live loss lock
+     * before this transaction commits. The recovery facts must show condition DAMAGED with the
+     * original custodian retained; the report moves to RECOVERED and records the repair id.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key, also reused for the linked repair creation
+     * @param input repair-recovery payload with fault/impact descriptions and the execution facts
+     * @return report view carrying the created repair id, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or tracked versions
+     *         drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_RECOVERY_EVIDENCE_REQUIRED} when the facts fail timeline/evidence checks,
+     *         or {@code LOSS_LINKED_RECOVERY_REQUIRED} when the condition is not DAMAGED or the
+     *         original custodian was not retained
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToRepair(
             Actor actor, long id, long version, UUID key, LossInput.RepairRecovery input) {
@@ -882,12 +1157,48 @@ public class LossService {
         return result;
     }
 
+    /**
+     * Requests admin approval to recover an intact confirmed-lost asset back to its original
+     * state. Validates the applicant role and recovery facts, checks asset eligibility and loan
+     * preconditions in the asset and loan ports, rejects the request when any business lock is
+     * still live, then inserts the recovery request, re-locks the asset for the report and files
+     * the admin decision todo.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED} when the caller is not an applicant,
+     *         {@code LOSS_NOT_FOUND}, {@code LOSS_NOT_VISIBLE}, {@code LOSS_REPORT_CHANGED} on
+     *         version/status drift, {@code LOSS_ALREADY_RECOVERED} when the report recovered
+     *         meanwhile, {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the report carries a repair
+     *         origin, {@code LOSS_RECOVERY_TIME_INVALID} / {@code LOSS_RECOVERY_EVIDENCE_REQUIRED}
+     *         / {@code LOSS_LINKED_RECOVERY_REQUIRED} from the facts checks, or
+     *         {@code LOSS_ASSET_LOCKED} while another business lock is held on the asset
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestRecovery(
             Actor actor, long id, long version, UUID key, LossInput.RecoveryRequest input) {
         return requestRecovery(actor, id, version, key, input, false, null);
     }
 
+    /**
+     * Requests admin approval to recover a confirmed-lost asset that was found damaged, so the
+     * later execution can create a linked repair. Same flow as {@link #requestRecovery} but the
+     * facts must show condition DAMAGED with the original custodian retained.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input damaged-recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #requestRecovery}, where the facts checks use
+     *         {@code LOSS_LINKED_RECOVERY_REQUIRED} when the condition is not DAMAGED or the
+     *         original custodian was not retained
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestRepairRecovery(
             Actor actor, long id, long version, UUID key, LossInput.DamagedRecoveryRequest input) {
@@ -997,6 +1308,24 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, id, recovery);
     }
 
+    /**
+     * Records the asset-admin decision on a pending recovery request. Approval re-checks the asset
+     * against the frozen request destination and moves the request to WAITING_WAREHOUSE_CLAIM with
+     * a claim todo; rejection releases the asset business lock and marks the request REJECTED. The
+     * decision snapshot freezes the actor, reason and original request payload.
+     *
+     * @param actor captured actor, must hold the asset-admin role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this decision attempt
+     * @param input decision payload with result APPROVE or REJECT and a reason
+     * @return report view with the updated recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_DECISION_INVALID} for a
+     *         result other than APPROVE/REJECT, {@code LOSS_RECOVERY_NOT_FOUND} for an unknown
+     *         request, {@code LOSS_RECOVERY_CHANGED} on request version/status drift,
+     *         {@code LOSS_ALREADY_RECOVERED} when the parent report recovered meanwhile, or
+     *         {@code LOSS_LOCK_CHANGED} when the recovery business lock moved
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery decideRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Decision input) {
@@ -1052,6 +1381,23 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    /**
+     * Cancels a recovery request that is still awaiting the admin decision. Only the request
+     * creator or an asset admin may cancel; the asset business lock is released, recovery todos
+     * are closed and the request is marked CANCELLED.
+     *
+     * @param actor captured actor, must be the request creator or hold the asset-admin role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this cancellation attempt
+     * @param input payload carrying the cancellation reason
+     * @return report view with the updated recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_CREATOR_REQUIRED} when the caller is neither the
+     *         creator nor an asset admin, {@code LOSS_NOT_VISIBLE},
+     *         {@code LOSS_RECOVERY_NOT_FOUND}, {@code LOSS_RECOVERY_CHANGED} on version/status
+     *         drift, {@code LOSS_ALREADY_RECOVERED}, or {@code LOSS_LOCK_CHANGED} when the
+     *         recovery business lock moved
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery cancelRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.Reason input) {
@@ -1088,6 +1434,24 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    /**
+     * Claims an approved recovery request for warehouse execution. Reports originating from a
+     * factory round or an internal repair may only be claimed by that source's processor. The
+     * request moves to VERIFYING, the caller becomes the processor and the ownership version
+     * advances; the asset state is re-checked against the frozen request destination.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this claim attempt
+     * @return report view with the updated recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_RECOVERY_NOT_FOUND},
+     *         {@code LOSS_RECOVERY_CHANGED} on version/status drift, {@code LOSS_ALREADY_RECOVERED},
+     *         {@code LOSS_LOCK_CHANGED} when the recovery business lock moved,
+     *         {@code LOSS_FACTORY_PROCESSOR_REQUIRED} or
+     *         {@code LOSS_INTERNAL_REPAIR_PROCESSOR_REQUIRED} when a different processor claims a
+     *         repair-sourced report
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery claimRecovery(Actor actor, long recovery, long version, UUID key) {
         var current = actors.revalidateLocked(actor);
@@ -1134,6 +1498,26 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    /**
+     * Executes a claimed recovery request whose frozen facts showed the asset INTACT: restores the
+     * asset to its original lifecycle and custody from the LOST exception state, completes the
+     * recovery request, stamps the parent report as recovered, releases the business lock and
+     * closes todos.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input recovery execution payload (ownership/asset/lock versions and recovery facts)
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_RECOVERY_NOT_FOUND},
+     *         {@code LOSS_RECOVERY_CHANGED} on version/status drift,
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen request was not an intact
+     *         original recovery, {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or
+     *         tracked versions drifted, {@code LOSS_LOCK_CHANGED} when the recovery lock moved, or
+     *         the recovery facts codes {@code LOSS_RECOVERY_TIME_INVALID} /
+     *         {@code LOSS_RECOVERY_EVIDENCE_REQUIRED} / {@code LOSS_LINKED_RECOVERY_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecovery(
             Actor actor, long recovery, long version, UUID key, LossInput.RecoveryExecution input) {
@@ -1182,6 +1566,26 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    /**
+     * Executes a claimed recovery request whose frozen facts showed the asset DAMAGED: restores the
+     * asset from the LOST exception state and creates the linked repair application through the
+     * repair port in the same transaction, then completes the request and stamps the parent report
+     * as recovered with the repair id in its snapshot.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key, also reused for the linked repair creation
+     * @param input closed-repair recovery payload with fault/impact and the execution facts
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_RECOVERY_NOT_FOUND},
+     *         {@code LOSS_RECOVERY_CHANGED} on version/status drift,
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen request was not a damaged
+     *         repair recovery, {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or
+     *         tracked versions drifted, {@code LOSS_LOCK_CHANGED} when the recovery lock moved, or
+     *         the damaged facts codes {@code LOSS_RECOVERY_TIME_INVALID} /
+     *         {@code LOSS_RECOVERY_EVIDENCE_REQUIRED} / {@code LOSS_LINKED_RECOVERY_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToRepair(
             Actor actor, long recovery, long version, UUID key, LossInput.ClosedRepairRecovery input) {
@@ -1225,6 +1629,16 @@ public class LossService {
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
+    /**
+     * Pages the locations selectable as the recovery destination when requesting a recovery. Only
+     * eligible loss applicants may read the list; the rows come from the asset domain port.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param page 1-based page number
+     * @param size maximum number of rows per page
+     * @return page of recovery location choices
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED} if the caller is not an applicant
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.RecoveryLocationPage recoveryLocations(Actor actor, int page, int size) {
         if (!applicant(actors.revalidateLocked(actor))) { throw new LossFailure(403, "LOSS_ROLE_REQUIRED"); }
@@ -1232,6 +1646,21 @@ public class LossService {
         return assets.recoveryLocations(page, size);
     }
 
+    /**
+     * Requests admin approval to recover a confirmed-lost asset into a new asset return. Same flow
+     * as {@link #requestRecovery} but the frozen destination is {@code ASSET_RETURN} and the facts
+     * must show condition INTACT without the original custodian being retained.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input return-recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #requestRecovery}, where the facts checks use
+     *         {@code LOSS_RETURN_RECOVERY_REQUIRED} when the condition is not INTACT or the
+     *         original custodian was retained
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestReturnRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
@@ -1239,6 +1668,22 @@ public class LossService {
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "ASSET_RETURN");
     }
 
+    /**
+     * Requests admin approval to recover a confirmed-lost asset into a transfer. Same flow as
+     * {@link #requestRecovery} but the frozen destination is {@code TRANSFER} and the facts must
+     * show condition INTACT with either a changed custodian or a location different from the one
+     * frozen in the report source snapshot.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input transfer-recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #requestRecovery}, where the facts checks use
+     *         {@code LOSS_TRANSFER_RECOVERY_REQUIRED} when the condition is not INTACT or the asset
+     *         was found with the original custodian at the original location
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestTransferRecovery(Actor actor, long id, long version,
             UUID key, LossInput.ReturnRecoveryRequest input) {
@@ -1265,12 +1710,50 @@ public class LossService {
         }
     }
 
+    /**
+     * Recovers a searching-phase report by handing the found asset into a new asset return. The
+     * processor's execution facts must show condition INTACT without the original custodian being
+     * retained; the asset port validates and restores the return-eligible state, the loan port
+     * re-checks recovery preconditions, and a linked return is created in the same transaction.
+     * The report moves to RECOVERED.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key, also reused for the linked return creation
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return the updated report view, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or tracked versions
+     *         drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_RETURN_RECOVERY_REQUIRED} when the facts do not describe a return-bound
+     *         recovery, or the timeline/evidence codes {@code LOSS_RECOVERY_TIME_INVALID} /
+     *         {@code LOSS_RECOVERY_EVIDENCE_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToReturn(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
         return recoverToReturn(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
+    /**
+     * Executes a claimed recovery request with the frozen destination {@code ASSET_RETURN}: same
+     * return-handoff flow as {@link #recoverToReturn} but driven by the approved recovery request,
+     * which must be in VERIFYING status. The request is completed and the parent report stays in
+     * CONFIRMED_LOST while being stamped as recovered.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param recovery recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key, also reused for the linked return creation
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #recoverToReturn}, plus
+     *         {@code LOSS_RECOVERY_NOT_FOUND}, {@code LOSS_RECOVERY_CHANGED} on request
+     *         version/status drift and {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen
+     *         request destination is not ASSET_RETURN
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToReturn(Actor actor, long recovery, long version,
             UUID key, LossInput.ExplicitRecoveryExecution input) {
@@ -1332,12 +1815,50 @@ public class LossService {
                 : remember(current, operation, key, hash, header(number(row, "id"))));
     }
 
+    /**
+     * Recovers a searching-phase report by handing the found asset into a new transfer. The
+     * processor's execution facts must show condition INTACT with either a changed custodian or a
+     * location different from the frozen source snapshot; the asset port restores the
+     * transfer-eligible state and a linked transfer is created in the same transaction. The report
+     * moves to RECOVERED.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input transfer recovery execution payload (target, reason and the recovery execution)
+     * @return the updated report view, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when the processor or tracked versions
+     *         drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_TRANSFER_RECOVERY_REQUIRED} when the facts do not describe a
+     *         transfer-bound recovery, or the timeline/evidence codes
+     *         {@code LOSS_RECOVERY_TIME_INVALID} / {@code LOSS_RECOVERY_EVIDENCE_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
         return recoverToTransfer(actor, id, version, key, input, false, LossViews.LossReport.class);
     }
 
+    /**
+     * Executes a claimed recovery request with the frozen destination {@code TRANSFER}: same
+     * transfer-handoff flow as {@link #recoverToTransfer} but driven by the approved recovery
+     * request, which must be in VERIFYING status. The request is completed and the parent report
+     * stays in CONFIRMED_LOST while being stamped as recovered.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role
+     * @param id recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input transfer recovery execution payload (target, reason and the recovery execution)
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #recoverToTransfer}, plus
+     *         {@code LOSS_RECOVERY_NOT_FOUND}, {@code LOSS_RECOVERY_CHANGED} on request
+     *         version/status drift and {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen
+     *         request destination is not TRANSFER
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToTransfer(Actor actor, long id, long version, UUID key,
             LossInput.TransferRecoveryExecution input) {
@@ -1399,6 +1920,22 @@ public class LossService {
                 : remember(current, operation, key, hash, header(report)));
     }
 
+    /**
+     * Requests admin approval to recover a confirmed-lost asset back into its originating factory
+     * repair round. Same flow as {@link #requestRecovery} but the report must carry a factory
+     * source and the frozen destination is {@code FACTORY_REPAIR}; the asset port validates the
+     * factory-recovery state instead of loan preconditions.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input factory-recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #requestRecovery}, where
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} also covers reports without a factory origin
+     *         and the facts checks follow the factory recovery rules
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestFactoryRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
@@ -1406,6 +1943,22 @@ public class LossService {
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "FACTORY_REPAIR");
     }
 
+    /**
+     * Requests admin approval to recover a confirmed-lost asset back into its originating internal
+     * repair order. Same flow as {@link #requestRecovery} but the report must carry an internal
+     * repair source and the frozen destination is {@code INTERNAL_REPAIR}; the asset port validates
+     * the internal-repair recovery state instead of loan preconditions.
+     *
+     * @param actor captured actor, must be an eligible loss applicant
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this request attempt
+     * @param input internal-repair recovery request payload (asset version and recovery facts)
+     * @return report view including the new recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #requestRecovery}, where
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} also covers reports without an internal repair
+     *         origin and the facts checks follow the factory recovery rules
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery requestInternalRepairRecovery(Actor actor, long id, long version, UUID key,
             LossInput.ReturnRecoveryRequest input) {
@@ -1413,6 +1966,25 @@ public class LossService {
                 new LossInput.RecoveryRequest(input.assetVersion(), input.facts()), false, "INTERNAL_REPAIR");
     }
 
+    /**
+     * Recovers a searching-phase report by returning the found asset to its originating factory
+     * repair round. Only the round's recorded processor may execute; the asset port restores the
+     * factory-repair state and the factory repair service resumes the round in the same
+     * transaction. The report moves to RECOVERED.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role and be the round processor
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return the updated report view, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_FACTORY_PROCESSOR_REQUIRED} when a different processor executes,
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when tracked versions drifted,
+     *         {@code LOSS_LOCK_CHANGED} when the business lock moved, or the factory facts codes
+     *         {@code LOSS_RECOVERY_TIME_INVALID} / {@code LOSS_RECOVERY_EVIDENCE_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToFactory(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
@@ -1420,6 +1992,24 @@ public class LossService {
                 LossViews.LossReport.class);
     }
 
+    /**
+     * Executes a claimed recovery request with the frozen destination {@code FACTORY_REPAIR}: same
+     * factory-round handoff as {@link #recoverToFactory} but driven by the approved recovery
+     * request, which must be in VERIFYING status. The request is completed and the parent report
+     * stays in CONFIRMED_LOST while being stamped as recovered.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role and be the round processor
+     * @param id recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #recoverToFactory}, plus
+     *         {@code LOSS_RECOVERY_NOT_FOUND}, {@code LOSS_RECOVERY_CHANGED} on request
+     *         version/status drift, {@code LOSS_ALREADY_RECOVERED} and
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen destination is not
+     *         FACTORY_REPAIR
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToFactory(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
@@ -1427,6 +2017,26 @@ public class LossService {
                 LossViews.LossReportWithRecovery.class);
     }
 
+    /**
+     * Recovers a searching-phase report by returning the found asset to its originating internal
+     * repair order. Only the order's recorded processor may execute; the asset port restores the
+     * under-repair state and the internal repair service resumes the order in the same transaction.
+     * The report moves to RECOVERED.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role and be the repair
+     *         processor
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return the updated report view, replayed identically on retry
+     * @throws LossFailure with code {@code LOSS_ROLE_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_INTERNAL_REPAIR_PROCESSOR_REQUIRED} when a different processor executes,
+     *         {@code LOSS_REPORT_CHANGED} on version/status drift,
+     *         {@code LOSS_PROCESSOR_OR_ASSET_CHANGED} when tracked versions drifted,
+     *         {@code LOSS_LOCK_CHANGED} when the business lock moved, or the factory facts codes
+     *         {@code LOSS_RECOVERY_TIME_INVALID} / {@code LOSS_RECOVERY_EVIDENCE_REQUIRED}
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReport recoverToInternalRepair(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
@@ -1434,6 +2044,25 @@ public class LossService {
                 LossViews.LossReport.class);
     }
 
+    /**
+     * Executes a claimed recovery request with the frozen destination {@code INTERNAL_REPAIR}:
+     * same internal-repair handoff as {@link #recoverToInternalRepair} but driven by the approved
+     * recovery request, which must be in VERIFYING status. The request is completed and the parent
+     * report stays in CONFIRMED_LOST while being stamped as recovered.
+     *
+     * @param actor captured actor, must hold the warehouse-operator role and be the repair
+     *         processor
+     * @param id recovery request id
+     * @param version expected recovery request version (If-Match)
+     * @param key idempotency key identifying this execution attempt
+     * @param input explicit recovery execution payload (ownership/asset/lock versions and facts)
+     * @return report view with the completed recovery request, replayed identically on retry
+     * @throws LossFailure with the codes of {@link #recoverToInternalRepair}, plus
+     *         {@code LOSS_RECOVERY_NOT_FOUND}, {@code LOSS_RECOVERY_CHANGED} on request
+     *         version/status drift, {@code LOSS_ALREADY_RECOVERED} and
+     *         {@code LOSS_RECOVERY_PURPOSE_CHANGED} when the frozen destination is not
+     *         INTERNAL_REPAIR
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public LossViews.LossReportWithRecovery executeRecoveryToInternalRepair(Actor actor, long id, long version, UUID key,
             LossInput.ExplicitRecoveryExecution input) {
@@ -1728,6 +2357,16 @@ public class LossService {
                                         current.id(), row.get("processor_account_id"))));
     }
 
+    /**
+     * Pre-upload authority check for loss photo evidence: only the report creator may upload
+     * photos. Runs in its own repeatable-read transaction before the (transaction-less) malware
+     * scan so the scan never holds a business transaction open.
+     *
+     * @param actor captured actor to authorize as the report creator
+     * @param id loss report id the photo is destined for
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} if the report does not exist or
+     *         {@code LOSS_CREATOR_REQUIRED} if the caller is not the creator
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public void photoUploader(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
@@ -1736,11 +2375,43 @@ public class LossService {
         }
     }
 
+    /**
+     * Read-access check for loss photo evidence used by grant issuance and content download: the
+     * report must exist and be visible to the caller under the same scope rules as
+     * {@link #get}. Runs inside the caller's mandatory transaction.
+     *
+     * @param actor captured actor whose visibility scope is revalidated under lock
+     * @param id loss report id owning the photo
+     * @throws LossFailure with code {@code LOSS_NOT_FOUND} if the report does not exist or
+     *         {@code LOSS_NOT_VISIBLE} if the caller is outside the report's visibility scope
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public void photoAccess(Actor actor, long id) {
         visible(actors.revalidateLocked(actor), header(id));
     }
 
+    /**
+     * Registers a scanned quarantine attachment as photo evidence on a report awaiting the admin
+     * decision. Re-checks creator authority and report state under lock, enforces the malware scan
+     * verdict and the image-only format rule, records the attachment in the registry, bumps the
+     * report version and writes the LOSS_PHOTO_ADDED audit event. Idempotent via the PHOTO
+     * operation receipt keyed by filename, hash, mime and size.
+     *
+     * @param actor captured actor, must be the report creator
+     * @param id loss report id
+     * @param version expected report version (If-Match)
+     * @param key idempotency key identifying this upload attempt
+     * @param filename original filename as supplied by the uploader
+     * @param attachment quarantined attachment with its scan verdict and detected format
+     * @return receipt with the report id, attachment object id and the new report version
+     * @throws LossFailure with code {@code LOSS_CREATOR_REQUIRED}, {@code LOSS_NOT_FOUND},
+     *         {@code LOSS_REPORT_CHANGED} when the report left PENDING_ADMIN_DECISION or the
+     *         version drifted, {@code LOSS_LOCK_CHANGED} when the business lock moved,
+     *         {@code LOSS_PHOTO_SCAN_UNAVAILABLE} when the scanner was down,
+     *         {@code LOSS_PHOTO_REJECTED} when the scan was not clean,
+     *         {@code LOSS_PHOTO_IMAGE_REQUIRED} for non-image formats, or
+     *         {@code LOSS_PHOTOS_UNAVAILABLE} when the attachment registry is not configured
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public LossViews.PhotoReceipt registerPhoto(
             Actor actor,
@@ -1997,6 +2668,13 @@ public class LossService {
             Object createdAt) {
     }
 
+    /**
+     * Maps attachment metadata rows into the wire-facing photo projection, normalizing SQL
+     * timestamp types into ISO-8601 UTC strings so the JSON shape is stable across drivers.
+     *
+     * @param rows attachment metadata rows listed for one loss report
+     * @return immutable list of photo projections in the order supplied
+     */
     public static List<Photo> photoProjection(List<AttachmentEvidencePort.Metadata> rows) {
         return rows.stream()
                 .map(

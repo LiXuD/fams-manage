@@ -14,9 +14,26 @@ import org.springframework.stereotype.Component;
 public final class InboundAttachmentPort implements AttachmentBusinessPort {
     private static final Logger LOG = LoggerFactory.getLogger(InboundAttachmentPort.class);
     private final JdbcTemplate db;
+    /**
+     * Wires the port to the inbound receipt tables.
+     *
+     * @param db JDBC template used for receipt, ownership and version checks
+     */
     public InboundAttachmentPort(JdbcTemplate db) { this.db = db; }
     @Override public String businessType() { return "INBOUND"; }
 
+    /**
+     * Read-access gate for inbound evidence, evaluated with the receipt row locked: asset admins
+     * may read once the receipt was submitted; warehouse operators may also read their own drafts
+     * and any receipt in the claim/processing/completed states. All other callers are rejected as
+     * if the receipt did not exist, so unreadable ids do not become an existence oracle.
+     *
+     * @param actorId account id of the requesting actor
+     * @param roles effective roles of the requesting actor
+     * @param businessId inbound receipt id owning the attachment
+     * @throws InboundFailure with code {@code INBOUND_NOT_FOUND} (404) when the receipt does not
+     *         exist or is not readable by this actor
+     */
     public void requireReaderLocked(long actorId, java.util.Set<Role> roles, long businessId) {
         var rows = db.queryForList("SELECT creator_account_id,receipt_status,submitted_at FROM fams_inbound_receipt "
                 + "WHERE id=? FOR UPDATE", businessId);

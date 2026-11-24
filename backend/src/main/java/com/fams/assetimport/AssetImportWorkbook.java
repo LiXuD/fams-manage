@@ -31,15 +31,34 @@ public final class AssetImportWorkbook {
             "预计收回日期", "返厂费用规则", "返厂费用限额", "当前返厂轮次",
             "最后见到时刻", "最后见到地点", "确认遗失时刻", "遗失责任依据", "厂家实际处置时刻", "厂家处置凭证");
 
+    /**
+     * Per-cell rejection: sheet name, 1-based sheet row, column label, the original cell value
+     * and a machine-readable reason code such as FORMULA_NOT_ALLOWED or CELL_TOO_LONG.
+     */
     public record CellError(String sheet, int sheetRow, String column, String original, String reason) {
+        /**
+         * Convenience constructor for errors on the asset sheet.
+         *
+         * @param sheetRow 1-based row number in the asset sheet
+         * @param column column label of the offending cell
+         * @param original original cell value as read
+         * @param reason machine-readable rejection reason
+         */
         public CellError(int sheetRow, String column, String original, String reason) {
             this("资产", sheetRow, column, original, reason);
         }
     }
+    /** One populated sheet row: its 1-based sheet row number and the column-to-text values. */
     public record DataRow(int sheetRow, Map<String, String> values) {
+        /** Defensively copies the value map so a parsed row cannot be mutated afterwards. */
         public DataRow { values = Map.copyOf(values); }
     }
+    /**
+     * Parse outcome of the whole workbook: sheet headers, the populated rows and structural cell
+     * errors found while reading (formulas, oversized cells, unmapped extra columns).
+     */
     public record Parsed(List<String> columns, List<DataRow> rows, List<CellError> errors) {
+        /** Defensively copies all lists so a parse result cannot be mutated afterwards. */
         public Parsed {
             columns = List.copyOf(columns);
             rows = List.copyOf(rows);
@@ -49,6 +68,19 @@ public final class AssetImportWorkbook {
 
     private AssetImportWorkbook() { }
 
+    /**
+     * Parses the asset sheet of an XLSX upload into literal cell text. Enforces the size, row
+     * and header limits, skips fully blank rows and records formula, oversized-cell and
+     * unmapped-column problems as cell errors instead of failing the whole parse.
+     *
+     * @param content raw workbook bytes
+     * @return headers, populated rows and structural cell errors
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_FILE_LIMIT} for an empty or
+     *         oversized file, {@code ASSET_IMPORT_SHEET_MISSING} without the asset sheet,
+     *         {@code ASSET_IMPORT_ROW_LIMIT} beyond the row cap,
+     *         {@code ASSET_IMPORT_HEADER_INVALID} for a broken header row, or
+     *         {@code ASSET_IMPORT_INVALID_XLSX} when the bytes are not a readable workbook
+     */
     public static Parsed parse(byte[] content) {
         if (content == null || content.length == 0 || content.length > MAX_BYTES) {
             throw new IllegalArgumentException("ASSET_IMPORT_FILE_LIMIT");
@@ -77,6 +109,14 @@ public final class AssetImportWorkbook {
         }
     }
 
+    /**
+     * Builds the downloadable empty template: the asset sheet with the canonical header row plus
+     * an instruction sheet describing the fill-in rules and limits.
+     *
+     * @return template workbook bytes
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_TEMPLATE_FAILED} when writing
+     *         the workbook to memory fails
+     */
     public static byte[] template() {
         try (var workbook = new XSSFWorkbook(); var output = new ByteArrayOutputStream()) {
             var sheet = workbook.createSheet("资产");
@@ -106,6 +146,14 @@ public final class AssetImportWorkbook {
         }
     }
 
+    /**
+     * Spreadsheet-injection guard for exported values: a value whose first non-blank character
+     * could start a formula is prefixed with a quote so downstream spreadsheet applications
+     * render it as text.
+     *
+     * @param value raw cell value; null is exported as an empty string
+     * @return the value, quoted when it starts with a formula-triggering character
+     */
     public static String safeExportCell(String value) {
         if (value == null) { return ""; }
         String leading = value.stripLeading();

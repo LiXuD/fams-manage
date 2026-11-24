@@ -27,7 +27,15 @@ public final class LossViews {
     private LossViews() {
     }
 
+    /**
+     * Generic list page envelope for loss endpoints: the page items plus the total count and the
+     * requested page number and size echoed back to the caller.
+     */
     public record Page<T>(List<T> items, long total, int page, int pageSize) {
+        /**
+         * Defensively copies the item list so the published page cannot be mutated afterwards;
+         * an explicit null list is preserved to keep the wire shape unchanged.
+         */
         public Page {
             items = items == null ? null : List.copyOf(items);
         }
@@ -113,6 +121,10 @@ public final class LossViews {
             List<LossRecovery> recoveries,
             long recoveriesTotal,
             ReportActions actions) {
+        /**
+         * Defensively copies the photos, history and recovery lists so the published detail cannot
+         * be mutated afterwards; explicit null lists are preserved to keep the wire shape.
+         */
         public LossDetail {
             photos = photos == null ? null : List.copyOf(photos);
             history = history == null ? null : List.copyOf(history);

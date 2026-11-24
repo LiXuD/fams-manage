@@ -3,6 +3,7 @@ package com.fams.auth;
 /** Business SMS capability. A provider can implement MiniSmsPort separately for verification codes. */
 @FunctionalInterface
 public interface MiniNotificationSmsPort {
+    /** Provider outcome classes for a reminder send, driving retry and reconciliation decisions. */
     enum Result {
         /** The provider accepted the request. This does not prove handset delivery. */
         ACCEPTED,

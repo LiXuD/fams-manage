@@ -14,10 +14,24 @@ import java.util.Map;
 public final class InventorySynchronizationIdentityPort {
     private final JdbcTemplate db;
 
+    /**
+     * Wires the port to the identity tables used for synchronization state.
+     *
+     * @param db JDBC template used for the batch state query
+     */
     public InventorySynchronizationIdentityPort(JdbcTemplate db) {
         this.db = db;
     }
 
+    /**
+     * Batch-loads the synchronization state of the given accounts. An account is enabled only
+     * when it is ENABLED without an initial-password obligation, its employee and organization
+     * are ACTIVE and it holds an executor-eligible role; binding fields come from the account's
+     * non-revoked mini binding, if any.
+     *
+     * @param accounts account ids to load; an empty list yields an empty map without a query
+     * @return state per requested account id that exists in the identity tables
+     */
     public Map<Long, State> states(List<Long> accounts) {
         if (accounts.isEmpty()) {
             return Map.of();
@@ -61,5 +75,9 @@ public final class InventorySynchronizationIdentityPort {
         return Map.copyOf(result);
     }
 
+    /**
+     * Synchronization view of one account: display name, whether it may act as an executor, and
+     * the id and version of its active mini binding (both null when there is none).
+     */
     public record State(String name, boolean enabled, Long bindingId, Long bindingVersion) {}
 }

@@ -34,6 +34,18 @@ public class AssetImportPublicationService {
     private final ObjectMapper json;
     private final Clock clock;
 
+    /**
+     * Wires the service to its persistence, catalog, publication, master-data, job, JSON and
+     * clock collaborators.
+     *
+     * @param db JDBC template for the batch, review, window and publication tables
+     * @param catalog fresh catalog snapshot source for the publication-time preflight recheck
+     * @param assets port creating the initial asset records
+     * @param masterData source of the current timezone and parameter version for publication
+     * @param jobs durable job service used to fail the claim on permanent errors
+     * @param json mapper for the stored column mapping and event details
+     * @param clock timestamp source for expiry and audit checks
+     */
     public AssetImportPublicationService(JdbcTemplate db, AssetImportCatalogRepository catalog,
             AssetInitialPublicationPort assets, AssetMasterDataPort masterData,
             DurableJobService jobs, ObjectMapper json, Clock clock) {
@@ -46,6 +58,24 @@ public class AssetImportPublicationService {
         this.clock = clock;
     }
 
+    /**
+     * Publishes one queued batch inside the fenced job-completion transaction. Locks the batch,
+     * treats an already PUBLISHED batch as an idempotent no-op, then rechecks the whole approval
+     * chain against current facts: the review must still be APPROVED under an open, unexpired
+     * window with the claim actor as processor, both the processor's warehouse-operator role and
+     * the approver's asset-admin role are re-verified with row locks, and a fresh preflight run
+     * must reproduce exactly the persisted READY rows. Only then are the initial assets created
+     * row by row and the batch marked PUBLISHED with an audit event.
+     *
+     * @param claim durable job claim whose business reference is the batch id
+     * @throws IllegalArgumentException with code {@code ASSET_IMPORT_JOB_INVALID} when the claim
+     *         is not an ASSET_IMPORT job
+     * @throws IllegalStateException with code {@code ASSET_IMPORT_JOB_INVALID} when the batch is
+     *         missing, fenced to another job or not in QUEUED state,
+     *         {@code ASSET_IMPORT_AUTH_REVOKED} when the review, window or current roles no
+     *         longer authorize publication, or {@code ASSET_IMPORT_STALE_PREVIEW} when the fresh
+     *         preflight disagrees with the persisted ready rows
+     */
     public void publish(DurableJobService.Claim claim) {
         if (!"ASSET_IMPORT".equals(claim.kind())) {
             throw new IllegalArgumentException("ASSET_IMPORT_JOB_INVALID");
@@ -118,6 +148,15 @@ public class AssetImportPublicationService {
                                 .collect(Collectors.toSet()).size())), Timestamp.from(now));
     }
 
+    /**
+     * Records a publication failure on the job and, for permanent failures, on the batch.
+     * Transient data-access failures are marked retryable and leave the batch QUEUED so lease
+     * recovery can rerun them; permanent failures extract the {@code ASSET_IMPORT_*} code from
+     * the exception when present and move the batch from QUEUED to FAILED with an audit event.
+     *
+     * @param claim durable job claim that failed
+     * @param failure the exception that aborted publication
+     */
     @Transactional
     public void recordFailure(DurableJobService.Claim claim, RuntimeException failure) {
         boolean retryable = failure instanceof TransientDataAccessException;
