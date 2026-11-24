@@ -112,3 +112,8 @@ CONV-06 的 L-B 代理报告 `transfer/TransferService` 有 8 个方法"完全�
 是否继承类级 `@Transactional`。在此之前，**不要把 §3 的 224/224 读作"全部入口已覆盖"**。
 同类需一并复核的还有 `reminder/WechatSubscriptionService` 与 `inbound/InboundReassignmentService`
 （§4 已登记为"语义空转"，用的是同一个未经证实的前提）。
+
+> **本文件 §8 已被 `CONV-03R-transaction-failure-scenarios.md` 裁决并取代。** 结论：既存缺陷、
+> 非本批回归、无需回滚 `900a62c`；真实问题是 138 个非 public 入口的 `@Transactional` 从未生效，
+> 另有 37 个 Port 的类级 MANDATORY 因方法包私有而从未施加。§3 的"224/224"应长期读作
+> "**public 入口**已覆盖"。
