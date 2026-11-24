@@ -76,7 +76,8 @@ class BusinessResultNoticeService {
                 + " AND a.id=(SELECT MAX(x.id) FROM fams_audit_event x"
                 + " WHERE x.resource_type='BUSINESS_RESULT_NOTICE' AND x.resource_id=n.id"
                 + " AND x.action='RESULT_NOTICE_OBJECTION')"
-                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type IN ('REQUISITION','TRANSFER','REPAIR')";
+                + " WHERE n.execution_type='PROXY_CONFIRMATION' AND n.business_type IN"
+                + " ('REQUISITION','TRANSFER','REPAIR')";
         var rows = db.queryForList("SELECT n.id,n.execution_id,n.business_id,n.business_type,r.name AS recipient,"
                 + "a.detail_json,a.occurred_at" + from + " ORDER BY a.id DESC LIMIT ? OFFSET ?",
                 pageSize, (page - 1) * pageSize);
@@ -101,7 +102,8 @@ class BusinessResultNoticeService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    public NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
+    public NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key,
+            String reason) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT * FROM fams_business_result_notice"
                 + " WHERE id=? AND recipient_employee_id=? FOR UPDATE", id, current.employeeId());
@@ -133,7 +135,8 @@ class BusinessResultNoticeService {
                 (String) notice.get("business_type"), notice.get("business_id").toString());
         db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,"
                 + "todo_type,todo_status,opened_at) VALUES ('ASSET_ADMIN',NULL,?,?,'PROXY_RECEIPT_REVIEW','OPEN',?)"
-                + " ON DUPLICATE KEY UPDATE id=id", notice.get("business_type"), notice.get("business_id"), clock.instant());
+                + " ON DUPLICATE KEY UPDATE id=id", notice.get("business_type"), notice.get("business_id"),
+                clock.instant());
         String actingRole = current.has(Role.EMPLOYEE) ? "EMPLOYEE"
                 : current.has(Role.DEPARTMENT_ASSET_MANAGER) ? "DEPARTMENT_ASSET_MANAGER"
                 : current.has(Role.WAREHOUSE_OPERATOR) ? "WAREHOUSE_OPERATOR" : "ASSET_ADMIN";

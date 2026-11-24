@@ -174,10 +174,12 @@ class RequisitionReassignmentService {
         var checks = checks(id);
         if (checks.size() != input.items().size()
                 || input.items().stream().map(RequisitionReassignmentController.Item::id).distinct().count()
-                    != checks.size()) { throw RequisitionFailure.conflict("REQUISITION_REASSIGNMENT_SNAPSHOT_CHANGED"); }
+                    != checks.size()) { throw RequisitionFailure.conflict(
+                            "REQUISITION_REASSIGNMENT_SNAPSHOT_CHANGED"); }
         for (var item : checks) {
             var submitted = input.items().stream().filter(i -> Long.toString(i.id()).equals(item.get("id")))
-                    .findFirst().orElseThrow(() -> RequisitionFailure.conflict("REQUISITION_REASSIGNMENT_SNAPSHOT_CHANGED"));
+                    .findFirst().orElseThrow(() -> RequisitionFailure.conflict(
+                            "REQUISITION_REASSIGNMENT_SNAPSHOT_CHANGED"));
             if (submitted.version() != number(item, "version") || !submitted.status().equals(item.get("status"))
                     || submitted.assetVersion() != number(item, "assetVersion")
                     || submitted.lockVersion() != number(item, "lockVersion")) {
@@ -243,13 +245,16 @@ class RequisitionReassignmentService {
     private List<Map<String, Object>> checks(long id) {
         // Lock demands too: an unallocated quantity is still part of the approved whole order.
         db.queryForList("SELECT id FROM fams_requisition_demand WHERE request_id=? ORDER BY id FOR UPDATE", id);
-        var rows = db.queryForList("SELECT * FROM fams_requisition_allocation WHERE request_id=? ORDER BY asset_id,id FOR UPDATE", id);
+        var rows = db.queryForList(
+                "SELECT * FROM fams_requisition_allocation WHERE request_id=? ORDER BY asset_id,id FOR UPDATE", id);
         List<Map<String, Object>> result = new ArrayList<>();
         for (var row : rows) {
-            var asset = db.queryForMap("SELECT version,asset_code FROM fams_asset WHERE id=? FOR UPDATE", row.get("asset_id"));
+            var asset = db.queryForMap("SELECT version,asset_code FROM fams_asset WHERE id=? FOR UPDATE",
+                    row.get("asset_id"));
             var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock WHERE "
                     + "business_type='REQUISITION' AND business_id=? AND business_item_id=? "
-                    + "AND asset_id=? AND id=? AND released_at IS NULL FOR UPDATE", id, row.get("demand_id"), row.get("asset_id"), row.get("business_lock_id"));
+                    + "AND asset_id=? AND id=? AND released_at IS NULL FOR UPDATE", id, row.get("demand_id"),
+                    row.get("asset_id"), row.get("business_lock_id"));
             boolean pending = !List.of("RECEIVED", "CANCELLED").contains(row.get("allocation_status"));
             if ((pending && locks.size() != 1) || (!pending && !locks.isEmpty())) {
                 throw RequisitionFailure.conflict("REQUISITION_ASSET_LOCK_CONFLICT"); }

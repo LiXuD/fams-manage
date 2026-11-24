@@ -18,7 +18,8 @@ import java.util.UUID;
 
 @Profile("fams-product")
 @Order(-1)
-@RestControllerAdvice(assignableTypes = {RequisitionHandoverController.class, RequisitionProxyConfirmationController.class, ItemTargetChangeController.class})
+@RestControllerAdvice(assignableTypes = {RequisitionHandoverController.class,
+        RequisitionProxyConfirmationController.class, ItemTargetChangeController.class})
 class HandoverErrorHandler {
     private static final Logger LOG = LoggerFactory.getLogger(HandoverErrorHandler.class);
 

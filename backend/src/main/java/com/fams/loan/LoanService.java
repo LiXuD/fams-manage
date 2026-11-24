@@ -49,7 +49,8 @@ class LoanService {
         String scope = scope(current);
         long total = java.util.Objects.requireNonNull(
                 db.queryForObject("SELECT COUNT(*) FROM fams_loan l WHERE " + scope, Long.class), "LOAN_COUNT_MISSING");
-        var rows = db.queryForList("SELECT l.*,a.asset_code,a.name,a.lifecycle_status,a.exception_status,a.version AS current_asset_version"
+        var rows = db.queryForList("SELECT l.*,a.asset_code,a.name,a.lifecycle_status,a.exception_status,"
+                + "a.version AS current_asset_version"
                 + " FROM fams_loan l JOIN fams_asset a ON a.id=l.asset_id WHERE " + scope
                 + " ORDER BY l.id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
         return new LoanViews.Page<>(rows.stream().map(row -> LoanViews.loan(json, clock, row)).toList(),
@@ -87,7 +88,8 @@ class LoanService {
         var rows = db.queryForList("SELECT * FROM fams_loan_extension WHERE " + predicate
                 + " ORDER BY id DESC LIMIT ? OFFSET ?", size, (page - 1) * size);
         long total = java.util.Objects.requireNonNull(
-                db.queryForObject("SELECT COUNT(*) FROM fams_loan_extension WHERE " + predicate, Long.class), "LOAN_COUNT_MISSING");
+                db.queryForObject("SELECT COUNT(*) FROM fams_loan_extension WHERE " + predicate, Long.class),
+                "LOAN_COUNT_MISSING");
         return new LoanViews.Page<>(rows.stream().map(LoanViews::extension).toList(), total, page, size);
     }
 
@@ -124,7 +126,8 @@ class LoanService {
                 + "requested_due_date,reason,proposed_by,created_at) VALUES (?,?,?,?,?,?,?,?)",
                 beforeReceipt ? null : id, beforeReceipt ? id : null, version, old,
                 input.expectedReturnDate(), input.reason(), current.id(), now());
-        long extension = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class), "LOAN_ID_MISSING");
+        long extension = java.util.Objects.requireNonNull(
+                db.queryForObject("SELECT LAST_INSERT_ID()", Long.class), "LOAN_ID_MISSING");
         db.update("INSERT INTO fams_todo (pool_type,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES ('ASSET_ADMIN','LOAN_EXTENSION',?,'APPROVAL','OPEN',?)", extension, now());
         audit(actor, current, "LOAN_EXTENSION_PROPOSED", extension, null, 0L,
@@ -145,7 +148,8 @@ class LoanService {
         if (replay != null) { return replay; }
         var extension = one("SELECT * FROM fams_loan_extension WHERE id=? FOR UPDATE", id);
         checkVersion(extension, version);
-        if (!"PENDING".equals(extension.get("extension_status"))) { throw new LoanFailure("LOAN_ALREADY_DECIDED", 409); }
+        if (!"PENDING".equals(extension.get("extension_status"))) {
+            throw new LoanFailure("LOAN_ALREADY_DECIDED", 409); }
         boolean beforeReceipt = extension.get("loan_id") == null;
         long targetId = number(extension, beforeReceipt ? "request_id" : "loan_id");
         var target = input.approved() ? target(targetId, beforeReceipt)
@@ -158,7 +162,8 @@ class LoanService {
                 throw new LoanFailure("LOAN_TARGET_CHANGED", 409);
             }
             if (beforeReceipt) {
-                requests.extend(targetId, number(extension, "target_version"), date(extension, "requested_due_date"), clock.instant());
+                requests.extend(targetId, number(extension, "target_version"), date(extension, "requested_due_date"),
+                        clock.instant());
             } else {
                 db.update("UPDATE fams_loan SET expected_return_date=?,version=version+1,updated_at=? WHERE id=?",
                         date(extension, "requested_due_date"), now(), targetId);
@@ -181,7 +186,8 @@ class LoanService {
     private Map<String, Object> requestSnapshot(long id) {
         try { return requests.snapshot(id); }
         catch (IllegalStateException failure) {
-            throw new LoanFailure(failure.getMessage(), "LOAN_TARGET_NOT_FOUND".equals(failure.getMessage()) ? 404 : 409);
+            throw new LoanFailure(failure.getMessage(),
+                    "LOAN_TARGET_NOT_FOUND".equals(failure.getMessage()) ? 404 : 409);
         }
     }
 
@@ -223,7 +229,8 @@ class LoanService {
     private String scope(Current current) {
         if (current.globalApplicant()) { return "1=1"; }
         return "l.borrower_employee_id=" + current.employeeId()
-                + (current.has(Role.DEPARTMENT_ASSET_MANAGER) ? " OR l.using_organization_id=" + current.organizationId() : "");
+                + (current.has(Role.DEPARTMENT_ASSET_MANAGER)
+                        ? " OR l.using_organization_id=" + current.organizationId() : "");
     }
 
     private <T extends LoanViews.Reply> T replay(
@@ -276,7 +283,8 @@ class LoanService {
     private String digest(String prefix, Object body) {
         try {
             return HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
-                    .digest((prefix + "\n" + json.writeValueAsString(body)).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+                    .digest((prefix + "\n" + json.writeValueAsString(body))
+                            .getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         } catch (java.security.NoSuchAlgorithmException failure) { throw new IllegalStateException(failure); }
     }
 }

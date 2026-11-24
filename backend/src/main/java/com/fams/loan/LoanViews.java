@@ -341,7 +341,8 @@ public final class LoanViews {
     }
 
     static LoanDetail loanDetail(
-            ObjectMapper json, Clock clock, Map<String, Object> row, List<Extension> extensions, List<Reminder> reminders) {
+            ObjectMapper json, Clock clock, Map<String, Object> row, List<Extension> extensions,
+            List<Reminder> reminders) {
         var base = loan(json, clock, row);
         return new LoanDetail(
                 base.id(),

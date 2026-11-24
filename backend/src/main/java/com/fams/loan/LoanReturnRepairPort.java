@@ -69,7 +69,8 @@ public class LoanReturnRepairPort {
         var rows =
                 db.queryForList(
                         "SELECT"
-                            + " f.*,r.return_status,r.inspection_result,r.completed_at,r.warehouse_id,r.location_id,r.parameter_snapshot_json"
+                            + " f.*,r.return_status,r.inspection_result,r.completed_at,"
+                            + "r.warehouse_id,r.location_id,r.parameter_snapshot_json"
                             + " FROM fams_return_followup f JOIN fams_asset_return r ON"
                             + " r.id=f.return_id WHERE f.id=? FOR UPDATE",
                         id);
@@ -172,14 +173,14 @@ public class LoanReturnRepairPort {
         boolean retry = "REJECTED".equals(status) || "CANCELLED".equals(status);
         if (retry) {
             if (db.update(
-                            "UPDATE fams_asset_business_lock SET"
-                                + " business_type='RETURN_REPAIR',business_id=?,business_item_id=?,lock_version=lock_version+1"
-                                + " WHERE asset_id=? AND business_type='REPAIR' AND business_id=?"
-                                + " AND released_at IS NULL",
-                            followup,
-                            followup,
-                            source.get("asset_id"),
-                            repair)
+                    "UPDATE fams_asset_business_lock SET"
+                        + " business_type='RETURN_REPAIR',business_id=?,business_item_id=?,lock_version=lock_version+1"
+                        + " WHERE asset_id=? AND business_type='REPAIR' AND business_id=?"
+                        + " AND released_at IS NULL",
+                    followup,
+                    followup,
+                    source.get("asset_id"),
+                    repair)
                     != 1) {
                 throw changed();
             }

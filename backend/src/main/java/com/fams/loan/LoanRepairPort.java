@@ -124,7 +124,8 @@ public class LoanRepairPort {
         }
         db.update(
                 "INSERT INTO"
-                    + " fams_loan_repair_return(repair_id,loan_id,asset_id,before_loan_version,after_loan_version,returned_at,actor_account_id)"
+                    + " fams_loan_repair_return(repair_id,loan_id,asset_id,before_loan_version,after_loan_version,"
+                    + "returned_at,actor_account_id)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 repair,
                 current.id(),

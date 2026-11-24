@@ -18,7 +18,8 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @Profile("fams-product")
 @Order(-1)
-@RestControllerAdvice(assignableTypes = {ProxyConfirmationAttachmentController.class, MiniProxyAttachmentReadController.class})
+@RestControllerAdvice(assignableTypes = {ProxyConfirmationAttachmentController.class,
+        MiniProxyAttachmentReadController.class})
 final class ProxyAttachmentErrorHandler {
     private static final Logger LOG = LoggerFactory.getLogger(ProxyAttachmentErrorHandler.class);
 

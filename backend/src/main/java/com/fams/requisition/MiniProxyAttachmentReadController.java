@@ -35,7 +35,8 @@ class MiniProxyAttachmentReadController {
     }
 
     @GetMapping("/api/v1/mini/attachments/{objectId}/content")
-    ResponseEntity<byte[]> content(@PathVariable UUID objectId, @RequestParam("grant") String grant) throws IOException {
+    ResponseEntity<byte[]> content(@PathVariable UUID objectId, @RequestParam("grant") String grant)
+            throws IOException {
         var content = reads.read(objectId, grant);
         return ResponseEntity.ok().contentType(MediaType.parseMediaType(content.mime()))
                 .contentLength(content.bytes().length).cacheControl(CacheControl.noStore())

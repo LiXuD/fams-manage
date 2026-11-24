@@ -37,15 +37,18 @@ class ItemTargetChangeService {
         return call(() -> workflow.list(actor, "REQUISITION", page, size));
     }
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    public TargetChangeViews.Change propose(Actor actor, long version, String key, ItemTargetChangeInput.Proposal input) {
+    public TargetChangeViews.Change propose(Actor actor, long version, String key,
+            ItemTargetChangeInput.Proposal input) {
         LOG.info("Proposing requisition target change actor={} business={} item={} version={}",
                 actor.id(), input.businessId(), input.itemId(), version);
         var command = new TargetChangeInput.Proposal(input.businessId(), input.itemId(), input.snapshot(),
-                json.valueToTree(input.target()), input.reason(), input.observedAssetCode(), input.physicalVerification(), input.physicalChecked());
+                json.valueToTree(input.target()), input.reason(), input.observedAssetCode(),
+                input.physicalVerification(), input.physicalChecked());
         return call(() -> workflow.propose(actor, "REQUISITION", version, key, command));
     }
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    public TargetChangeViews.Change decide(Actor actor, long id, long version, String key, ItemTargetChangeInput.Decision input) {
+    public TargetChangeViews.Change decide(Actor actor, long id, long version, String key,
+            ItemTargetChangeInput.Decision input) {
         LOG.info("Deciding requisition target change actor={} changeId={} version={} result={}",
                 actor.id(), id, version, input.result());
         return call(() -> workflow.decide(actor, "REQUISITION", id, version, key,

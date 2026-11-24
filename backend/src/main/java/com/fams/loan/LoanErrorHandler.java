@@ -21,7 +21,8 @@ class LoanErrorHandler {
     private static final Logger LOG = LoggerFactory.getLogger(LoanErrorHandler.class);
 
     @ExceptionHandler(com.fams.asset.AssetHandoverPort.Failure.class)
-    ResponseEntity<ErrorResponse> assetFailure(com.fams.asset.AssetHandoverPort.Failure failure, HttpServletRequest request) {
+    ResponseEntity<ErrorResponse> assetFailure(com.fams.asset.AssetHandoverPort.Failure failure,
+            HttpServletRequest request) {
         if (failure.status() >= 500) {
             LOG.error("Loan asset handover failed: path={} code={} status={}", request.getRequestURI(),
                     failure.getMessage(), failure.status(), failure);
@@ -29,8 +30,8 @@ class LoanErrorHandler {
             LOG.warn("Loan asset handover rejected: path={} code={} status={}", request.getRequestURI(),
                     failure.getMessage(), failure.status());
         }
-        return ResponseEntity.status(failure.status()).body(new ErrorResponse(failure.getMessage(), failure.getMessage(),
-                java.util.UUID.fromString(requestId(request)), Map.of()));
+        return ResponseEntity.status(failure.status()).body(new ErrorResponse(failure.getMessage(),
+                failure.getMessage(), java.util.UUID.fromString(requestId(request)), Map.of()));
     }
     @ExceptionHandler(LoanFailure.class)
     ResponseEntity<ErrorResponse> failure(LoanFailure failure, HttpServletRequest request) {

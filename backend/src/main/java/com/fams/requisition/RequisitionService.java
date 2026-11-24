@@ -176,7 +176,8 @@ class RequisitionService {
         insertDemands(id, resolved);
         db.update(
                 "UPDATE fams_requisition SET"
-                    + " request_version=request_version+1,request_status='DRAFT',version=version+1,request_type=?,expected_return_date=?,updated_at=?"
+                    + " request_version=request_version+1,request_status='DRAFT',version=version+1,"
+                    + "request_type=?,expected_return_date=?,updated_at=?"
                     + " WHERE id=?",
                 input.requestType(),
                 input.expectedReturnDate(),
@@ -259,7 +260,8 @@ class RequisitionService {
                         Map.of());
         db.update(
                 "INSERT INTO fams_requisition_decision"
-                    + " (request_id,request_version,decision_result,approved_scope_json,comment_text,decided_by_account_id,decided_at,audit_event_id)"
+                    + " (request_id,request_version,decision_result,approved_scope_json,comment_text,"
+                    + "decided_by_account_id,decided_at,audit_event_id)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 id,
                 number(header, "request_version"),
@@ -319,7 +321,8 @@ class RequisitionService {
                         Map.of());
         db.update(
                 "INSERT INTO fams_requisition_change_proposal"
-                    + " (request_id,request_version,previous_request_version,previous_request_status,proposal_json,proposal_status,proposed_by_account_id,proposed_at,audit_event_id)"
+                    + " (request_id,request_version,previous_request_version,previous_request_status,"
+                    + "proposal_json,proposal_status,proposed_by_account_id,proposed_at,audit_event_id)"
                     + " VALUES (?,?,?,?,?,'PENDING',?,?,?)",
                 id,
                 revision,
@@ -396,9 +399,13 @@ class RequisitionService {
                 db.update(
                         "UPDATE fams_requisition_demand SET"
                             + " category_id=?,category_version_snapshot=?,category_name_snapshot=?,"
-                            + "specification=?,preferred_brand=?,preferred_model=?,purpose=?,expected_date=?,custody_type=?,"
-                            + "target_organization_id=?,organization_version_snapshot=?,target_employee_id=?,target_department_employee_id=?,"
-                            + "employee_version_snapshot=?,target_location_id=?,location_version_snapshot=?,target_snapshot_json=?,requested_quantity=?,pending_allocation_quantity=?,version=version+1"
+                            + "specification=?,preferred_brand=?,preferred_model=?,purpose=?,"
+                            + "expected_date=?,custody_type=?,"
+                            + "target_organization_id=?,organization_version_snapshot=?,target_employee_id=?,"
+                            + "target_department_employee_id=?,"
+                            + "employee_version_snapshot=?,target_location_id=?,location_version_snapshot=?,"
+                            + "target_snapshot_json=?,requested_quantity=?,pending_allocation_quantity=?,"
+                            + "version=version+1"
                             + " WHERE id=?",
                         next.category().id(),
                         next.category().version(),
@@ -440,7 +447,8 @@ class RequisitionService {
                         Map.of());
         db.update(
                 "INSERT INTO fams_requisition_decision"
-                    + " (request_id,request_version,decision_result,approved_scope_json,comment_text,decided_by_account_id,decided_at,audit_event_id)"
+                    + " (request_id,request_version,decision_result,approved_scope_json,comment_text,"
+                    + "decided_by_account_id,decided_at,audit_event_id)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 id,
                 number(header, "request_version"),
@@ -542,7 +550,8 @@ class RequisitionService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    public RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId, int page, int size) {
+    public RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId,
+            int page, int size) {
         LOG.debug("Listing inventory for requisition demand actor={} requestId={} demandId={} page={} size={}",
                 actor.id(), id, demandId, page, size);
         Current current = actors.revalidateLocked(actor);
@@ -679,7 +688,8 @@ class RequisitionService {
         db.update(
                 "INSERT INTO fams_requisition_allocation"
                     + " (request_id,demand_id,ownership_id,asset_id,"
-                    + "asset_version_snapshot,asset_snapshot_json,business_lock_id,allocation_status,predecessor_allocation_id,allocated_at,audit_event_id)"
+                    + "asset_version_snapshot,asset_snapshot_json,business_lock_id,allocation_status,"
+                    + "predecessor_allocation_id,allocated_at,audit_event_id)"
                     + " VALUES (?,?,?,?,?,?,?,'WAITING_DELIVERY',?,?,?)",
                 id,
                 demandId,
@@ -694,7 +704,8 @@ class RequisitionService {
         if (predecessor == null) {
             db.update(
                     "UPDATE fams_requisition_demand SET"
-                        + " pending_allocation_quantity=pending_allocation_quantity-1,pending_handover_quantity=pending_handover_quantity+1,version=version+1"
+                        + " pending_allocation_quantity=pending_allocation_quantity-1,"
+                        + "pending_handover_quantity=pending_handover_quantity+1,version=version+1"
                         + " WHERE id=?",
                     demandId);
         }
@@ -758,7 +769,9 @@ class RequisitionService {
                         "ACTIVE / IN_STOCK / NORMAL / no active business lock");
         db.update(
                 "INSERT INTO fams_requisition_unfulfillable"
-                    + " (request_id,demand_id,quantity,reason_code,reason_description,requirement_snapshot_json,inventory_query_summary_json,recorded_by_account_id,recorded_at,audit_event_id)"
+                    + " (request_id,demand_id,quantity,reason_code,reason_description,"
+                    + "requirement_snapshot_json,inventory_query_summary_json,recorded_by_account_id,"
+                    + "recorded_at,audit_event_id)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 id,
                 demandId,
@@ -772,7 +785,8 @@ class RequisitionService {
                 audit);
         db.update(
                 "UPDATE fams_requisition_demand SET"
-                    + " pending_allocation_quantity=pending_allocation_quantity-?,unfulfillable_quantity=unfulfillable_quantity+?,version=version+1"
+                    + " pending_allocation_quantity=pending_allocation_quantity-?,"
+                    + "unfulfillable_quantity=unfulfillable_quantity+?,version=version+1"
                     + " WHERE id=?",
                 input.quantity(),
                 input.quantity(),
@@ -932,7 +946,8 @@ class RequisitionService {
         db.update(
                 "INSERT INTO fams_requisition"
                     + " (request_no,creator_account_id,creator_username_snapshot,request_status,"
-                    + "parameter_version_id,parameter_snapshot_json,request_type,expected_return_date,source_request_id,source_demand_id,source_reason_snapshot_json,created_at,updated_at)"
+                    + "parameter_version_id,parameter_snapshot_json,request_type,expected_return_date,"
+                    + "source_request_id,source_demand_id,source_reason_snapshot_json,created_at,updated_at)"
                     + " VALUES (?,?,?,'DRAFT',?,?,?,?,?,?,?,?,?)",
                 "REQ-" + UUID.randomUUID(),
                 current.id(),
@@ -1025,9 +1040,12 @@ class RequisitionService {
             db.update(
                     "INSERT INTO fams_requisition_demand"
                         + " (request_id,line_no,category_id,category_version_snapshot,"
-                        + "category_name_snapshot,specification,preferred_brand,preferred_model,purpose,expected_date,custody_type,"
-                        + "target_organization_id,organization_version_snapshot,target_employee_id,target_department_employee_id,"
-                        + "employee_version_snapshot,target_location_id,location_version_snapshot,target_snapshot_json,requested_quantity,pending_allocation_quantity)"
+                        + "category_name_snapshot,specification,preferred_brand,preferred_model,"
+                        + "purpose,expected_date,custody_type,"
+                        + "target_organization_id,organization_version_snapshot,target_employee_id,"
+                        + "target_department_employee_id,"
+                        + "employee_version_snapshot,target_location_id,location_version_snapshot,"
+                        + "target_snapshot_json,requested_quantity,pending_allocation_quantity)"
                         + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     id,
                     ++line,
@@ -1203,7 +1221,8 @@ class RequisitionService {
             args.add(current.id());
             return result
                     + " OR r.request_status IN"
-                    + " ('WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING','WAITING_HANDOVER','PARTIALLY_COMPLETED','COMPLETED','UNFULFILLABLE')"
+                    + " ('WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING','WAITING_HANDOVER',"
+                    + "'PARTIALLY_COMPLETED','COMPLETED','UNFULFILLABLE')"
                     + " OR (r.request_status='PENDING_ADMIN_DECISION' AND EXISTS (SELECT 1 FROM"
                     + " fams_requisition_change_proposal p WHERE p.request_id=r.id AND"
                     + " p.proposal_status='PENDING')) OR (r.request_status='CANCELLED' AND EXISTS"
@@ -1430,7 +1449,9 @@ class RequisitionService {
         var result = detailView(id);
         db.update(
                 "INSERT INTO fams_idempotency_record"
-                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
+                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,"
+                    + "response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,"
+                    + "expires_at)"
                     + " VALUES (?,?,?,?,'SUCCEEDED',?,?,'REQUISITION',?,?,?,?,?)",
                 current.id(),
                 "requisition:" + operation,
@@ -1479,7 +1500,8 @@ class RequisitionService {
         String role = current.roles().stream().map(Enum::name).sorted().findFirst().orElseThrow();
         db.update(
                 "INSERT INTO fams_audit_event"
-                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,?,?,'REQUISITION',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

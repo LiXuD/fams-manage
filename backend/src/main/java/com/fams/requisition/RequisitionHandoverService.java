@@ -76,17 +76,17 @@ class RequisitionHandoverService {
         LOG.debug("Listing pending receipt items actor={} page={} size={} allocationId={}",
                 actor.id(), page, size, allocationId);
         Current current = actors.revalidateLocked(actor);
-        String from =
-                " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
-                        + " d.id=a.demand_id JOIN fams_requisition r ON r.id=a.request_id JOIN"
-                        + " fams_requisition_handover h ON h.allocation_id=a.id WHERE"
-                        + " COALESCE(a.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id)=? AND"
-                        + " a.allocation_status='DELIVERED_WAITING_RECEIPT' AND"
-                        + " r.request_status='WAITING_HANDOVER' AND (? IS NULL OR a.id=?)";
+        String from = " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
+                + " d.id=a.demand_id JOIN fams_requisition r ON r.id=a.request_id JOIN"
+                + " fams_requisition_handover h ON h.allocation_id=a.id WHERE"
+                + " COALESCE(a.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id)=? AND"
+                + " a.allocation_status='DELIVERED_WAITING_RECEIPT' AND"
+                + " r.request_status='WAITING_HANDOVER' AND (? IS NULL OR a.id=?)";
         long total =
                 Objects.requireNonNull(
                         db.queryForObject(
-                                "SELECT COUNT(*)" + from, Long.class, current.employeeId(), allocationId, allocationId));
+                                "SELECT COUNT(*)" + from, Long.class, current.employeeId(), allocationId,
+                                allocationId));
         var rows =
                 db.queryForList(
                         "SELECT a.id,a.request_id,r.request_no,a.asset_snapshot_json,a.version,"
@@ -128,7 +128,8 @@ class RequisitionHandoverService {
                 current.id());
         db.update(
                 "INSERT INTO fams_requisition_receipt_grant"
-                    + " (token_hash,allocation_id,receiver_account_id,receiver_employee_id,auth_epoch,authorization_version,request_version,allocation_version,issued_at,expires_at)"
+                    + " (token_hash,allocation_id,receiver_account_id,receiver_employee_id,auth_epoch,"
+                    + "authorization_version,request_version,allocation_version,issued_at,expires_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 hash(token),
                 allocation,
@@ -227,7 +228,8 @@ class RequisitionHandoverService {
                 Role.WAREHOUSE_OPERATOR);
         todo(allocation, "RECEIPT", "RECEIVER", receiverAccount(target(demand)));
         progress(request);
-        LOG.info("Delivered requisition allocation actor={} request={} allocation={}", current.id(), request, allocation);
+        LOG.info("Delivered requisition allocation actor={} request={} allocation={}", current.id(), request,
+                allocation);
         return finish(
                 current,
                 "deliver",
@@ -306,7 +308,8 @@ class RequisitionHandoverService {
             demand(item);
             db.update(
                     "UPDATE fams_requisition_demand SET"
-                        + " pending_handover_quantity=pending_handover_quantity-1,cancelled_quantity=cancelled_quantity+1,version=version+1"
+                        + " pending_handover_quantity=pending_handover_quantity-1,"
+                        + "cancelled_quantity=cancelled_quantity+1,version=version+1"
                         + " WHERE id=?",
                     n(item, "demand_id"));
             release(item);
@@ -468,7 +471,8 @@ class RequisitionHandoverService {
         }
         db.update(
                 "UPDATE fams_requisition_demand SET"
-                    + " pending_handover_quantity=pending_handover_quantity-1,completed_quantity=completed_quantity+1,version=version+1"
+                    + " pending_handover_quantity=pending_handover_quantity-1,"
+                    + "completed_quantity=completed_quantity+1,version=version+1"
                     + " WHERE id=?",
                 n(item, "demand_id"));
         db.update(
@@ -496,7 +500,8 @@ class RequisitionHandoverService {
             throw RequisitionFailure.conflict("HANDOVER_NOT_DELIVERED");
         }
         if (!db.queryForList("SELECT id FROM fams_todo WHERE business_type='REQUISITION_ALLOCATION'"
-                + " AND business_id=? AND todo_type IN ('HANDOVER_EXCEPTION','RECOVERY') AND closed_at IS NULL FOR UPDATE",
+                + " AND business_id=? AND todo_type IN ('HANDOVER_EXCEPTION','RECOVERY')"
+                + " AND closed_at IS NULL FOR UPDATE",
                 allocation).isEmpty()) { throw RequisitionFailure.conflict("PROXY_RECEIPT_DISPUTED"); }
         var demand = demand(item);
         targets(demand);
@@ -531,7 +536,8 @@ class RequisitionHandoverService {
         var snapshot = proxySnapshot(actor, request, allocation, true);
         // Text round-trip keeps the pre-JAVA-04 comparison semantics verbatim (integral width
         // normalization between the stored/HTTP expected snapshot and the typed live snapshot).
-        if (!json.readTree(json.writeValueAsString(snapshot)).equals(json.readTree(json.writeValueAsString(expected)))) {
+        if (!json.readTree(json.writeValueAsString(snapshot))
+                .equals(json.readTree(json.writeValueAsString(expected)))) {
             throw RequisitionFailure.conflict("PROXY_RECEIPT_SCOPE_CHANGED");
         }
         var current = actors.revalidateLocked(actor);
@@ -597,7 +603,8 @@ class RequisitionHandoverService {
         var item = item(request, allocation);
         if (!List.of("WAITING_DELIVERY", "DELIVERED_WAITING_RECEIPT").contains(item.get("allocation_status"))
                 || !db.queryForList("SELECT id FROM fams_todo WHERE business_type='REQUISITION_ALLOCATION'"
-                        + " AND business_id=? AND todo_type='RECOVERY' AND closed_at IS NULL FOR UPDATE", allocation).isEmpty()) {
+                        + " AND business_id=? AND todo_type='RECOVERY' AND closed_at IS NULL FOR UPDATE",
+                        allocation).isEmpty()) {
             throw RequisitionFailure.conflict("TARGET_CHANGE_PHYSICAL_STAGE_INVALID");
         }
         var asset = assets.stock(n(item, "asset_id"), n(item, "asset_version_snapshot"));
@@ -649,8 +656,10 @@ class RequisitionHandoverService {
         next.put("custody_type", target.custodyType());
         next.put("target_organization_id", Long.parseLong(target.organizationId()));
         next.put("organization_version_snapshot", target.organizationVersion());
-        next.put("target_employee_id", "PERSONAL".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
-        next.put("target_department_employee_id", "SHARED".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
+        next.put("target_employee_id",
+                "PERSONAL".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
+        next.put("target_department_employee_id",
+                "SHARED".equals(target.custodyType()) ? Long.parseLong(target.employeeId()) : null);
         next.put("employee_version_snapshot", target.employeeVersion());
         next.put("target_location_id", Long.parseLong(target.locationId()));
         next.put("location_version_snapshot", target.locationVersion());
@@ -670,7 +679,8 @@ class RequisitionHandoverService {
                 new tools.jackson.core.type.TypeReference<LinkedHashMap<String, Object>>() {});
         approved.put("referenceSnapshot", targetReferenceSnapshot(target));
         db.update("UPDATE fams_requisition_allocation SET approved_target_json=?,receipt_target_employee_id=?,"
-                + "version=version+1 WHERE id=?", json.writeValueAsString(approved), Long.parseLong(target.employeeId()), allocation);
+                + "version=version+1 WHERE id=?", json.writeValueAsString(approved),
+                Long.parseLong(target.employeeId()), allocation);
         invalidate(allocation);
         if ("DELIVERED_WAITING_RECEIPT".equals(item.get("allocation_status"))) {
             close(allocation, "RECEIPT");
@@ -758,9 +768,9 @@ class RequisitionHandoverService {
 
     private void sharedReceiver(Map<String, Object> demand) {
         if ("SHARED".equals(demand.get("custody_type"))
-                && db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
-                        + " WHERE a.employee_id=? AND a.status='ENABLED' AND r.role_code='DEPARTMENT_ASSET_MANAGER' FOR UPDATE",
-                        target(demand)).isEmpty()) {
+            && db.queryForList("SELECT a.id FROM fams_system_account a JOIN fams_account_role r ON r.account_id=a.id"
+                + " WHERE a.employee_id=? AND a.status='ENABLED' AND r.role_code='DEPARTMENT_ASSET_MANAGER' FOR UPDATE",
+                target(demand)).isEmpty()) {
             throw RequisitionFailure.conflict("HANDOVER_SHARED_RECEIVER_INVALID");
         }
     }
@@ -916,7 +926,8 @@ class RequisitionHandoverService {
         }
         db.update(
                 "INSERT INTO fams_audit_event"
-                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,?,?,'REQUISITION_ALLOCATION',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),
@@ -936,9 +947,9 @@ class RequisitionHandoverService {
                 Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         db.update(
                 "INSERT INTO fams_requisition_handover_event"
-                    + " (allocation_id,event_type,actor_account_id,occurred_at,"
-                    + "observed_asset_code,evidence_text,allocation_version_before,allocation_version_after,audit_event_id)"
-                    + " VALUES (?,?,?,?,?,?,?,?,?)",
+                + " (allocation_id,event_type,actor_account_id,occurred_at,"
+                + "observed_asset_code,evidence_text,allocation_version_before,allocation_version_after,audit_event_id)"
+                + " VALUES (?,?,?,?,?,?,?,?,?)",
                 n(item, "id"),
                 type,
                 current.id(),
@@ -1080,7 +1091,8 @@ class RequisitionHandoverService {
         db.update(
                 "INSERT INTO fams_idempotency_record"
                     + " (actor_account_id,operation_id,idempotency_key,payload_sha256,"
-                    + "result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
+                    + "result_status,http_status,response_body_json,resource_type,resource_id,resource_version,"
+                    + "created_at,completed_at,expires_at)"
                     + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'REQUISITION',?,?,?,?,?)",
                 current.id(),
                 "handover:" + action,

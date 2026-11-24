@@ -37,7 +37,8 @@ public class LoanReminderService {
         var rows = db.queryForList("SELECT * FROM fams_loan WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) { return; }
         var loan = rows.getFirst();
-        var asset = db.queryForMap("SELECT lifecycle_status,exception_status FROM fams_asset WHERE id=? FOR UPDATE", loan.get("asset_id"));
+        var asset = db.queryForMap("SELECT lifecycle_status,exception_status FROM fams_asset WHERE id=? FOR UPDATE",
+                loan.get("asset_id"));
         Timestamp now = Timestamp.from(clock.instant());
         String type = null;
         LocalDate today = clock.instant().atZone(ZoneId.of(json.readTree(loan.get("parameter_snapshot_json").toString())
@@ -58,14 +59,17 @@ public class LoanReminderService {
                 + " AND closed_at IS NULL AND (? IS NULL OR todo_type<>?)", now, id, type, type);
         if (type == null) { return; }
         LOG.info("Raised LOAN reminder loanId={} type={} due={} businessDate={}", id, type, due, today);
-        db.update("INSERT INTO fams_loan_reminder (loan_id,expected_return_date,reminder_business_date,reminder_type,overdue_from,created_at)"
-                + " VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id", id, due, today, type, due.isBefore(today) ? due.plusDays(1) : null, now);
-        var accounts = db.queryForList("SELECT id FROM fams_system_account WHERE employee_id=? AND status='ENABLED'", Long.class,
-                loan.get("borrower_employee_id"));
-        boolean disabled = "DISABLED".equals(db.queryForObject("SELECT status FROM fams_employee WHERE id=?", String.class,
-                loan.get("borrower_employee_id")));
+        db.update("INSERT INTO fams_loan_reminder"
+                + " (loan_id,expected_return_date,reminder_business_date,reminder_type,overdue_from,created_at)"
+                + " VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id", id, due, today, type,
+                due.isBefore(today) ? due.plusDays(1) : null, now);
+        var accounts = db.queryForList("SELECT id FROM fams_system_account WHERE employee_id=? AND status='ENABLED'",
+                Long.class, loan.get("borrower_employee_id"));
+        boolean disabled = "DISABLED".equals(db.queryForObject("SELECT status FROM fams_employee WHERE id=?",
+                String.class, loan.get("borrower_employee_id")));
         Long assignee = disabled || accounts.isEmpty() || "LOST_LIABILITY".equals(type) ? null : accounts.getFirst();
-        db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+        db.update("INSERT INTO fams_todo"
+                + " (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES (?,?,'LOAN',?,?,'OPEN',?) ON DUPLICATE KEY UPDATE pool_type=VALUES(pool_type),"
                 + "assignee_account_id=VALUES(assignee_account_id)",
                 assignee == null ? "ASSET_ADMIN" : "EMPLOYEE", assignee, id, type, now);

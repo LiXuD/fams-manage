@@ -86,19 +86,21 @@ class RequisitionProxyConfirmationService {
         }
         String predicate =
                 current.has(Role.ASSET_ADMIN)
-                        ? "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND (confirmation_status<>'DRAFT' OR creator_account_id="
-                                + current.id() + ")"
-                        : "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND (creator_account_id="
-                                + current.id()
-                                + " OR (business_type='REQUISITION' AND EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE"
-                                + " o.request_id=fams_proxy_confirmation.business_id AND"
-                                + " o.archived_at IS NULL AND o.processor_account_id="
-                                + current.id()
-                                + ")) OR (business_type='TRANSFER' AND EXISTS (SELECT 1 FROM fams_transfer t"
-                                + " WHERE t.id=fams_proxy_confirmation.business_id AND t.processor_account_id="
-                                + current.id() + ")) OR (business_type='REPAIR' AND EXISTS (SELECT 1 FROM fams_repair_request p"
-                                + " WHERE p.id=fams_proxy_confirmation.business_id AND p.processor_account_id="
-                                + current.id() + ")))";
+                ? "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND"
+                + " (confirmation_status<>'DRAFT' OR creator_account_id="
+                + current.id() + ")"
+                : "business_type IN ('REQUISITION','TRANSFER','REPAIR') AND (creator_account_id="
+                + current.id()
+                + " OR (business_type='REQUISITION' AND EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE"
+                + " o.request_id=fams_proxy_confirmation.business_id AND"
+                + " o.archived_at IS NULL AND o.processor_account_id="
+                + current.id()
+                + ")) OR (business_type='TRANSFER' AND EXISTS (SELECT 1 FROM fams_transfer t"
+                + " WHERE t.id=fams_proxy_confirmation.business_id AND t.processor_account_id="
+                + current.id()
+                + ")) OR (business_type='REPAIR' AND EXISTS (SELECT 1 FROM fams_repair_request p"
+                + " WHERE p.id=fams_proxy_confirmation.business_id AND p.processor_account_id="
+                + current.id() + ")))";
         long total =
                 Objects.requireNonNull(
                         db.queryForObject(
@@ -177,7 +179,11 @@ class RequisitionProxyConfirmationService {
         Instant now = now();
         db.update(
                 "INSERT INTO fams_proxy_confirmation"
-                    + " (business_type,business_id,item_id,business_snapshot_json,evidence_metadata_json,previous_confirmation_id,observed_asset_code,actual_signer,actual_received_at,cannot_confirm_reason,contact_record,delegated_receipt,delegation_relationship,delegation_basis,evidence_kind,collection_method,manual_reason,creator_account_id,created_at,updated_at)"
+                    + " (business_type,business_id,item_id,business_snapshot_json,evidence_metadata_json,"
+                    + "previous_confirmation_id,observed_asset_code,actual_signer,actual_received_at,"
+                    + "cannot_confirm_reason,contact_record,delegated_receipt,delegation_relationship,"
+                    + "delegation_basis,evidence_kind,collection_method,manual_reason,creator_account_id,created_at,"
+                    + "updated_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 businessType,
                 input.businessId(),
@@ -210,7 +216,8 @@ class RequisitionProxyConfirmationService {
                 Map.of("snapshot", snapshot, "evidenceMetadata", input));
         LOG.info("Drafted proxy confirmation actor={} confirmationId={} businessType={} businessId={} itemId={}",
                 current.id(), id, businessType, input.businessId(), input.itemId());
-        return finish(current, "createProxyConfirmation", key, input, id, ProxyViews.confirmation(json, row(id, false)));
+        return finish(current, "createProxyConfirmation", key, input, id,
+                ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
@@ -231,7 +238,8 @@ class RequisitionProxyConfirmationService {
         var evidence = evidence(id);
         db.update(
                 "UPDATE fams_proxy_confirmation SET"
-                    + " confirmation_status='SUBMITTED',evidence_snapshot_json=?,submitted_at=?,version=version+1,updated_at=?"
+                    + " confirmation_status='SUBMITTED',evidence_snapshot_json=?,submitted_at=?,"
+                    + "version=version+1,updated_at=?"
                     + " WHERE id=?",
                 json.writeValueAsString(evidence),
                 now(),
@@ -246,7 +254,8 @@ class RequisitionProxyConfirmationService {
                 version + 1,
                 Map.of("evidence", evidence));
         LOG.info("Submitted proxy confirmation actor={} confirmationId={} version={}", current.id(), id, version);
-        return finish(current, "submitProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
+        return finish(current, "submitProxyConfirmation", key, payload, id,
+                ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
@@ -272,7 +281,8 @@ class RequisitionProxyConfirmationService {
         }
         db.update(
                 "UPDATE fams_proxy_confirmation SET"
-                    + " confirmation_status=?,approver_account_id=?,decision_reason=?,decided_at=?,version=version+1,updated_at=?"
+                    + " confirmation_status=?,approver_account_id=?,decision_reason=?,decided_at=?,"
+                    + "version=version+1,updated_at=?"
                     + " WHERE id=?",
                 input.approved() ? "APPROVED" : "REJECTED",
                 current.id(),
@@ -290,7 +300,8 @@ class RequisitionProxyConfirmationService {
                 Map.of("decision", input));
         LOG.info("Decided proxy confirmation actor={} confirmationId={} approved={} version={}",
                 current.id(), id, input.approved(), version);
-        return finish(current, "decideProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
+        return finish(current, "decideProxyConfirmation", key, payload, id,
+                ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
@@ -318,7 +329,8 @@ class RequisitionProxyConfirmationService {
                         executionEvidence(row));
         db.update(
                 "UPDATE fams_proxy_confirmation SET"
-                    + " confirmation_status='EXECUTED',executor_account_id=?,executed_at=?,execution_result_json=?,version=version+1,updated_at=?"
+                    + " confirmation_status='EXECUTED',executor_account_id=?,executed_at=?,"
+                    + "execution_result_json=?,version=version+1,updated_at=?"
                     + " WHERE id=?",
                 current.id(),
                 now(),
@@ -344,7 +356,8 @@ class RequisitionProxyConfirmationService {
                 detail);
         db.update(
                 "INSERT INTO fams_business_result_notice"
-                    + " (execution_type,execution_id,recipient_employee_id,business_type,business_id,item_id,content_json,created_at)"
+                    + " (execution_type,execution_id,recipient_employee_id,business_type,"
+                    + "business_id,item_id,content_json,created_at)"
                     + " VALUES ('PROXY_CONFIRMATION',?,?,?,?,?,?,?)",
                 id,
                 Long.parseLong(result.targetEmployeeId()),
@@ -355,7 +368,8 @@ class RequisitionProxyConfirmationService {
                 now());
         LOG.info("Executed proxy confirmation actor={} confirmationId={} businessType={} businessId={} itemId={}",
                 current.id(), id, row.get("business_type"), number(row, "business_id"), number(row, "item_id"));
-        return finish(current, "executeProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
+        return finish(current, "executeProxyConfirmation", key, payload, id,
+                ProxyViews.confirmation(json, row(id, false)));
     }
 
     private ProxyReceiptPort.ExecutionEvidence executionEvidence(Map<String, Object> row) {
@@ -401,7 +415,8 @@ class RequisitionProxyConfirmationService {
         var rows =
                 db.queryForList(
                         "SELECT"
-                            + " a.object_id,a.content_sha256,a.size_bytes,a.original_filename,a.business_version,a.uploader_account_id,a.created_at,a.scan_status"
+                            + " a.object_id,a.content_sha256,a.size_bytes,a.original_filename,a.business_version,"
+                            + "a.uploader_account_id,a.created_at,a.scan_status"
                             + " FROM fams_attachment a WHERE a.business_type='PROXY_CONFIRMATION'"
                             + " AND a.business_id=? AND a.deleted_at IS NULL AND NOT EXISTS (SELECT"
                             + " 1 FROM fams_attachment_revision r WHERE"
@@ -489,7 +504,8 @@ class RequisitionProxyConfirmationService {
             Object detail) {
         db.update(
                 "INSERT INTO fams_audit_event"
-                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,?,?,'PROXY_CONFIRMATION',?,?,?,?,?)",
                 actor.requestId().toString(),
                 actor.id(),
@@ -533,7 +549,9 @@ class RequisitionProxyConfirmationService {
             T result) {
         db.update(
                 "INSERT INTO fams_idempotency_record"
-                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
+                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,"
+                    + "response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,"
+                    + "expires_at)"
                     + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'PROXY_CONFIRMATION',?,?,?,?,?)",
                 current.id(),
                 operation,

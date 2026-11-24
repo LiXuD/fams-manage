@@ -44,7 +44,8 @@ public class LoanLossPort {
     public record OpenBorrowing(long id, long version) {}
 
     public OpenBorrowing requireOpenBorrowing(long asset, long borrower, long organization) {
-        return openBorrowing(asset, borrower, organization).orElseThrow(() -> new Failure("LOSS_LOAN_IDENTITY_CHANGED"));
+        return openBorrowing(asset, borrower, organization)
+                .orElseThrow(() -> new Failure("LOSS_LOAN_IDENTITY_CHANGED"));
     }
 
     public java.util.Optional<OpenBorrowing> openBorrowing(long asset, long borrower, long organization) {
@@ -62,13 +63,14 @@ public class LoanLossPort {
 
     public boolean hasOpenBorrowing(long asset) {
         LOG.debug("Checking locked open fams_loan rows for asset={}", asset);
-        return !db.queryForList("SELECT id FROM fams_loan WHERE asset_id=? AND relation_status='OPEN' FOR UPDATE", asset)
-                .isEmpty();
+        return !db.queryForList("SELECT id FROM fams_loan WHERE asset_id=? AND relation_status='OPEN' FOR UPDATE",
+                asset).isEmpty();
     }
 
     public void terminateLost(long asset, long borrower, long organization, long loanId, long version,
             java.time.Instant time) {
-        if (db.update("UPDATE fams_loan SET relation_status='LOST_TERMINATED',closed_at=?,updated_at=?,version=version+1"
+        if (db.update(
+                "UPDATE fams_loan SET relation_status='LOST_TERMINATED',closed_at=?,updated_at=?,version=version+1"
                         + " WHERE id=? AND asset_id=? AND borrower_employee_id=? AND using_organization_id=?"
                         + " AND relation_status='OPEN' AND version=?",
                 time, time, loanId, asset, borrower, organization, version) != 1) {

@@ -48,7 +48,8 @@ class RequisitionTargetChangePort implements TargetChangePort {
             return null;
         });
     }
-    @Override public void apply(Actor actor, long business, long item, JsonNode target, String observedCode, long proposal) {
+    @Override public void apply(Actor actor, long business, long item, JsonNode target, String observedCode,
+            long proposal) {
         LOG.debug("Applying target change to requisition business={} item={} proposal={}", business, item, proposal);
         translate(() -> { handovers.applyChangedTarget(actor, business, item, decode(target), observedCode, proposal);
             return null;
@@ -57,7 +58,8 @@ class RequisitionTargetChangePort implements TargetChangePort {
     private ItemTargetChangeInput.Target decode(JsonNode input) {
         try {
             var target = json.treeToValue(input, ItemTargetChangeInput.Target.class);
-            if (target == null || !validator.validate(target).isEmpty()) { throw TargetChangeFailure.invalid("TARGET_CHANGE_TARGET_INVALID"); }
+            if (target == null || !validator.validate(target).isEmpty()) {
+                throw TargetChangeFailure.invalid("TARGET_CHANGE_TARGET_INVALID"); }
             return target;
         } catch (JacksonException error) { throw TargetChangeFailure.invalid("TARGET_CHANGE_TARGET_INVALID"); }
     }

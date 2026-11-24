@@ -29,7 +29,8 @@ class AssetReturnController {
     record Inspection(@NotBlank String result, @Size(max = 256) String observedCode,
             @NotBlank @Size(max = 1000) String reason, Long warehouseId, Long warehouseVersion,
             Long locationId, Long locationVersion, @Min(0) long assetVersion, @Min(0) long lockVersion,
-            @Valid @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            @Valid @com.fasterxml.jackson.annotation.JsonInclude(
+                    com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
             MissingLoss missingLoss) {}
     record MissingLoss(@NotNull java.time.Instant lastSeenAt, @NotBlank @Size(max = 500) String lastLocation,
             @NotBlank @Size(min = 10, max = 2000) String circumstances) {}

@@ -55,7 +55,8 @@ class AssetReturnReassignmentService {
                 + "AND e.status='ACTIVE' AND o.status='ACTIVE' AND r.role_code='WAREHOUSE_OPERATOR' "
                 + "AND a.id<>? ORDER BY a.id", owner.get("processor_account_id"));
         var items = checks(id).stream().map(LoanViews::reassignmentItem).toList();
-        var declared = unavailabilityReason(id, number(owner, "ownership_version"), number(owner, "processor_account_id"));
+        var declared = unavailabilityReason(id, number(owner, "ownership_version"),
+                number(owner, "processor_account_id"));
         return LoanViews.reassignmentSnapshot(id, owner, items,
                 operators.stream().map(LoanViews::operator).toList(), declared);
     }
@@ -142,7 +143,8 @@ class AssetReturnReassignmentService {
         if (!prior.isEmpty()) {
             if (!digest.equals(prior.getFirst().get("payload_sha256"))) {
                 throw conflict("RETURN_IDEMPOTENCY_CONFLICT"); }
-            return json.readValue(prior.getFirst().get("response_body_json").toString(), LoanViews.AssetReturnDetail.class);
+            return json.readValue(prior.getFirst().get("response_body_json").toString(),
+                    LoanViews.AssetReturnDetail.class);
         }
         // Account locks precede receipt/ownership/item/asset locks, matching execution.
         var target = db.queryForList("SELECT id,employee_id,status,initial_password_required "
@@ -218,7 +220,8 @@ class AssetReturnReassignmentService {
     private Map<String, Object> processing(long id) {
         var rows = db.queryForList("SELECT * FROM fams_asset_return WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) { throw new LoanFailure("RETURN_NOT_FOUND", 404); }
-        if (!"WAREHOUSE_PROCESSING".equals(rows.getFirst().get("return_status")) || rows.getFirst().get("processor_account_id") == null) {
+        if (!"WAREHOUSE_PROCESSING".equals(rows.getFirst().get("return_status"))
+                || rows.getFirst().get("processor_account_id") == null) {
             throw conflict("RETURN_NOT_PROCESSING"); }
         return rows.getFirst();
     }
