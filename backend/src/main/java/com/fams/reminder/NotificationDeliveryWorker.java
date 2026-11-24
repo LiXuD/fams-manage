@@ -107,7 +107,8 @@ class NotificationDeliveryWorker {
             result = sender.send(new WechatSubscriptionPort.Delivery(context.accountId(), bindingId, template,
                     page(context.businessType()),
                     // Field keys are placeholders until the real provider template is wired in D6-09B/10B.
-                    Map.of("thing1", context.businessType(), "time2", DISPLAY_TIME.format(context.deadline().toInstant())),
+                    Map.of("thing1", context.businessType(), "time2",
+                            DISPLAY_TIME.format(context.deadline().toInstant())),
                     claim.id().toString()));
         } catch (RuntimeException failure) {
             result = WechatSubscriptionPort.Result.UNKNOWN;

@@ -135,7 +135,8 @@ public class DutyEscalationService {
      */
     private void escalateUnread(Stage stage, Instant now) {
         for (var entry : stage.cases()) {
-            int threshold = entry.snapshot().path("notificationEscalationThresholds").path(stage.thresholdKey()).asInt(0);
+            int threshold = entry.snapshot().path("notificationEscalationThresholds")
+                    .path(stage.thresholdKey()).asInt(0);
             if (threshold <= 0) {
                 continue;
             }

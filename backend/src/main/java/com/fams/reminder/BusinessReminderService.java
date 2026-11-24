@@ -93,6 +93,7 @@ public class BusinessReminderService {
     }
 
     private void receipts() {
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         each("""
              SELECT x.id,h.receipt_deadline_at,
                     COALESCE(x.receipt_target_employee_id,d.target_employee_id,d.target_department_employee_id) AS employee_id,
@@ -102,6 +103,7 @@ public class BusinessReminderService {
                JOIN fams_requisition_handover h ON h.allocation_id=x.id
                JOIN fams_requisition q ON q.id=x.request_id
               WHERE x.allocation_status='DELIVERED_WAITING_RECEIPT' AND q.request_status='WAITING_HANDOVER'""",
+        // CHECKSTYLE.ON: LineLength
                 row -> receipt(row, "REQUISITION_ALLOCATION"));
     }
 
@@ -129,7 +131,8 @@ public class BusinessReminderService {
     private void inventory(ZoneId fallback) {
         each("SELECT x.id,x.due_at,x.timezone_id FROM fams_inventory_task x WHERE x.task_status='IN_PROGRESS'",
                 row -> {
-                    var zone = row.get("timezone_id") == null ? fallback : ZoneId.of(String.valueOf(row.get("timezone_id")));
+                    var zone = row.get("timezone_id") == null ? fallback
+                            : ZoneId.of(String.valueOf(row.get("timezone_id")));
                     var today = clock.instant().atZone(zone).toLocalDate();
                     var deadline = instant(row.get("due_at"));
                     var due = deadline.atZone(zone).toLocalDate();
@@ -206,6 +209,7 @@ public class BusinessReminderService {
     }
 
     private void lossReviews(ZoneId fallback) {
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         each("""
              SELECT x.id,x.next_review_date,x.processor_account_id,(
                  SELECT e.detail_json FROM fams_loss_event e WHERE e.report_id=x.id
@@ -216,6 +220,7 @@ public class BusinessReminderService {
                 AND asset.lifecycle_status<>'SCRAPPED'
                 AND NOT EXISTS (SELECT 1 FROM fams_scrap_request s JOIN fams_scrap_disposition d ON d.request_id=s.id
                     WHERE s.source_type='LOSS' AND s.source_business_id=x.id AND d.disposition_status='LOSS_WRITTEN_OFF')""",
+        // CHECKSTYLE.ON: LineLength
                 row -> {
                     var due = LocalDate.parse(String.valueOf(row.get("next_review_date")));
                     ZoneId zone = fallback;

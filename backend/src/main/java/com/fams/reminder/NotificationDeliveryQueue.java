@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 class NotificationDeliveryQueue {
     static final String KIND = "NOTIFICATION_SMS";
     static final String WECHAT_KIND = "NOTIFICATION_WECHAT";
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     private static final String GRANT_MATCH = """
             ((g.business_type = 'REQUISITION' AND r.business_type = 'REQUISITION_ALLOCATION' AND EXISTS (
                 SELECT 1 FROM fams_requisition_allocation x WHERE x.id = r.business_id AND x.request_id = g.business_id))
@@ -27,12 +28,14 @@ class NotificationDeliveryQueue {
                 SELECT 1 FROM fams_repair_factory_round x WHERE x.id = r.business_id AND x.repair_id = g.business_id))
             OR (g.business_type = r.business_type AND g.business_id = r.business_id))
             """;
+    // CHECKSTYLE.ON: LineLength
     private static final String GRANT_AVAILABLE = """
             SELECT 1 FROM fams_wechat_subscription_grant g
             WHERE g.account_id = a.id AND g.status = 'AVAILABLE' AND g.template_id = ? AND
             """ + GRANT_MATCH + """
                 AND NOT EXISTS (SELECT 1 FROM fams_notification_delivery d2 WHERE d2.grant_id = g.id)
             """;
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     private static final String ACTIVE_STAGE = """
             AND (
                 (r.business_type = 'INBOUND' AND
@@ -80,6 +83,7 @@ class NotificationDeliveryQueue {
                 ))
             )
             """;
+    // CHECKSTYLE.ON: LineLength
     private static final String FALLBACK = """
             r.reminder_type = 'SMS_FALLBACK' AND (
                 (r.business_type = 'LOAN' AND r.stage = 'LOAN_RETURN' AND EXISTS (
@@ -243,6 +247,7 @@ class NotificationDeliveryQueue {
     String eligibleTemplate(DurableJobService.Claim claim) {
         var now = clock.instant();
         var dayAgo = Timestamp.from(now.minusSeconds(86400));
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         return db.query("""
                 SELECT d.template_code FROM fams_notification_delivery d
                 JOIN fams_business_reminder r ON r.id = d.reminder_id
@@ -252,6 +257,7 @@ class NotificationDeliveryQueue {
                 JOIN fams_account_role ar ON ar.account_id = a.id AND ar.role_code = r.recipient_pool_type
                 WHERE d.job_id = ?
                 """ + ELIGIBLE, (row, index) -> row.getString(1), claim.id().toString(), dayAgo, Timestamp.from(now), dayAgo)
+        // CHECKSTYLE.ON: LineLength
                 .stream().findFirst().orElse(null);
     }
 
@@ -295,7 +301,8 @@ class NotificationDeliveryQueue {
     }
 
     Long activeBinding(long accountId) {
-        return db.query("SELECT id FROM fams_mini_binding WHERE account_id = ? AND revoked_at IS NULL ORDER BY id LIMIT 1",
+        return db.query(
+                "SELECT id FROM fams_mini_binding WHERE account_id = ? AND revoked_at IS NULL ORDER BY id LIMIT 1",
                 (row, index) -> row.getLong(1), accountId).stream().findFirst().orElse(null);
     }
 

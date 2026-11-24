@@ -39,7 +39,8 @@ class MessageController {
     }
 
     @GetMapping
-    ReminderViews.MessagePage list(@RequestParam(defaultValue = "INBOX") @Pattern(regexp = "INBOX|EXCEPTION") String view,
+    ReminderViews.MessagePage list(
+            @RequestParam(defaultValue = "INBOX") @Pattern(regexp = "INBOX|EXCEPTION") String view,
             @RequestParam(defaultValue = "1") @Min(1) @Max(1000000) int page,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return messages.list(actors.capture(), view, page, pageSize);

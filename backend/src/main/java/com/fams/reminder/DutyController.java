@@ -54,7 +54,8 @@ class DutyController {
     }
 
     @PutMapping("/{roleCode}")
-    DutyService.DutyAssignment replace(@PathVariable @Pattern(regexp = "ASSET_ADMIN|WAREHOUSE_OPERATOR") String roleCode,
+    DutyService.DutyAssignment replace(
+            @PathVariable @Pattern(regexp = "ASSET_ADMIN|WAREHOUSE_OPERATOR") String roleCode,
             @RequestHeader("Idempotency-Key") @Size(min = 16, max = 128) String key,
             @RequestHeader("If-Match-Version") @Min(0) long version,
             @Valid @RequestBody DutyRequest body) {

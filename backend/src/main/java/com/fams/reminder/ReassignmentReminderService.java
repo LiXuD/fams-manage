@@ -22,7 +22,8 @@ import tools.jackson.databind.ObjectMapper;
 @Service
 @Profile("fams-product")
 class ReassignmentReminderService {
-    // The original acquisition survives later edits. A first handover or an explicit transfer resolves the original timeout.
+    // The original acquisition survives later edits.
+    // A first handover or an explicit transfer resolves the original timeout.
     private static final String FIRST_EXECUTION = """
             SELECT 'REQUISITION' business_type, request.id business_id, ownership.id claim_id,
                    ownership.acquired_at, request.parameter_snapshot_json
@@ -204,12 +205,14 @@ class ReassignmentReminderService {
                 ORDER BY work.business_type, work.business_id
                 ON DUPLICATE KEY UPDATE id = fams_todo.id
                 """, now, expired, now);
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update(SOURCE + """
                 UPDATE fams_todo t
                 LEFT JOIN affected_work work ON work.business_type = t.business_type AND work.business_id = t.business_id
                 SET t.todo_status = 'CLOSED', t.closed_at = ?
                 WHERE t.todo_type = 'REASSIGNMENT_REQUIRED' AND t.active_guard = 1 AND work.business_id IS NULL
                 """, now, expired, now);
+        // CHECKSTYLE.ON: LineLength
     }
 
     private String expiredClaims(Instant now) {

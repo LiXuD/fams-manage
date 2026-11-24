@@ -94,6 +94,7 @@ public class MessageService {
     private static final String ACTIVE_REMINDER = ACTIVE_FACTORY_RETURN + " AND " + ACTIVE_INVENTORY_COMPLETION
             + " AND (r.business_type<>'INBOUND' OR " + InboundReminderState.CURRENT_STAGE + ")"
             + " AND " + ACTIVE_HANDOVER_RECEIPT;
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     private static final String ACTIVE_CUSTODIAN_REMINDER = """
             (r.business_type<>'LOST_REPORT' OR r.stage<>'LOSS_REVIEW' OR EXISTS (
                 SELECT 1 FROM fams_loss_report l JOIN fams_asset asset ON asset.id=l.asset_id
@@ -117,6 +118,7 @@ public class MessageService {
                         WHEN 'OVERDUE' THEN DATE_SUB(r.notice_date,INTERVAL 1 DAY) END
             ))
             """;
+    // CHECKSTYLE.ON: LineLength
     private static final String REMINDER_COLUMNS =
             " SELECT 'REMINDER' message_kind,r.id id,r.business_type,r.business_id,r.reminder_type stage,"
             + " r.stage object_stage,r.recipient_pool_type pool_type,r.recipient_account_id,r.created_at moment,"
@@ -160,6 +162,7 @@ public class MessageService {
         var args = exception ? exceptionArgs(current) : inboxArgs(current);
         var paged = new ArrayList<>(args);
         paged.addAll(List.of(pageSize, (long) (page - 1) * pageSize));
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         var rows = db.queryForList("""
                 SELECT m.*, COALESCE(allocation.request_id, transfer.request_id, factory.repair_id,
                     extension.loan_id, extension.request_id) parent_business_id,
@@ -175,6 +178,7 @@ public class MessageService {
                     ON m.business_type='REPAIR_FACTORY_ROUND' AND factory.id=m.business_id
                 LEFT JOIN fams_loan_extension extension ON m.business_type='LOAN_EXTENSION' AND extension.id=m.business_id
                 """
+        // CHECKSTYLE.ON: LineLength
                 + " ORDER BY m.moment DESC,m.id DESC LIMIT ? OFFSET ?", paged.toArray());
         var read = readIds(current.id(), rows);
         var unreadArgs = new ArrayList<>(args);
