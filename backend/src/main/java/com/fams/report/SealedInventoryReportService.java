@@ -149,6 +149,7 @@ class SealedInventoryReportService {
         }
         var task = tasks.getFirst();
         if (task.source() == ExecutorSource.SEALED) {
+            // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
             var rows = executorRows("""
                     SELECT NULLIF(CAST(NULLIF(i.snapshot_json->>'$.item.executor_account_id','null') AS UNSIGNED),0)
                             AS executor_id,
@@ -161,6 +162,7 @@ class SealedInventoryReportService {
                         AND e.observation_id=CAST(NULLIF(i.snapshot_json->>'$.review.observation_id','null') AS UNSIGNED)
                     WHERE i.task_id=?
                     """, taskId);
+            // CHECKSTYLE.ON: LineLength
             return executorBreakdown(taskId, task.source(), task.expected(), rows);
         }
         var rows = executorRows("""

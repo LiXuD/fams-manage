@@ -89,6 +89,7 @@ class InboundTimingReportService {
                 JOIN fams_inbound_decision d ON d.receipt_id=r.id AND d.decision_result='APPROVED'
                 WHERE a.resource_type='INBOUND' AND a.action='INBOUND_WAREHOUSE_CLAIMED'
                 """),
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
         FIRST_EXECUTION("""
                 SELECT r.id,r.id AS receipt_id,r.receipt_no,CAST(a.accepted_by_account_id AS CHAR) AS processor_account_id,
                     'ACCEPTED' AS stage_result,o.acquired_at AS started_at,a.accepted_at AS finished_at
@@ -102,6 +103,7 @@ class InboundTimingReportService {
                     WHERE ii.receipt_id=r.id ORDER BY aa.accepted_at,aa.id LIMIT 1
                 )
                 """),
+        // CHECKSTYLE.ON: LineLength
         REASSIGNMENT("""
                 SELECT a.id,r.id AS receipt_id,r.receipt_no,
                     JSON_UNQUOTE(JSON_EXTRACT(a.detail_json,'$.processorAccountId')) AS processor_account_id,

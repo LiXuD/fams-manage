@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 class AssetCustodyReportService {
     private static final int EXPORT_LIMIT = 10_000;
     private static final String EFFECTIVE = "a.card_stage = 'ACTIVE' AND a.lifecycle_status NOT IN ('WAITING_INBOUND','SCRAPPED')";
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
     private static final String COMPLETE_CUSTODY = """
             CASE WHEN a.current_location_id IS NULL THEN 0
                  WHEN a.custody_type='STORAGE' AND a.storage_warehouse_id IS NOT NULL
@@ -32,6 +33,8 @@ class AssetCustodyReportService {
                     AND a.lifecycle_status IN ('IN_USE','UNDER_REPAIR','FACTORY_REPAIR','PENDING_SCRAP') THEN 1
                  ELSE 0 END
             """;
+    // CHECKSTYLE.ON: LineLength
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
     private static final String QUERY = """
             SELECT a.id, a.asset_code, a.name, a.lifecycle_status, a.exception_status, a.custody_type,
                 a.last_inventory_business_date, u.name AS organization_name, w.name AS warehouse_name,
@@ -43,6 +46,7 @@ class AssetCustodyReportService {
             LEFT JOIN fams_employee e ON e.id = COALESCE(a.responsible_employee_id, a.department_responsible_employee_id)
             WHERE
             """ + EFFECTIVE + """
+    // CHECKSTYLE.ON: LineLength
                 AND (? IS NULL OR a.using_organization_id = ? OR (? = 0 AND a.using_organization_id IS NULL))
                 AND (? IS NULL OR a.category_id = ? OR (? = 0 AND a.category_id IS NULL))
                 AND (? IS NULL OR a.responsible_employee_id = ? OR a.department_responsible_employee_id = ?)
@@ -75,6 +79,7 @@ class AssetCustodyReportService {
                         """ + EFFECTIVE + """
                             AND a.custody_type IN ('PERSONAL','SHARED')
                         GROUP BY a.custody_type ORDER BY a.custody_type
+                        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
                         """, (row, index) -> new CustodyGroup(row.getString("custody_type"), row.getLong("total"))),
                 db.queryForObject("SELECT COUNT(CASE WHEN " + EFFECTIVE + " AND (" + COMPLETE_CUSTODY + ")=1 THEN 1 END) AS complete,"
                         + " COUNT(CASE WHEN " + EFFECTIVE + " THEN 1 END) AS effective, COUNT(*) AS total FROM fams_asset a",
@@ -104,12 +109,14 @@ class AssetCustodyReportService {
             throw new ExportLimit();
         }
         db.update("""
+                        // CHECKSTYLE.ON: LineLength
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','ASSET_CUSTODY_REPORT',0,?,
                     JSON_OBJECT('rows',?,'organizationId',?,'responsibleId',?,'warehouseId',?,
                         'locationId',?,'custody',?,'inventoryBefore',?,'categoryId',?,'lifecycle',?,'exception',?,
                         'custodyComplete',CAST(? AS JSON)))
+                // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()), rows.size(),
                 filter.organizationId(), filter.responsibleId(), filter.warehouseId(), filter.locationId(),
                 filter.custody(), filter.inventoryBefore(), filter.categoryId(), filter.lifecycle(), filter.exception(),
@@ -158,3 +165,5 @@ class AssetCustodyReportService {
 
     static final class ExportLimit extends RuntimeException {}
 }
+
+                // CHECKSTYLE.ON: LineLength

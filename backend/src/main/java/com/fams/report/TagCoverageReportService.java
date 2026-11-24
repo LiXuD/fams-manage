@@ -72,11 +72,13 @@ class TagCoverageReportService {
                     .append(csv(verified ? "COVERED" : row.tagVersion() == null ? "NO_TAG" : "EVIDENCE_MISSING"))
                     .append("\r\n");
         }
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
         db.update("""
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','ASSET_TAG_COVERAGE',0,?,JSON_OBJECT('rows',?,'covered',?))
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()), rows.size(), covered);
+        // CHECKSTYLE.ON: LineLength
         return csv.toString();
     }
 

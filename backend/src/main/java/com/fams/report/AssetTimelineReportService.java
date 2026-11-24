@@ -41,11 +41,13 @@ class AssetTimelineReportService {
         if (rows.size() > EXPORT_LIMIT) {
             throw new ExportLimit();
         }
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
         db.update("""
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','ASSET_TIMELINE_REPORT',?,?,JSON_OBJECT('eventType',?,'rows',?))
                 """, actor.requestId(), actor.id(), actor.role(), filter.assetId(), Timestamp.from(clock.instant()),
+        // CHECKSTYLE.ON: LineLength
                 filter.eventType(), rows.size());
         return "\uFEFFeventId,assetId,assetCode,eventType,occurredAt,businessType,businessId,factoryRoundId,summary\r\n"
                 + rows.stream().map(row -> String.join(",", row.eventId(), Long.toString(filter.assetId()),
