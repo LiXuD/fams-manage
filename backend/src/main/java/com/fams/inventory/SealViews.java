@@ -38,6 +38,13 @@ public final class SealViews {
 
     /** Generic page envelope of the sealed report section exits. */
     public record Page<T>(List<T> items, long total, int page, int pageSize) {
+        /**
+         * Copies the section rows into the frozen page envelope. Null stays null instead of becoming
+         * an empty list, so an unprojected section keeps its explicit {@code items: null} key under
+         * the ALWAYS inclusion of the global JsonConfiguration.
+         *
+         * @param items rows of the requested sealed-report section page, or null when absent
+         */
         public Page {
             items = items == null ? null : List.copyOf(items);
         }
@@ -94,6 +101,13 @@ public final class SealViews {
             @JsonInclude(JsonInclude.Include.NON_NULL) Long missingSynchronizationCount,
             @JsonInclude(JsonInclude.Include.NON_NULL) Boolean declarationOnly,
             @JsonInclude(JsonInclude.Include.NON_NULL) Boolean canSealWithoutWaiver) {
+        /**
+         * Copies the two conditional list keys of the preflight body. Both stay null in the sealed
+         * branch, which only emitted task/sealed/report, so the copy must not invent empty lists.
+         *
+         * @param blockers open preflight blockers, or null when the task is already sealed
+         * @param synchronization device roster participants, or null when already sealed
+         */
         public Preflight {
             blockers = blockers == null ? null : List.copyOf(blockers);
             synchronization = synchronization == null ? null : List.copyOf(synchronization);
@@ -160,6 +174,15 @@ public final class SealViews {
             boolean current,
             String reason,
             List<DeviceRow> devices) {
+        /**
+         * Copies the device chips of this participant into the fingerprinted roster. The copy keeps
+         * the roster text stable while {@code InventorySealService} accumulates it page by page and
+         * hashes it into {@code sync_digest}, so a later mutation of the per-page list cannot change
+         * a digest that was already sealed.
+         *
+         * @param devices device chips of this participant ordered by binding_id then device_id, or
+         *     null when the roster was not projected
+         */
         public SyncParticipant {
             devices = devices == null ? null : List.copyOf(devices);
         }
@@ -173,6 +196,13 @@ public final class SealViews {
             int pageSize,
             long taskVersion,
             boolean declarationOnly) {
+        /**
+         * Copies the participant page into the frozen status body. Null stays null rather than
+         * becoming an empty list; the seal-side roster walk accumulates these pages until the total
+         * is reached and fails loudly on an empty page instead of mistaking it for a short roster.
+         *
+         * @param items participants of this page ordered by account_id, or null when absent
+         */
         public SynchronizationStatus {
             items = items == null ? null : List.copyOf(items);
         }
@@ -234,6 +264,15 @@ public final class SealViews {
             List<String> differences,
             String receivedAt,
             boolean recollectionRequired) {
+        /**
+         * Copies the difference dimensions into the receipt that is replayed verbatim. The same text
+         * is persisted into {@code fams_inventory_observation.receipt_json} and both audit
+         * {@code detail_json} columns, so an eventId replay must return byte-identical dimensions;
+         * only a fresh ACCEPTED or DIFFERENCE_REVIEW observation ever carries a non-empty list.
+         *
+         * @param differences derived difference dimension codes such as LOCATION or USAGE_MODE, or
+         *     null when the receipt was not built from a fresh observation
+         */
         public ObservationReceipt {
             differences = differences == null ? null : List.copyOf(differences);
         }

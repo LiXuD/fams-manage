@@ -246,7 +246,8 @@ public class InventorySealService {
         db.update(
                 "INSERT INTO"
                     + " fams_inventory_sealed_report(task_id,task_version,timezone_id,expected_count,accepted_count,"
-                    + "not_observed_count,captured_count,actor_account_id,actor_username,seal_reason,missing_sync_reason,sync_digest,report_sha256,snapshot_json,created_at)"
+                    + "not_observed_count,captured_count,actor_account_id,actor_username,seal_reason,"
+                    + "missing_sync_reason,sync_digest,report_sha256,snapshot_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 taskId,
                 version + 1,
@@ -267,7 +268,8 @@ public class InventorySealService {
             var item = evaluation.items().get(index);
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_sealed_item(task_id,item_id,asset_id,recheck_generation,snapshot_json,snapshot_sha256)"
+                        + " fams_inventory_sealed_item(task_id,item_id,asset_id,recheck_generation,snapshot_json,"
+                        + "snapshot_sha256)"
                         + " VALUES (?,?,?,?,?,?)",
                     taskId,
                     item.get("id"),
@@ -313,7 +315,8 @@ public class InventorySealService {
         audit(actor, current, task, "INVENTORY_SEALED", version + 1, response);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,'SEAL',?,?,?,?)",
                 taskId,
                 current.id(),
@@ -621,7 +624,8 @@ public class InventorySealService {
                 time);
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

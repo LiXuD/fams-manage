@@ -42,6 +42,19 @@ import jakarta.validation.constraints.Size;
 @Profile("fams-product")
 public class InventoryReadinessService {
     private static final Logger LOG = LoggerFactory.getLogger(InventoryReadinessService.class);
+    /**
+     * Request body for escalating an ASSET_NOT_FOUND unobserved reason into a formal loss report.
+     * The record is bound directly by {@link #reportMissing} rather than living in
+     * {@link InventoryReadinessInput}, because it is the only readiness payload whose validation
+     * mirrors the loss domain's own submission rules instead of the review rules.
+     *
+     * @param assetVersion asset card version the client read; the loss port rejects a stale version,
+     *     and the failure is re-thrown as an InventoryFailure with the loss status and code
+     * @param lastSeenAt moment the asset was last physically seen, never null
+     * @param lastLocation free-text description of the last known place, at most 500 characters
+     * @param circumstances description of how the asset went missing, at least 10 characters after
+     *     stripping, otherwise INVENTORY_MISSING_LOSS_BASIS_REQUIRED
+     */
     public record MissingLossInput(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull Instant lastSeenAt,
@@ -55,6 +68,18 @@ public class InventoryReadinessService {
     private final Clock clock;
     private final InventoryLossPort losses;
 
+    /**
+     * Wires the readiness service. The loss port is injected so that escalating a missing asset
+     * stays one transaction, and the clock stamps every review, reason, receipt and audit row with
+     * the same millisecond-truncated instant.
+     *
+     * @param db JDBC template for the readiness reads and the review/reason/receipt/audit writes
+     * @param json mapper used to build idempotency digests and to re-read stored snapshot payloads
+     * @param actors actor context that revalidates the caller and enforces the ASSET_ADMIN role
+     * @param assets port that supplies the live asset context and version checks
+     * @param clock time source of every written timestamp
+     * @param losses port that reports progress of, and submits, the formal loss report
+     */
     public InventoryReadinessService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -69,6 +94,24 @@ public class InventoryReadinessService {
         this.losses = losses;
     }
 
+    /**
+     * Reads the readiness page of one task: every item of the page together with its review state,
+     * its ASSET_NOT_FOUND reason rows and the loss-report progress of each reason. An item is
+     * reported as still collectible only when the task is IN_PROGRESS, it has no review row and it
+     * has no non-EXPIRED observation, and a reason is reported as retryable only when the task is
+     * IN_PROGRESS or WAITING_REVIEW and the loss port says the report may be retried. Nothing is
+     * written.
+     *
+     * @param actor caller captured by the controller, revalidated and required to hold ASSET_ADMIN
+     * @param taskId inventory task whose readiness page is read
+     * @param page one-based page number of the item list
+     * @param size maximum number of items per page
+     * @return task row, the page of readiness items ordered by asset id, the total item count and
+     *     the two aggregate counters of items still missing a result and items recorded as
+     *     unobserved
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, or
+     *     404 INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.ReadinessView detail(
             Actor actor, long taskId, int page, int size) {
@@ -171,6 +214,23 @@ public class InventoryReadinessService {
                 notObserved(taskId));
     }
 
+    /**
+     * Pages the unobserved reasons recorded for one item across all its recheck generations, newest
+     * generation first. This is the audit trail behind a NOT_OBSERVED review: it shows whether an
+     * item was repeatedly unobservable or was escalated to a loss report in an earlier round.
+     * Nothing is written.
+     *
+     * @param actor caller captured by the controller, revalidated and required to hold ASSET_ADMIN
+     * @param taskId inventory task owning the item
+     * @param itemId fams_inventory_item id whose reason history is read
+     * @param page one-based page number
+     * @param size maximum number of reason rows per page
+     * @return reason rows ordered by descending recheck generation, plus the total row count and the
+     *     echoed paging arguments
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role,
+     *     404 INVENTORY_REVIEW_TASK_NOT_FOUND for a missing/DRAFT/DELETED task, or
+     *     404 INVENTORY_ITEM_NOT_FOUND when the item does not belong to the task
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SelectionViews.UnobservedHistoryPage history(
             Actor actor, long taskId, long itemId, int page, int size) {
@@ -198,6 +258,34 @@ public class InventoryReadinessService {
                 SelectionViews.unobservedReasons(rows), total, page, size);
     }
 
+    /**
+     * Records that an item could not be physically observed, which is an explicit conclusion and
+     * never a substitute for an observation. The call is refused when the item already has a review
+     * row, when it already carries a non-EXPIRED observation or a round result for the same recheck
+     * generation, or when the asset card moved since the client read it. On success it writes a
+     * NOT_OBSERVED review row, the matching fams_inventory_unobserved_reason row, bumps the task
+     * version and stores the reply as an idempotency receipt keyed by the request id.
+     *
+     * @param actor caller captured by the controller, revalidated and required to hold ASSET_ADMIN
+     * @param taskId inventory task owning the item
+     * @param itemId fams_inventory_item id to mark as unobserved
+     * @param version task version the client read through If-Match-Version; the reply carries
+     *     version+1
+     * @param key client idempotency key; a repeat with the same key and digest replays the stored
+     *     reply, and the same key with a different digest is rejected as a conflict
+     * @param input unobserved payload carrying the recheck generation, the asset version and one of
+     *     the kinds UNABLE_TO_OBSERVE, EVIDENCE_UNAVAILABLE or ASSET_NOT_FOUND
+     * @return reply naming the created reason row, the new task version and whether the kind was
+     *     ASSET_NOT_FOUND and therefore eligible for loss escalation
+     * @throws InventoryReviewConflict when the item is already reviewed, the task version or status
+     *     changed, the recheck generation no longer matches, or the asset card moved; the conflict
+     *     is audited and does not roll the transaction back
+     * @throws InventoryFailure 403 without ASSET_ADMIN, 404 for an unknown task or item,
+     *     400 INVENTORY_UNOBSERVED_KIND_INVALID for an unknown kind,
+     *     400 INVENTORY_UNOBSERVED_BASIS_REQUIRED when the reason is shorter than 3 or the evidence
+     *     shorter than 10 characters, and 409 INVENTORY_OBSERVATION_ALREADY_PRESENT when a usable
+     *     observation or round result already exists
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -272,7 +360,9 @@ public class InventoryReadinessService {
         var now = now();
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_item_review(item_id,recheck_generation,task_id,observation_id,review_status,verified_observed_at,reviewed_asset_version,reason,evidence,reviewer_account_id,reviewer_username,reviewed_at,version)"
+                    + " fams_inventory_item_review(item_id,recheck_generation,task_id,observation_id,review_status,"
+                    + "verified_observed_at,reviewed_asset_version,reason,evidence,reviewer_account_id,"
+                    + "reviewer_username,reviewed_at,version)"
                     + " VALUES (?,?,?,NULL,'NOT_OBSERVED',NULL,?,?,?,?,?,?,1)",
                 itemId,
                 input.recheckGeneration(),
@@ -285,7 +375,8 @@ public class InventoryReadinessService {
                 now);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_unobserved_reason(task_id,item_id,recheck_generation,reason_kind,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,recorded_at)"
+                    + " fams_inventory_unobserved_reason(task_id,item_id,recheck_generation,reason_kind,reason,"
+                    + "evidence,reviewed_asset_version,actor_account_id,actor_username,recorded_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 taskId,
                 itemId,
@@ -317,6 +408,33 @@ public class InventoryReadinessService {
         return response;
     }
 
+    /**
+     * Escalates a recorded ASSET_NOT_FOUND reason into a formal loss report through the loss domain.
+     * The reason row is re-read under FOR SHARE to confirm it belongs to this task and item and
+     * really carries the ASSET_NOT_FOUND kind, the loss port is asked whether an existing report may
+     * be retried, and only then is the submission created. The inventory side writes nothing but the
+     * task version bump, the audit rows and the idempotency receipt, so the loss report itself
+     * remains the single owner of the missing-asset lifecycle.
+     *
+     * @param actor caller captured by the controller, revalidated and required to hold ASSET_ADMIN
+     * @param taskId inventory task owning the item
+     * @param itemId fams_inventory_item id whose asset is missing
+     * @param reasonId fams_inventory_unobserved_reason id to escalate, which must carry the
+     *     ASSET_NOT_FOUND kind
+     * @param version task version the client read through If-Match-Version; the reply carries
+     *     version+1
+     * @param key client idempotency key; a repeat with the same key and digest replays the stored
+     *     reply, and the same key with a different digest is rejected as a conflict
+     * @param input loss escalation payload with the pinned asset version, the last sighting time and
+     *     place and the circumstances
+     * @return reply naming the created loss report id and the new task version
+     * @throws InventoryReviewConflict when the task version changed or the task is not IN_PROGRESS
+     *     or WAITING_REVIEW; the conflict is audited and does not roll the transaction back
+     * @throws InventoryFailure 403 without ASSET_ADMIN, 404 for an unknown task, item or reason,
+     *     409 INVENTORY_MISSING_ALREADY_LINKED when the loss port refuses a retry,
+     *     400 INVENTORY_MISSING_LOSS_BASIS_REQUIRED for circumstances shorter than 10 characters,
+     *     and any loss-domain or asset-handover failure re-raised with its original status and code
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -389,6 +507,29 @@ public class InventoryReadinessService {
         return response;
     }
 
+    /**
+     * Moves a task from IN_PROGRESS to WAITING_REVIEW once collection is provably complete. The gate
+     * is arithmetic, not a flag: the item count must be non-zero, must equal the expected_count
+     * frozen at publication, and no item may be left without either a round result or a matching
+     * NOT_OBSERVED review plus reason row. Passing the gate freezes further assignment without a
+     * recheck and hands the task to the review routes.
+     *
+     * @param actor caller captured by the controller, revalidated and required to hold ASSET_ADMIN
+     * @param taskId inventory task to move to WAITING_REVIEW
+     * @param version task version the client read through If-Match-Version; the reply carries
+     *     version+1
+     * @param key client idempotency key; a repeat with the same key and digest replays the stored
+     *     reply, and the same key with a different digest is rejected as a conflict
+     * @param input waiting payload whose reason must be at least 3 characters after stripping
+     * @return reply naming the new task version, the WAITING_REVIEW status and the number of items
+     *     recorded as unobserved
+     * @throws InventoryReviewConflict when the task version changed or the task is not IN_PROGRESS;
+     *     the conflict is audited and does not roll the transaction back
+     * @throws InventoryFailure 403 without ASSET_ADMIN, 404 for an unknown task,
+     *     400 INVENTORY_WAITING_REASON_REQUIRED for a too-short reason, and
+     *     409 INVENTORY_RESULTS_OR_REASONS_REQUIRED while items still lack a result or an explicit
+     *     unobserved reason
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -542,7 +683,8 @@ public class InventoryReadinessService {
             Current actor, long task, String operation, UUID key, String hash, Object response) {
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 task,
                 actor.id(),
@@ -600,7 +742,8 @@ public class InventoryReadinessService {
                 now);
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

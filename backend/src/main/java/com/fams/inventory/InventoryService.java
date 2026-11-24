@@ -132,7 +132,8 @@ public class InventoryService {
         }
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,copied_from_task_id,created_at,updated_at)"
+                    + " fams_inventory_task(name,range_json,starts_at,due_at,creator_account_id,copied_from_task_id,"
+                    + "created_at,updated_at)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 input.name().strip(),
                 InventoryViews.inventoryRangeJson(json, input.range()),
@@ -217,7 +218,8 @@ public class InventoryService {
         }
         db.update(
                 "UPDATE fams_inventory_task SET"
-                    + " task_status='READY',expected_count=?,parameter_version_id=?,timezone_id=?,publisher_account_id=?,published_at=?,updated_at=?,version=version+1"
+                    + " task_status='READY',expected_count=?,parameter_version_id=?,timezone_id=?,"
+                    + "publisher_account_id=?,published_at=?,updated_at=?,version=version+1"
                     + " WHERE id=?",
                 input.expectedCount(),
                 parameters.currentParameterVersionId(),
@@ -368,7 +370,8 @@ public class InventoryService {
             long generation = number(item, "recheck_generation") + (input.recheck() ? 1 : 0);
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_assignment(task_id,item_id,old_executor_account_id,new_executor_account_id,assignment_version,recheck_generation,reason,actor_account_id,assigned_at)"
+                        + " fams_inventory_assignment(task_id,item_id,old_executor_account_id,new_executor_account_id,"
+                        + "assignment_version,recheck_generation,reason,actor_account_id,assigned_at)"
                         + " VALUES (?,?,?,?,?,?,?,?,?)",
                     id,
                     itemId,
@@ -554,7 +557,8 @@ public class InventoryService {
                 now());
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'SYSTEM_SCHEDULE','INVENTORY_STARTED',"
                     + "'INVENTORY_TASK',?,?,?,?,?)",
                 java.util.UUID.randomUUID().toString(),
@@ -735,8 +739,10 @@ public class InventoryService {
             InventoryViews.InventoryTaskRow result) {
         db.update(
                 "INSERT INTO"
-                    + " fams_idempotency_record(actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,"
-                    + "response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
+                    + " fams_idempotency_record(actor_account_id,operation_id,idempotency_key,payload_sha256,"
+                    + "result_status,http_status,"
+                    + "response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,"
+                    + "expires_at)"
                     + " VALUES (?,?,?,?,'SUCCEEDED',200,?,'INVENTORY_TASK',?,?,?,?,?)",
                 current.id(),
                 "inventory:" + operation,
@@ -771,7 +777,8 @@ public class InventoryService {
                 now());
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 actorId,

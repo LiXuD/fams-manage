@@ -38,6 +38,15 @@ public class InventoryReviewService {
     private final AssetInventoryReviewPort assets;
     private final Clock clock;
 
+    /**
+     * Injects the collaborators the admin-side normal review flow needs.
+     *
+     * @param db reads and writes the inventory task, item, observation, review and receipt tables
+     * @param json projects the recursive review wire and serializes stored receipt texts
+     * @param actors revalidates the caller session and proves the ASSET_ADMIN role
+     * @param assets supplies the asset snapshot, period movements and version match for each item
+     * @param clock stamps every persisted review instant
+     */
     public InventoryReviewService(JdbcTemplate db, ObjectMapper json, RequisitionActorContext actors,
             AssetInventoryReviewPort assets, Clock clock) {
         this.db = db;
@@ -47,6 +56,21 @@ public class InventoryReviewService {
         this.clock = clock;
     }
 
+    /**
+     * Projects one page of the review worklist: for each item its book snapshot, the live asset
+     * snapshot with its period movements, the counted candidate observation, the review-state union and
+     * the reason the item cannot be accepted normally. An item that already has a review row reports
+     * ALREADY_REVIEWED instead of the underlying problem, so a reviewer never re-accepts it.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task whose items are listed
+     * @param page one-based page number
+     * @param size maximum number of items per page
+     * @return task row, the item page ordered by asset id, the item total, the paging echo and the
+     *     accepted review count
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, or
+     *     404 INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ReviewTaskDetail detail(Actor actor, long taskId, int page, int size) {
         admin(actor);
@@ -81,12 +105,29 @@ public class InventoryReviewService {
                 countItems(taskId), page, size, reviewedCount(taskId));
     }
 
+    /**
+     * Lists one page of the observations a reviewer may bind a decision to. Without an item id only the
+     * task's unassigned observations are returned, which is the finding pool; with an item id only that
+     * item's observations are returned. The rows go through the recursive review wire, so identifier
+     * keys inside facts_json leave as text.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task the observations belong to
+     * @param item inventory item to restrict the list to, or null for the unassigned observations
+     * @param page one-based page number
+     * @param size maximum number of observations per page
+     * @return observation rows in ascending observation id order, the total count and the paging echo
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED, or 404
+     *     INVENTORY_ITEM_NOT_FOUND when the given item does not belong to the task
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ObservationPage observations(Actor actor, long taskId, Long itemId, int page, int size) {
         admin(actor);
         task(taskId);
         if (itemId != null) {
-            var owned = db.queryForList("SELECT id FROM fams_inventory_item WHERE task_id=? AND id=? FOR SHARE", taskId, itemId);
+            var owned = db.queryForList("SELECT id FROM fams_inventory_item WHERE task_id=? AND id=? FOR SHARE",
+                    taskId, itemId);
             if (owned.isEmpty()) {
                 throw new InventoryFailure(404, "INVENTORY_ITEM_NOT_FOUND");
             }
@@ -97,7 +138,8 @@ public class InventoryReviewService {
         if (itemId != null) {
             args.add(itemId);
         }
-        Long total = db.queryForObject("SELECT COUNT(*) FROM fams_inventory_observation WHERE " + where + " FOR SHARE", Long.class, args.toArray());
+        Long total = db.queryForObject("SELECT COUNT(*) FROM fams_inventory_observation WHERE " + where + " FOR SHARE",
+                Long.class, args.toArray());
         args.add(size);
         args.add((page - 1) * size);
         var rows = db.queryForList("SELECT * FROM fams_inventory_observation WHERE " + where
@@ -108,6 +150,33 @@ public class InventoryReviewService {
                 Objects.requireNonNull(total), page, size);
     }
 
+    /**
+     * Accepts a batch of undisputed items as normal in one transaction. The request id makes the call
+     * idempotent: a stored ACCEPT_NORMAL receipt with the same fingerprint replays, a different one is
+     * rejected as an idempotency conflict. Items are locked in ascending asset id order so overlapping
+     * reviews in different tasks serialize deterministically. Each item is judged on its own and a
+     * refusal never aborts the batch: it becomes a CONFLICT outcome line carrying its code, while the
+     * accepted ones still write fams_inventory_item_review plus a CLOSED NORMAL review subject.
+     *
+     * <p>State impact: the task version is bumped once when at least one item was accepted, the batch
+     * is audited as INVENTORY_NORMAL_REVIEWED and stored as the ACCEPT_NORMAL receipt.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task whose items are accepted
+     * @param expectedVersion task version the caller read, compared against the locked task row
+     * @param key client request id used for the idempotency receipt
+     * @param input shared review reason plus the item id, recheck generation, review version and asset
+     *     version of each item to accept
+     * @return receipt with the resulting task version, accepted and conflict counters, one outcome line
+     *     per requested item in asset order and the new accepted review count
+     * @throws InventoryReviewConflict INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT when the request id was
+     *     already used with a different payload, or INVENTORY_REVIEW_TASK_CHANGED when the task version
+     *     differs or the task is not IN_PROGRESS or WAITING_REVIEW; both are audited and do not roll the
+     *     transaction back
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED, or 400
+     *     INVENTORY_REVIEW_ITEM_DUPLICATE when the payload lists one item twice
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -122,7 +191,8 @@ public class InventoryReviewService {
                 + " AND request_id=? FOR UPDATE", taskId, current.id(), key.toString());
         if (!prior.isEmpty()) {
             if (!fingerprint.equals(prior.getFirst().get("payload_sha256"))) {
-                reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT", Map.of("requestId", key.toString()));
+                reject(actor, current, task, "INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT",
+                        Map.of("requestId", key.toString()));
             }
             return replay(prior.getFirst(), FindingViews.NormalBatchReceipt.class);
         }
@@ -149,7 +219,8 @@ public class InventoryReviewService {
         var outcomes = new ArrayList<FindingViews.NormalBatchItem>();
         int accepted = 0;
         for (var entry : ordered) {
-            var rows = db.queryForList("SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR UPDATE", taskId, entry.itemId());
+            var rows = db.queryForList("SELECT * FROM fams_inventory_item WHERE task_id=? AND id=? FOR UPDATE",
+                    taskId, entry.itemId());
             if (rows.isEmpty()) {
                 outcomes.add(conflict(entry.itemId(), "INVENTORY_ITEM_NOT_FOUND", null));
                 continue;
@@ -219,14 +290,16 @@ public class InventoryReviewService {
         if (!context.movements().isEmpty()) {
             return "INVENTORY_REVIEW_PERIOD_MOVEMENT";
         }
-        for (String field : List.of("locationId", "custodyType", "responsibleEmployeeId", "departmentResponsibleEmployeeId",
-                "usingOrganizationId", "owningOrganizationId", "lifecycle", "exception", "warehouseId")) {
+        for (String field : List.of("locationId", "custodyType", "responsibleEmployeeId",
+                "departmentResponsibleEmployeeId", "usingOrganizationId", "owningOrganizationId", "lifecycle",
+                "exception", "warehouseId")) {
             if (!Objects.equals(book.path(field), latest.path(field))) {
                 return "INVENTORY_REVIEW_PERIOD_MOVEMENT";
             }
         }
-        Long conflict = db.queryForObject("SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=? AND item_id=?"
-                + " AND recheck_generation=? AND outcome NOT IN ('ACCEPTED','DUPLICATE','EXPIRED','LATE_REVIEW') FOR SHARE",
+        Long conflict = db.queryForObject("SELECT COUNT(*) FROM fams_inventory_observation WHERE task_id=?"
+                + " AND item_id=? AND recheck_generation=?"
+                + " AND outcome NOT IN ('ACCEPTED','DUPLICATE','EXPIRED','LATE_REVIEW') FOR SHARE",
                 Long.class, item.get("task_id"), item.get("id"), item.get("recheck_generation"));
         return conflict != null && conflict > 0 ? "INVENTORY_REVIEW_EVIDENCE_CONFLICT" : null;
     }
@@ -255,7 +328,8 @@ public class InventoryReviewService {
     }
 
     private Map<String, Object> review(Map<String, Object> item) {
-        var rows = db.queryForList("SELECT * FROM fams_inventory_item_review WHERE item_id=? AND recheck_generation=? FOR UPDATE",
+        var rows = db.queryForList(
+                "SELECT * FROM fams_inventory_item_review WHERE item_id=? AND recheck_generation=? FOR UPDATE",
                 item.get("id"), item.get("recheck_generation"));
         return rows.isEmpty() ? null : rows.getFirst();
     }
@@ -266,7 +340,9 @@ public class InventoryReviewService {
     }
 
     private long countItems(long task) {
-        return Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM fams_inventory_item WHERE task_id=? FOR SHARE", Long.class, task));
+        return Objects.requireNonNull(
+                db.queryForObject("SELECT COUNT(*) FROM fams_inventory_item WHERE task_id=? FOR SHARE",
+                        Long.class, task));
     }
 
     private long reviewedCount(long task) {
@@ -275,14 +351,16 @@ public class InventoryReviewService {
                 + " WHERE r.task_id=? AND r.review_status='ACCEPTED' FOR SHARE", Long.class, task));
     }
 
-    private Map<String, String> conflictFields(Actor actor, Map<String, Object> task, InventoryReviewInput.NormalBatch input) {
+    private Map<String, String> conflictFields(
+            Actor actor, Map<String, Object> task, InventoryReviewInput.NormalBatch input) {
         Map<String, String> fields = new LinkedHashMap<>();
         fields.put("taskVersion", Long.toString(number(task, "version")));
         fields.put("taskStatus", task.get("task_status").toString());
         fields.put("readOnlyUrl", InventoryReviewLinks.task(actor, number(task, "id")));
         for (var item : input.items()) {
             var rows = db.queryForList("SELECT reviewer_account_id,reviewer_username,reviewed_at,review_status,version"
-                    + " FROM fams_inventory_item_review WHERE task_id=? AND item_id=? AND recheck_generation=? FOR SHARE",
+                    + " FROM fams_inventory_item_review WHERE task_id=? AND item_id=? AND recheck_generation=? "
+                    + "FOR SHARE",
                     task.get("id"), item.itemId(), item.recheckGeneration());
             if (!rows.isEmpty()) {
                 var winner = rows.getFirst();
@@ -298,18 +376,21 @@ public class InventoryReviewService {
         return fields;
     }
 
-    private void reject(Actor actor, Current current, Map<String, Object> task, String code, Map<String, String> fields) {
-        audit(actor, current, number(task, "id"), "INVENTORY_REVIEW_CONFLICT_REJECTED", number(task, "version"), number(task, "version"),
-                Map.of("code", code, "fields", fields));
+    private void reject(
+            Actor actor, Current current, Map<String, Object> task, String code, Map<String, String> fields) {
+        audit(actor, current, number(task, "id"), "INVENTORY_REVIEW_CONFLICT_REJECTED",
+                number(task, "version"), number(task, "version"), Map.of("code", code, "fields", fields));
         throw new InventoryReviewConflict(code, fields);
     }
 
     private void audit(Actor actor, Current current, long task, String action, long before, long after, Object detail) {
         String serialized = json.writeValueAsString(detail);
-        db.update("INSERT INTO fams_inventory_task_event(task_id,actor_account_id,action,detail_json,occurred_at) VALUES (?,?,?,?,?)",
+        db.update("INSERT INTO fams_inventory_task_event(task_id,actor_account_id,action,detail_json,occurred_at) "
+                + "VALUES (?,?,?,?,?)",
                 task, current.id(), action, serialized, now());
-        db.update("INSERT INTO fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
-                + "before_version,after_version,occurred_at,detail_json) VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
+        db.update("INSERT INTO fams_audit_event(request_id,actor_account_id,actor_role,action,"
+                + "resource_type,resource_id,before_version,after_version,occurred_at,detail_json) "
+                + "VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(), current.id(), action, task, before, after, now(), serialized);
     }
 

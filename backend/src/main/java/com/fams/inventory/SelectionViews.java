@@ -237,6 +237,15 @@ public final class SelectionViews {
             int page,
             int pageSize,
             long total) {
+        /**
+         * Copies the two list segments of the selection detail body. The movement list is the very
+         * snapshot the {@code contextDigest} was computed from, so freezing it keeps the digest and
+         * the published movements consistent even if the asset review port's caller mutates its list.
+         *
+         * @param movementEvents period movements behind the context digest, or null when absent
+         * @param history fams_inventory_selection_event rows ordered by recheck_generation then
+         *     review_version, or null when the page was not projected
+         */
         public SelectionDetailView {
             movementEvents = movementEvents == null ? null : List.copyOf(movementEvents);
             history = history == null ? null : List.copyOf(history);
@@ -271,6 +280,18 @@ public final class SelectionViews {
             List<DecisionRow> decisions,
             List<TransferLinkRow> links,
             List<RepairLinkRow> repairLinks) {
+        /**
+         * Copies the three appended segments so the subject row keeps the legacy assembly order and
+         * cannot be changed through the query result lists it was built from. Null stays null in each
+         * segment because the ALWAYS inclusion still has to emit the explicit key.
+         *
+         * @param decisions fams_inventory_review_decision rows of this subject in ascending
+         *     after_version order, or null when absent
+         * @param links fams_inventory_review_transfer rows of this subject in ascending
+         *     decision_version order, or null when absent
+         * @param repairLinks fams_inventory_review_repair rows of this subject in ascending
+         *     decision_version order, or null when absent
+         */
         public EvidenceSubjectRow {
             decisions = decisions == null ? null : List.copyOf(decisions);
             links = links == null ? null : List.copyOf(links);
@@ -280,6 +301,17 @@ public final class SelectionViews {
 
     /** GET …/evidence-subjects envelope. */
     public record EvidenceSubjectView(List<EvidenceSubjectRow> items, List<String> requiredDimensions) {
+        /**
+         * Copies both envelope lists. The dimension list is the sorted output of
+         * {@code InventoryDifferenceService.requiredDimensions}: every dimension derived from the
+         * observation receipt plus its outcome-mapped special dimension, i.e. the review subjects
+         * that must exist before this observation can be accepted.
+         *
+         * @param items fams_inventory_review_subject rows of the observation in ascending dimension
+         *     order, or null when absent
+         * @param requiredDimensions dimensions the difference service derived for this observation,
+         *     sorted, or null when absent
+         */
         public EvidenceSubjectView {
             items = items == null ? null : List.copyOf(items);
             requiredDimensions = requiredDimensions == null ? null : List.copyOf(requiredDimensions);
@@ -324,6 +356,18 @@ public final class SelectionViews {
             List<DecisionRow> decisions,
             List<TransferLinkRow> links,
             List<RepairLinkRow> repairLinks) {
+        /**
+         * Copies the three appended segments of the difference list row. Null stays null per segment
+         * so the ALWAYS inclusion still emits the key, and the copy detaches the row from the
+         * per-subject query results it was assembled from.
+         *
+         * @param decisions fams_inventory_review_decision rows of this subject in ascending
+         *     after_version order, or null when absent
+         * @param links fams_inventory_review_transfer rows of this subject in ascending
+         *     decision_version order, or null when absent
+         * @param repairLinks fams_inventory_review_repair rows of this subject in ascending
+         *     decision_version order, or null when absent
+         */
         public DifferenceSubjectRow {
             decisions = decisions == null ? null : List.copyOf(decisions);
             links = links == null ? null : List.copyOf(links);
@@ -334,6 +378,13 @@ public final class SelectionViews {
     /** GET …/differences envelope. */
     public record DifferencePage(
             List<DifferenceSubjectRow> items, int page, int pageSize, long total) {
+        /**
+         * Copies the subject rows of the frozen difference page. Null stays null rather than an empty
+         * list, so an unprojected page keeps its explicit {@code items} key.
+         *
+         * @param items review subjects of this page ordered by observation_id then dimension, or null
+         *     when the page was not projected
+         */
         public DifferencePage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -342,6 +393,13 @@ public final class SelectionViews {
     /** GET …/evidence-dispositions envelope. */
     public record DispositionPage(
             List<EvidenceDispositionRow> items, long total, int page, int pageSize) {
+        /**
+         * Copies the counter-evidence disposition rows of the frozen page. Null stays null, which is
+         * not the same as an empty list under the ALWAYS inclusion.
+         *
+         * @param items fams_inventory_evidence_disposition rows of this page in ascending
+         *     observation_id order, or null when the page was not projected
+         */
         public DispositionPage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -367,6 +425,13 @@ public final class SelectionViews {
     /** POST …/differences/decisions and the DECIDE_DIFFERENCES receipt body. */
     public record DifferenceDecisionReply(
             List<DifferenceDecisionItem> items, String taskId, long version) {
+        /**
+         * Copies the decision results into the reply that {@code finish} also serializes into
+         * fams_inventory_review_receipt.response_json and the task event detail_json, so a replayed
+         * request must return the identical list. Null stays null rather than an empty list.
+         *
+         * @param items one entry per decision in request payload order, or null when absent
+         */
         public DifferenceDecisionReply {
             items = items == null ? null : List.copyOf(items);
         }
@@ -384,6 +449,14 @@ public final class SelectionViews {
             String originalObservedAt,
             JsonNode originalFacts,
             List<RepairLinkRow> repairLinks) {
+        /**
+         * Copies the CONDITION repair links of the frozen ten-key context. Null stays null rather
+         * than becoming an empty list, so the explicit key keeps its projected meaning under the
+         * ALWAYS inclusion.
+         *
+         * @param repairLinks fams_inventory_review_repair rows of the CONDITION dimension in
+         *     ascending decision_version order, or null when absent
+         */
         public DifferenceRepairContext {
             repairLinks = repairLinks == null ? null : List.copyOf(repairLinks);
         }
@@ -407,6 +480,14 @@ public final class SelectionViews {
             boolean canRecord,
             boolean physicalMissingOpen,
             List<MissingLossRow> missingLosses) {
+        /**
+         * Copies the missing-loss rows of this readiness item. Null stays null rather than becoming
+         * an empty list, which keeps the ALWAYS-included key distinguishable from a projected item
+         * that simply has no ASSET_NOT_FOUND reason yet.
+         *
+         * @param missingLosses ASSET_NOT_FOUND reasons of this item with their loss-domain progress,
+         *     ordered by recheck_generation, or null when absent
+         */
         public ReadinessItem {
             missingLosses = missingLosses == null ? null : List.copyOf(missingLosses);
         }
@@ -421,6 +502,13 @@ public final class SelectionViews {
             int pageSize,
             long missingCount,
             long notObservedCount) {
+        /**
+         * Copies the readiness items of the frozen envelope. Null stays null rather than an empty
+         * list, keeping the explicit key distinguishable from a projected but empty page.
+         *
+         * @param items readiness items of this page ordered by asset id, or null when the page was not
+         *     projected
+         */
         public ReadinessView {
             items = items == null ? null : List.copyOf(items);
         }
@@ -429,6 +517,13 @@ public final class SelectionViews {
     /** GET …/items/{item}/unobserved-history envelope. */
     public record UnobservedHistoryPage(
             List<UnobservedReasonRow> items, long total, int page, int pageSize) {
+        /**
+         * Copies the reason rows of the frozen history page. Null stays null rather than an empty
+         * list, preserving the explicit key under the ALWAYS inclusion.
+         *
+         * @param items fams_inventory_unobserved_reason rows of this item in descending
+         *     recheck_generation order, or null when the page was not projected
+         */
         public UnobservedHistoryPage {
             items = items == null ? null : List.copyOf(items);
         }

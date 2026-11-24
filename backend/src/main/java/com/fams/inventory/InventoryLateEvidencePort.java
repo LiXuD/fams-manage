@@ -32,6 +32,16 @@ public class InventoryLateEvidencePort {
      * fams_inventory_late_case.snapshot_json packet keys exactly like the previous raw row Map.
      */
     public record Task(long id, String taskStatus, long version) {
+        /**
+         * Projects the three identity columns out of a raw fams_inventory_task row so callers keep
+         * passing whole {@code Map<String,Object>} rows around without widening the stored-shape
+         * contract. The BIGINT id and version are narrowed to long exactly as the previous raw-row
+         * reads did, and task_status stays the literal column value the terminal-status check
+         * compares against.
+         *
+         * @param row raw fams_inventory_task row containing id, task_status and version
+         * @return narrow task identity carrying only the columns the evidence chain reads
+         */
         public static Task fromRow(Map<String, Object> row) {
             return new Task(
                     ((Number) row.get("id")).longValue(),
@@ -43,11 +53,37 @@ public class InventoryLateEvidencePort {
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
+    /**
+     * Wires the port. It runs inside the caller's transaction because the late case must commit or
+     * roll back together with the observation row that triggered it, so no transaction manager is
+     * injected here.
+     *
+     * @param db JDBC template used to read observations, items, reviews and sealed reports and to
+     *     insert the late case, todo and late-damage rows
+     * @param json mapper used to re-read facts_json, to serialize the snapshot packet and to project
+     *     the stored review row into its wire shape
+     */
     public InventoryLateEvidencePort(JdbcTemplate db, ObjectMapper json) {
         this.db = db;
         this.json = json;
     }
 
+    /**
+     * Registers one observation that arrived after its task reached a terminal status. The row is
+     * supplemental only: it never reopens the sealed report, never proves the original sealing
+     * condition and is inserted with the observation's own received_at so the audit timeline stays
+     * monotonic. The comparison kind is derived from the frozen or sealed state of the item
+     * (TIME_UNVERIFIED, FINDING, NO_ACCEPTED, FACTS_MATCH or FROZEN_CONFLICT) and drives whether an
+     * ASSET_ADMIN late-evidence review todo is opened; a DAMAGED condition additionally opens a
+     * late-damage row and its own repair todo. An EXPIRED observation or an observation that already
+     * has a late case returns without writing, which makes the call idempotent under retries.
+     *
+     * @param task terminal task identity already locked by the caller's transaction
+     * @param observationId id of the freshly inserted fams_inventory_observation row to register
+     * @throws IllegalArgumentException when the task is not COMPLETED, CANCELLED or TERMINATED, or
+     *     when the observation outcome is neither TIME_REVIEW nor LATE_REVIEW, because only those two
+     *     are supplemental evidence for an already closed task
+     */
     public void append(Task task, long observationId) {
         if (!List.of("COMPLETED", "CANCELLED", "TERMINATED").contains(task.taskStatus())) {
             throw new IllegalArgumentException("Terminal inventory task required");
@@ -171,7 +207,8 @@ public class InventoryLateEvidencePort {
                                 kind, json.readTree(raw.get("facts_json").toString()));
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_late_case(observation_id,task_id,comparison_kind,needs_review,report_sha256,accepted_observation_id,snapshot_json,snapshot_sha256,created_at)"
+                    + " fams_inventory_late_case(observation_id,task_id,comparison_kind,needs_review,report_sha256,"
+                    + "accepted_observation_id,snapshot_json,snapshot_sha256,created_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?)",
                 observationId,
                 task.id(),
@@ -185,7 +222,8 @@ public class InventoryLateEvidencePort {
         if (needsReview) {
             db.update(
                     "INSERT INTO"
-                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,"
+                        + "opened_at)"
                         + " VALUES"
                         + " ('ASSET_ADMIN',NULL,'INVENTORY_LATE',?,'LATE_EVIDENCE_REVIEW','OPEN',?)"
                         + " ON DUPLICATE KEY UPDATE id=id",
@@ -207,7 +245,8 @@ public class InventoryLateEvidencePort {
                     raw.get("received_at"));
             db.update(
                     "INSERT INTO"
-                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,"
+                        + "opened_at)"
                         + " VALUES"
                         + " ('ASSET_ADMIN',NULL,'INVENTORY_LATE',?,'LATE_DAMAGE_REPAIR','OPEN',?)",
                     observationId,

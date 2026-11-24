@@ -44,6 +44,18 @@ public class InventoryObservationService {
                     com.fams.attachment.AttachmentEvidencePort>
             attachments;
 
+    /**
+     * Injects the collaborators the append-only observation flow needs.
+     *
+     * @param db reads and appends the inventory task, item, participant, observation and round tables
+     * @param json serializes observation payloads into the digests and stored receipt texts
+     * @param actors revalidates the caller session under the task lock
+     * @param identities resolves the device binding id behind the caller session
+     * @param assets identifies an asset by tag or code for the lookup exits
+     * @param clock stamps calibration, reception and every persisted instant
+     * @param late appends terminal-task evidence for the late supplemental review domain
+     * @param attachments optional evidence port used to check and discard event photos
+     */
     public InventoryObservationService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -65,6 +77,17 @@ public class InventoryObservationService {
         this.attachments = attachments;
     }
 
+    /**
+     * Records one clock calibration sample of the caller's device and returns the server instant that
+     * later observations calibrate against. The row is append-only: it never updates an earlier sample
+     * and it is not tied to a task, so the same device can calibrate repeatedly.
+     *
+     * @param actor caller whose session is revalidated under lock and whose binding id is stored
+     * @param input device id and client instant of this calibration sample
+     * @return calibration id, server time and echoed client time
+     * @throws InventoryFailure 400 INVENTORY_TIME_INVALID when the client time is outside the
+     *     2000-01-01..2100-01-01 window or carries sub-millisecond precision
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.CalibrationResult calibrate(
             RequisitionActorContext.Actor actor, InventoryObservationInput.Calibration input) {
@@ -75,7 +98,8 @@ public class InventoryObservationService {
         String id = UUID.randomUUID().toString();
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_clock_calibration(id,actor_account_id,binding_id,device_id,client_time,server_time)"
+                    + " fams_inventory_clock_calibration(id,actor_account_id,binding_id,device_id,client_time,"
+                    + "server_time)"
                     + " VALUES (?,?,?,?,?,?)",
                 id,
                 current.id(),
@@ -87,6 +111,23 @@ public class InventoryObservationService {
         return new SealViews.CalibrationResult(id, now.toString(), input.clientTime().toString());
     }
 
+    /**
+     * Resolves a scanned tag or typed code to its inventory position without recording anything. The
+     * five outcomes are advisory, never a surplus verdict: INVALID_TAG for a malformed scan value,
+     * UNVERIFIED when no asset matches, TASK_OUTSIDE when the asset is not in this task, NOT_ASSIGNED
+     * when the item belongs to another executor, and ASSIGNED with the item id, its three version
+     * components and the stored snapshot.
+     *
+     * @param actor caller whose session is revalidated under the task lock
+     * @param task inventory task the lookup is scoped to
+     * @param source lookup kind, either SCAN or CODE
+     * @param value tag text or asset code, at most 256 characters
+     * @return identification result carrying only the keys of its own outcome kind
+     * @throws InventoryFailure 400 INVENTORY_LOOKUP_INVALID when the source is neither SCAN nor CODE
+     *     or the value is blank or longer than 256 characters, 404 INVENTORY_TASK_NOT_FOUND for an
+     *     unknown task, 403 INVENTORY_PARTICIPATION_REVOKED for a revoked participant, or 403
+     *     INVENTORY_PARTICIPATION_REQUIRED for a caller who is neither an admin nor a participant
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.Identification identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
@@ -94,6 +135,21 @@ public class InventoryObservationService {
         return identify(actor, taskId, source, value, false);
     }
 
+    /**
+     * Same identification as {@link #identify} plus the tag-recognition side effect: an ASSIGNED SCAN
+     * lookup on a collecting task upserts fams_inventory_tag_recognition for the item's current tag
+     * version, keeping the earlier recognized_at on a duplicate key so the first recognition wins.
+     *
+     * @param actor caller whose session is revalidated under the task lock
+     * @param task inventory task the lookup is scoped to
+     * @param source lookup kind, either SCAN or CODE
+     * @param value tag text or asset code, at most 256 characters
+     * @return identification result carrying only the keys of its own outcome kind
+     * @throws InventoryFailure 400 INVENTORY_LOOKUP_INVALID when the source is neither SCAN nor CODE
+     *     or the value is blank or longer than 256 characters, 404 INVENTORY_TASK_NOT_FOUND for an
+     *     unknown task, 403 INVENTORY_PARTICIPATION_REVOKED for a revoked participant, or 403
+     *     INVENTORY_PARTICIPATION_REQUIRED for a caller who is neither an admin nor a participant
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.Identification identifyAndRecord(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
@@ -123,7 +179,8 @@ public class InventoryObservationService {
         var rows =
                 db.queryForList(
                         "SELECT CAST(id AS CHAR) AS"
-                            + " id,executor_account_id,assignment_version,recheck_generation,asset_version,CAST(snapshot_json"
+                            + " id,executor_account_id,assignment_version,recheck_generation,asset_version,"
+                            + "CAST(snapshot_json"
                             + " AS CHAR) AS snapshot FROM fams_inventory_item WHERE task_id=? AND"
                             + " asset_id=?",
                         taskId,
@@ -164,6 +221,37 @@ public class InventoryObservationService {
                 json.readTree(item.get("snapshot").toString()));
     }
 
+    /**
+     * Appends one immutable observation and derives its review outcome. The client event id makes the
+     * call idempotent: a matching prior row replays its stored receipt, while a differing actor,
+     * binding or payload is rejected as a conflict. Time is calibrated first, then the outcome is
+     * decided in a fixed order - TIME_REVIEW, EXPIRED, LATE_REVIEW for a terminal task, FINDING_REVIEW
+     * without an item, OLD_ASSIGNMENT_REVIEW on any version mismatch, DUPLICATE or CONFLICT_REVIEW
+     * against an existing round result, otherwise ACCEPTED or DIFFERENCE_REVIEW.
+     *
+     * <p>State impact: the observation row plus its receipt are appended, the upload scope is marked
+     * submitted, an EXPIRED event discards its photos and stores empty facts instead, a terminal task
+     * appends late evidence, CONFLICT_REVIEW and DIFFERENCE_REVIEW open an ASSET_ADMIN todo, a counted
+     * outcome appends a round result and raises the item result_count, and a non-terminal counted
+     * event raises the task captured_result_count and version. The task event INVENTORY_OBSERVED is
+     * always written.
+     *
+     * @param actor caller whose session is revalidated under the task lock
+     * @param taskId inventory task the observation belongs to
+     * @param input client event id, raw and calibrated times, device, optional item versions and the
+     *     observed facts with their photo ids
+     * @return receipt of this event: outcome, counted flag, difference dimensions, server reception
+     *     time and whether recollection is required
+     * @throws InventoryFailure 404 INVENTORY_TASK_NOT_FOUND or INVENTORY_ITEM_NOT_FOUND, 403
+     *     INVENTORY_PARTICIPATION_REQUIRED / INVENTORY_PARTICIPATION_REVOKED /
+     *     INVENTORY_PERSON_OUTSIDE_TASK / INVENTORY_PHOTO_NOT_AUTHORIZED, 409 INVENTORY_EVENT_CONFLICT
+     *     for a replayed event id with a different actor, binding or payload, 409
+     *     INVENTORY_NOT_COLLECTING while the task is DRAFT, READY or DELETED, or 400 for
+     *     INVENTORY_TIME_INVALID, INVENTORY_FACT_INVALID, INVENTORY_MANUAL_REASON_REQUIRED,
+     *     INVENTORY_CUSTODY_INVALID, INVENTORY_IDENTIFIER_INVALID, INVENTORY_PHOTO_REQUIRED,
+     *     INVENTORY_FINDING_DESCRIPTION_REQUIRED, INVENTORY_UNKNOWN_REASON_REQUIRED and
+     *     INVENTORY_PHOTO_DUPLICATE
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.ObservationReceipt submit(
             RequisitionActorContext.Actor actor,
@@ -284,7 +372,11 @@ public class InventoryObservationService {
         }
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_observation(task_id,client_event_id,actor_account_id,binding_id,device_id,item_id,assignment_version,recheck_generation,snapshot_asset_version,source,asset_code,raw_observed_at,first_persisted_at,client_expires_at,calibrated_observed_at,calibrated_persisted_at,calibration_id,received_at,facts_json,payload_sha256,fact_sha256,outcome,receipt_json)"
+                    + " fams_inventory_observation(task_id,client_event_id,actor_account_id,binding_id,device_id,"
+                    + "item_id,assignment_version,recheck_generation,snapshot_asset_version,source,asset_code,"
+                    + "raw_observed_at,first_persisted_at,client_expires_at,calibrated_observed_at,"
+                    + "calibrated_persisted_at,calibration_id,received_at,facts_json,payload_sha256,fact_sha256,"
+                    + "outcome,receipt_json)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 taskId,
                 input.eventId().toString(),
@@ -366,7 +458,8 @@ public class InventoryObservationService {
                 timestamp(received));
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,?,'INVENTORY_OBSERVED','INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),
@@ -494,7 +587,8 @@ public class InventoryObservationService {
                     db.queryForObject(
                             "SELECT COUNT(*) FROM fams_inventory_item WHERE task_id=? AND"
                                 + " (JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.responsibleEmployeeId'))=?"
-                                + " OR JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.departmentResponsibleEmployeeId'))=?)",
+                                + " OR JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,"
+                                + "'$.departmentResponsibleEmployeeId'))=?)",
                             Long.class,
                             task,
                             input.actual().responsibleEmployeeId().toString(),

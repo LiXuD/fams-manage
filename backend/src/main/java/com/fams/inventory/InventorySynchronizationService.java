@@ -41,6 +41,16 @@ public class InventorySynchronizationService {
     private final InventorySynchronizationIdentityPort states;
     private final Clock clock;
 
+    /**
+     * Injects the collaborators the device synchronization flow needs.
+     *
+     * @param db reads and writes the participant, observation, declaration and receipt tables
+     * @param json serializes declaration payloads into the digest and the stored receipt text
+     * @param actors revalidates the caller session and proves the ASSET_ADMIN role for the roster
+     * @param identities resolves the device binding id behind the caller session
+     * @param states supplies the current identity state and binding version of each participant
+     * @param clock stamps the declaration instant
+     */
     public InventorySynchronizationService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -56,6 +66,23 @@ public class InventorySynchronizationService {
         this.clock = clock;
     }
 
+    /**
+     * Reports the caller's own device synchronization state as the mini app needs it before it may
+     * declare. The watermark is the highest observation id this binding and device already submitted,
+     * and the device chip carries the derived reason - DECLARED, NO_DECLARATION, NEW_OBSERVATION,
+     * BINDING_CHANGED, ASSIGNMENT_CHANGED, LOCAL_EVIDENCE_MISSING, IDENTITY_DISABLED or
+     * UNBOUND_OBSERVATION. Nothing is written.
+     *
+     * @param actor caller whose session is revalidated under the task lock and who must be a
+     *     non-revoked participant
+     * @param taskId inventory task the device state is scoped to
+     * @param device device id the caller is synchronizing from
+     * @return task id, version, status and assignment version, the device id, its observation
+     *     watermark, the device chip and the declaration-only flag
+     * @throws InventoryFailure 403 INVENTORY_MINI_BINDING_REQUIRED when the session has no device
+     *     binding, 404 INVENTORY_TASK_NOT_FOUND when the task is missing or DELETED, or 403
+     *     INVENTORY_PARTICIPATION_REQUIRED when the caller is not a live participant of the task
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.OwnDeviceState own(Actor actor, long taskId, UUID device) {
         var current = actors.revalidateLocked(actor);
@@ -78,6 +105,34 @@ public class InventorySynchronizationService {
                 true);
     }
 
+    /**
+     * Records one device synchronization declaration after proving the caller still holds the context
+     * it read. The request id makes the call idempotent: a stored fams_inventory_sync_receipt with the
+     * same fingerprint replays, a different one is rejected as a request conflict. The context check
+     * covers the task status and version, the assignment version and the observation watermark, so a
+     * device that fell behind cannot declare against a stale view.
+     *
+     * <p>State impact: appends the declaration row with the binding version and the queue digest,
+     * bumps the task version, writes the SYNCHRONIZATION_DECLARED task event and audit event, and
+     * stores the reply as the sync receipt.
+     *
+     * @param actor caller whose session is revalidated under the task lock and who must be a
+     *     non-revoked participant
+     * @param taskId inventory task the declaration belongs to
+     * @param version task version the caller read, compared against the locked task row
+     * @param key client request id used for the sync receipt
+     * @param input device id, assignment version, observation watermark, queue snapshot and unresolved
+     *     local evidence count as the device reported them
+     * @return declaration id, task id, the bumped task version, device id, declaration time and the
+     *     declaration-only flag
+     * @throws InventoryFailure 403 INVENTORY_MINI_BINDING_REQUIRED when the session has no device
+     *     binding, 404 INVENTORY_TASK_NOT_FOUND when the task is missing or DELETED, 403
+     *     INVENTORY_PARTICIPATION_REQUIRED for a caller who is not a live participant, 409
+     *     INVENTORY_SYNC_CONTEXT_CHANGED when the task status, version, assignment version or
+     *     watermark moved, 403 INVENTORY_SYNC_IDENTITY_INVALID when the identity state is missing,
+     *     disabled or bound elsewhere, or 409 INVENTORY_SYNC_REQUEST_CONFLICT when the request id was
+     *     already used by a different actor, binding or payload
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.SyncDeclarationReceipt declare(
             Actor actor,
@@ -112,7 +167,8 @@ public class InventorySynchronizationService {
         var now = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
                 "INSERT INTO fams_inventory_sync_declaration"
-                    + "(task_id,actor_account_id,binding_id,binding_version,device_id,assignment_version,observation_watermark,queue_digest,unresolved_count,declared_at)"
+                    + "(task_id,actor_account_id,binding_id,binding_version,device_id,assignment_version,"
+                    + "observation_watermark,queue_digest,unresolved_count,declared_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 taskId,
                 current.id(),
@@ -174,6 +230,23 @@ public class InventorySynchronizationService {
         return response;
     }
 
+    /**
+     * Derives one page of the participant synchronization roster for an admin. Every participant is
+     * judged from current facts - identity state, binding, the union of observed and declared devices
+     * and the live watermark - and gets a reason: PARTICIPATION_REVOKED, IDENTITY_DISABLED,
+     * BINDING_MISSING, NO_DEVICE_DECLARATION, DEVICE_CONFIRMATION_MISSING or DECLARED. The seal flow
+     * walks this exit page by page and hashes the accumulated roster into sync_digest, so the same
+     * roster must be reproducible within one transaction.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task whose participants are listed
+     * @param page one-based page number
+     * @param size maximum number of participants per page
+     * @return roster page in ascending account id order, the participant total, the paging echo, the
+     *     current task version and the declaration-only flag
+     * @throws InventoryFailure 403 INVENTORY_ADMIN_REQUIRED without the ASSET_ADMIN role, or 404
+     *     INVENTORY_TASK_NOT_FOUND when the task is missing or DELETED
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.SynchronizationStatus status(
             Actor actor, long taskId, int page, int size) {
@@ -259,7 +332,8 @@ public class InventorySynchronizationService {
         var rows =
                 db.queryForList(
                         "SELECT"
-                            + " id,binding_version,assignment_version,observation_watermark,unresolved_count,declared_at"
+                            + " id,binding_version,assignment_version,observation_watermark,unresolved_count,"
+                            + "declared_at"
                             + " FROM fams_inventory_sync_declaration WHERE task_id=? AND"
                             + " actor_account_id=? AND binding_id<=>? AND device_id=? ORDER BY id"
                             + " DESC LIMIT 1",

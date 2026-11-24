@@ -46,6 +46,17 @@ public class InventoryFindingService {
     private final InventoryInboundPort inbounds;
     private final Clock clock;
 
+    /**
+     * Injects the collaborators the finding review flow needs.
+     *
+     * @param db reads and writes the observation, review subject, decision, link and receipt tables
+     * @param json projects the flat finding wire and serializes stored receipt texts
+     * @param actors revalidates the caller session and proves the ASSET_ADMIN role
+     * @param assets proves the owner version of a duplicate asset card still matches
+     * @param cards identifies an asset by code and reads its authoritative current snapshot
+     * @param inbounds resolves and validates the formal inbound acceptance a finding is linked to
+     * @param clock stamps every persisted decision instant
+     */
     public InventoryFindingService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -63,6 +74,21 @@ public class InventoryFindingService {
         this.clock = clock;
     }
 
+    /**
+     * Searches the candidates an admin may bind a finding to. A non-blank receipt number switches to
+     * the formal-inbound lookup and returns at most one FORMAL_INBOUND target; otherwise the asset code
+     * drives a card lookup and returns at most one DUPLICATE_ASSET target read from the authoritative
+     * current snapshot. An unmatched search is an empty list, never an error, because the admin still
+     * has to be able to close the finding as NON_ENTERPRISE.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task the finding belongs to; locked but not written
+     * @param assetCode asset code to search, trimmed before the lookup
+     * @param receiptNumber formal inbound receipt number, or null to search by asset code only
+     * @return the single matching target, or an empty list when nothing matches
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, or
+     *     404 INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.FindingTargets targets(
             Actor actor, long taskId, String assetCode, String receiptNumber) {
@@ -102,6 +128,23 @@ public class InventoryFindingService {
                                 row.path("version").asLong())));
     }
 
+    /**
+     * Assembles the finding review page of one observation. The subject is the empty/full union, so a
+     * finding that was never prepared is emitted as a zero-key object rather than an all-null row. The
+     * read order stays frozen - FINDING subject, decision history, TIME subjects, recollections, history
+     * count - because the history is capped at the newest 100 decisions while the total still counts
+     * every one.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task the finding belongs to
+     * @param observationId finding observation, which must be unassigned and in FINDING_REVIEW or
+     *     TIME_REVIEW
+     * @return TIME subjects, recollections, task version, the observation row, the FINDING subject
+     *     projection, the newest decision history and its total
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED, or 404
+     *     INVENTORY_FINDING_NOT_FOUND when the observation is not an unassigned finding of this task
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.FindingDetail detail(Actor actor, long taskId, long observationId) {
         admin(actor);
@@ -161,6 +204,45 @@ public class InventoryFindingService {
                 historyTotal);
     }
 
+    /**
+     * Decides one finding subject. The operation key FINDING:{observationId} plus the request id makes
+     * the call idempotent: a stored receipt with the same fingerprint replays, a different one is
+     * rejected as an idempotency conflict. Closure never trusts free text - NON_ENTERPRISE closes
+     * without a target, DUPLICATE_ASSET closes only against a card whose owner version still matches,
+     * and LINK_INBOUND derives the status from the actual inbound acceptance: CLOSED for an accepted
+     * item on an active card, PROCESSING while the acceptance is still open, OPEN when a refresh meets
+     * a cancelled or rejected receipt. REFRESH_INBOUND is the only method allowed to re-decide a
+     * PROCESSING subject and must point at the same link.
+     *
+     * <p>State impact: the FINDING subject row is updated to the new status and version, a decision row
+     * and, for a targeted method, a finding link row are appended, the task version is bumped, the
+     * decision is audited as INVENTORY_FINDING_DECIDED and stored as the review receipt.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task the finding belongs to
+     * @param observationId finding observation to decide
+     * @param version task version the caller read, compared against the locked task row
+     * @param key client request id used for the review receipt
+     * @param input method, subject version, reason, evidence and the optional asset, inbound receipt
+     *     and owner version of the chosen target
+     * @return receipt with the task id, observation id, the bumped task version, the new subject
+     *     version and the resulting subject status
+     * @throws InventoryReviewConflict INVENTORY_REVIEW_IDEMPOTENCY_CONFLICT when the request id was
+     *     already used with a different payload, INVENTORY_REVIEW_TASK_CHANGED when the task version
+     *     differs or the task is not IN_PROGRESS or WAITING_REVIEW, or
+     *     INVENTORY_REVIEW_VERSION_CONFLICT when the subject version differs or the subject is already
+     *     CLOSED or TRANSFERRED; all are audited and do not roll the transaction back
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND or INVENTORY_FINDING_NOT_FOUND, 400
+     *     INVENTORY_REVIEW_METHOD_INVALID for an unknown method, 400
+     *     INVENTORY_FINDING_TARGET_INVALID when the target fields do not match the method, 409
+     *     INVENTORY_FINDING_PREPARATION_REQUIRED when no FINDING subject exists yet, 409
+     *     INVENTORY_FINDING_PROGRESS_REQUIRED when a PROCESSING subject is re-decided without
+     *     REFRESH_INBOUND, 409 INVENTORY_REVIEW_ASSET_CHANGED for a moved duplicate card, 409
+     *     INVENTORY_FINDING_LINK_REQUIRED when a refresh does not match the previous link, 409
+     *     INVENTORY_FINDING_OWNER_CHANGED for a moved or refused inbound owner, or 409
+     *     INVENTORY_FINDING_ALREADY_LINKED when the asset is already linked to another finding
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -355,6 +437,24 @@ public class InventoryFindingService {
         return result;
     }
 
+    /**
+     * Lists the unassigned FINDING_REVIEW observations a TIME_REVIEW finding may be recollected
+     * against. Only observations of the same task that arrived after the original one and whose
+     * calibrated observed time is at or after the original reception are eligible, so a recollection can
+     * never borrow an earlier fact. Nothing is written.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task both observations belong to
+     * @param observationId original TIME_REVIEW observation the recollection starts from
+     * @param page one-based page number
+     * @param size maximum number of observations per page
+     * @return candidate observation rows in ascending observation id order, the total count and the
+     *     paging echo
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND when the task is missing, DRAFT or DELETED, 404
+     *     INVENTORY_FINDING_NOT_FOUND when the observation is not an unassigned finding of this task,
+     *     or 409 INVENTORY_FINDING_TIME_REQUIRED when its outcome is not TIME_REVIEW
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public FindingViews.ObservationPage recollectionTargets(
             Actor actor, long taskId, long observationId, int page, int size) {
@@ -490,7 +590,8 @@ public class InventoryFindingService {
         db.update(
                 "INSERT INTO"
                     + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,"
-                    + "after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                    + "after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,"
+                    + "actor_username,occurred_at)"
                     + " VALUES (?,?,'TIME',?,?,'RECOLLECTED','CLOSED',?,?,0,?,?,?)",
                 taskId,
                 observationId,
@@ -503,7 +604,8 @@ public class InventoryFindingService {
                 now);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_finding_recollection(observation_id,dimension,decision_version,task_id,counter_observation_id,counter_observed_at,created_at)"
+                    + " fams_inventory_finding_recollection(observation_id,dimension,decision_version,task_id,"
+                    + "counter_observation_id,counter_observed_at,created_at)"
                     + " VALUES (?,'TIME',?,?,?,?,?)",
                 observationId,
                 after,
@@ -528,7 +630,8 @@ public class InventoryFindingService {
         audit(actor, current, task, "INVENTORY_FINDING_TIME_RECOLLECTED", result);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 taskId,
                 current.id(),

@@ -43,6 +43,17 @@ public class InventoryLateDamageService {
     private final InventoryRepairPort repairs;
     private final Clock clock;
 
+    /**
+     * Injects the collaborators the late damage repair flow needs.
+     *
+     * @param db reads and writes the late case, damage state, damage decision, todo and receipt tables
+     * @param json projects the recursive late wire, validates the frozen snapshot and serializes
+     *     receipts
+     * @param actors revalidates the caller session and proves the ASSET_ADMIN role
+     * @param assets supplies the current asset snapshot and proves the reviewed asset version matches
+     * @param repairs creates, links and refreshes the formal repair the damage decision points at
+     * @param clock stamps every persisted decision instant and bounds the verified discovery time
+     */
     public InventoryLateDamageService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -58,6 +69,30 @@ public class InventoryLateDamageService {
         this.clock = clock;
     }
 
+    /**
+     * Assembles the damage repair page of one late case. The source is re-validated on every read: the
+     * frozen snapshot must still hash to its stored digest, its facts must equal the observation facts,
+     * the condition must be DAMAGED, the outcome must be LATE_REVIEW or TIME_REVIEW and the item must
+     * still point at the same asset - otherwise the case is refused as changed instead of being shown.
+     * The read order stays frozen: task, case plus observation source, damage state FOR UPDATE, asset
+     * contexts, decision page rows, its COUNT, recheck result, todo probe.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param observation observation whose damage follow-up is requested
+     * @param page one-based page number of the damage decision history
+     * @param size maximum number of decisions per page
+     * @return task and damage identity, the current asset snapshot, the damage state, the original
+     *     evidence, the decision history page, the latest recheck result, the todo state and the two
+     *     supplement flags
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 404
+     *     INVENTORY_REVIEW_TASK_NOT_FOUND for an unknown task, 409
+     *     INVENTORY_LATE_TERMINAL_TASK_REQUIRED while the task is not terminal, 404
+     *     INVENTORY_LATE_CASE_NOT_FOUND when the observation has no late case, 409
+     *     INVENTORY_LATE_DAMAGE_SOURCE_CHANGED when the frozen source no longer matches its snapshot,
+     *     409 INVENTORY_LATE_DAMAGE_ASSET_REQUIRED when the snapshot carries no numeric asset id, or
+     *     404 INVENTORY_LATE_DAMAGE_NOT_REQUIRED when no damage state row exists
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateDamageDetail detail(
             Actor actor, long taskId, long observation, int page, int size) {
@@ -104,6 +139,43 @@ public class InventoryLateDamageService {
                 false);
     }
 
+    /**
+     * Decides one late damage follow-up and derives its new state from the real repair progress.
+     * FORMAL_REPAIR creates a formal repair from the frozen original evidence, LINK_REPAIR attaches an
+     * existing repair to it and REFRESH_REPAIR re-reads the already linked repair without touching the
+     * asset version. The resulting damage status follows the repair: CLOSED for COMPLETED, OPEN for a
+     * REJECTED or CANCELLED repair, PROCESSING otherwise, so the todo is closed or kept open by the same
+     * derivation. The request id makes the call idempotent against the stored LATE_DAMAGE_REPAIR
+     * receipt, and the damage version is guarded by a conditional update.
+     *
+     * <p>State impact: bumps the fams_inventory_late_damage version and state, appends a damage decision
+     * row, closes or reopens the LATE_DAMAGE_REPAIR todo, audits INVENTORY_LATE_DAMAGE_DECIDED and stores
+     * the receipt. The supplemental decision history of {@code InventoryLateService} is untouched.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param observation observation whose damage follow-up is decided
+     * @param version damage state version the caller read, compared against the locked state row
+     * @param key client request id used for the review receipt
+     * @param input method, reason of at least three characters, evidence of at least ten characters,
+     *     the reviewed asset version and the damage verification or repair reference
+     * @return receipt with the task and observation id, the new damage version, method, damage status,
+     *     repair id and status, recheck result, todo state, decider name and time and the two flags
+     * @throws InventoryReviewConflict INVENTORY_LATE_DAMAGE_IDEMPOTENCY_CONFLICT when the request id was
+     *     already used with a different payload, INVENTORY_LATE_DAMAGE_VERSION_CONFLICT when the damage
+     *     version moved or the follow-up is already CLOSED, or INVENTORY_REVIEW_ASSET_CHANGED when the
+     *     asset version no longer matches; all are audited and do not roll the transaction back
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, the
+     *     detail-exit codes for a missing or changed source, 400 INVENTORY_LATE_DAMAGE_INPUT_INVALID for
+     *     an unknown method or a too-short reason or evidence, 400
+     *     INVENTORY_REPAIR_VERIFICATION_REQUIRED when the damage checks or the verified discovery time
+     *     are incomplete, 400 INVENTORY_REPAIR_SUBMISSION_INVALID for an incomplete formal repair
+     *     submission, 400 or 409 INVENTORY_REPAIR_LINK_REQUIRED when a link or refresh has no repair to
+     *     point at, 409 INVENTORY_REPAIR_PROGRESS_REQUIRED when a non-refresh method meets a state that
+     *     is not OPEN, 409 INVENTORY_REPAIR_ORIGINAL_PHOTO_REQUIRED when the frozen facts carry no photo,
+     *     409 INVENTORY_LATE_DAMAGE_WRITE_CONFLICT when the guarded update lost the race, or the mapped
+     *     status and code of a repair-port refusal
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -266,7 +338,9 @@ public class InventoryLateDamageService {
         }
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_late_damage_decision(observation_id,before_version,after_version,method,damage_status,repair_id,repair_status,reviewed_asset_version,reason,evidence,actor_account_id,actor_username,decided_at)"
+                    + " fams_inventory_late_damage_decision(observation_id,before_version,after_version,method,"
+                    + "damage_status,repair_id,repair_status,reviewed_asset_version,reason,evidence,actor_account_id,"
+                    + "actor_username,decided_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 observation,
                 version,
@@ -291,7 +365,8 @@ public class InventoryLateDamageService {
         } else {
             db.update(
                     "INSERT INTO"
-                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,"
+                        + "opened_at)"
                         + " VALUES"
                         + " ('ASSET_ADMIN',NULL,'INVENTORY_LATE',?,'LATE_DAMAGE_REPAIR','OPEN',?)"
                         + " ON DUPLICATE KEY UPDATE id=id",
@@ -319,7 +394,8 @@ public class InventoryLateDamageService {
         audit(actor, current, task, "INVENTORY_LATE_DAMAGE_DECIDED", response);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 taskId,
                 current.id(),
@@ -482,7 +558,8 @@ public class InventoryLateDamageService {
                 now);
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

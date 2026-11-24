@@ -167,7 +167,8 @@ public class InventoryDifferenceService {
                 if (present.isEmpty()) {
                     db.update(
                             "INSERT INTO"
-                                + " fams_inventory_review_subject(observation_id,dimension,task_id,item_id,recheck_generation)"
+                                + " fams_inventory_review_subject(observation_id,dimension,task_id,item_id,"
+                                + "recheck_generation)"
                                 + " VALUES (?,?,?,?,?)",
                             id,
                             dimension,
@@ -447,7 +448,8 @@ public class InventoryDifferenceService {
             long before = number(row, "version"), after = before + 1;
             db.update(
                     "UPDATE fams_inventory_review_subject SET"
-                        + " subject_status=?,method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                        + " subject_status=?,method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,"
+                        + "reviewed_at=?,version=?"
                         + " WHERE observation_id=? AND dimension=?",
                     status,
                     input.method(),
@@ -461,7 +463,9 @@ public class InventoryDifferenceService {
                     row.get("dimension"));
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                        + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,"
+                        + "after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,"
+                        + "actor_username,occurred_at)"
                         + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     taskId,
                     row.get("observation_id"),
@@ -479,7 +483,8 @@ public class InventoryDifferenceService {
             if (created != null) {
                 db.update(
                         "INSERT INTO"
-                            + " fams_inventory_review_transfer(observation_id,dimension,decision_version,transfer_id,transfer_item_id,created_at)"
+                            + " fams_inventory_review_transfer(observation_id,dimension,decision_version,transfer_id,"
+                            + "transfer_item_id,created_at)"
                             + " VALUES (?,?,?,?,?,?)",
                         row.get("observation_id"),
                         row.get("dimension"),
@@ -672,7 +677,8 @@ public class InventoryDifferenceService {
         long before = number(subject, "version"), after = before + 1;
         db.update(
                 "UPDATE fams_inventory_review_subject SET"
-                    + " subject_status=?,method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                    + " subject_status=?,method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,"
+                    + "reviewed_at=?,version=?"
                     + " WHERE observation_id=? AND dimension='CONDITION'",
                 status,
                 input.method(),
@@ -685,7 +691,9 @@ public class InventoryDifferenceService {
                 ref.observationId());
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                    + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,after_version,"
+                    + "method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,"
+                    + "occurred_at)"
                     + " VALUES (?,?,'CONDITION',?,?,?,?,?,?,?,?,?,?)",
                 taskId,
                 ref.observationId(),
@@ -702,7 +710,8 @@ public class InventoryDifferenceService {
         if (!refresh) {
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_review_repair(observation_id,dimension,decision_version,repair_id,created_at)"
+                        + " fams_inventory_review_repair(observation_id,dimension,decision_version,repair_id,"
+                        + "created_at)"
                         + " VALUES (?,'CONDITION',?,?,?)",
                     ref.observationId(),
                     after,
@@ -895,7 +904,8 @@ public class InventoryDifferenceService {
         audit(actor, current, task, operation, result);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 task.get("id"),
                 current.id(),
@@ -926,7 +936,8 @@ public class InventoryDifferenceService {
                 now());
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

@@ -40,6 +40,18 @@ public class InventoryPhotoService {
     private final Clock clock;
     private final ObjectMapper json;
 
+    /**
+     * Injects the collaborators the photo intake needs.
+     *
+     * @param writer streams the bytes into quarantine and runs the registration callback
+     * @param registry registers the accepted attachment against its INVENTORY_EVENT upload scope
+     * @param storage deletes the quarantined bytes of an attempt that turned out to be an exact replay
+     * @param actors revalidates the caller session inside the writer callback
+     * @param identities resolves the device binding id behind the caller session
+     * @param db locks the task, checks participation and writes the scope, receipt and audit rows
+     * @param clock stamps the scope creation and the audit event
+     * @param json serializes the audit detail of the upload
+     */
     public InventoryPhotoService(
             AttachmentWriter writer,
             AttachmentRegistry registry,
@@ -59,6 +71,40 @@ public class InventoryPhotoService {
         this.json = json;
     }
 
+    /**
+     * Takes one inventory event photo into quarantine and registers it against the event's upload
+     * scope. The upload is deliberately not transactional: the bytes land first and every inventory
+     * invariant is enforced inside the writer callback, which locks the task and the scope. The client
+     * photo id makes the call idempotent - an identical re-upload of the same bytes and filename
+     * replays the stored receipt, while a differing payload on the same key is a conflict. When the
+     * replay returns an already registered object, this attempt's freshly quarantined bytes are
+     * deleted again so no orphan file survives.
+     *
+     * <p>State impact on a fresh upload: the scope row is created when the event has none, the
+     * attachment is registered as INVENTORY_EVENT version 0, a photo receipt row is appended and the
+     * INVENTORY_PHOTO_UPLOADED audit event is written. The task version is not bumped.
+     *
+     * @param actor caller whose session is revalidated inside the callback and who must be a live
+     *     participant of the task
+     * @param taskId inventory task the event belongs to
+     * @param eventId client event id that identifies the upload scope
+     * @param photoId client photo id, the idempotency key within the scope
+     * @param deviceId device the photo was captured on; must match the scope's device
+     * @param filename original filename, also compared on replay
+     * @param mime declared content type of the upload
+     * @param source photo bytes to stream into quarantine
+     * @return object id of the registered attachment and the echoed client photo id
+     * @throws IOException when the upload stream cannot be read or the quarantined file cannot be
+     *     written
+     * @throws InventoryFailure 404 INVENTORY_TASK_NOT_FOUND, 403 INVENTORY_PARTICIPATION_REQUIRED for
+     *     a caller who is not a live participant, 409 INVENTORY_NOT_COLLECTING while the task is DRAFT,
+     *     READY or DELETED, 503 INVENTORY_PHOTO_SCAN_UNAVAILABLE when the scanner is down, 422
+     *     INVENTORY_PHOTO_REJECTED for a non-clean scan, 400 INVENTORY_PHOTO_IMAGE_REQUIRED for a
+     *     non-image format, 410 INVENTORY_PHOTO_EXPIRED for a discarded scope, 403
+     *     INVENTORY_PHOTO_IDENTITY when actor, binding or device differ from the scope, 409
+     *     INVENTORY_PHOTO_KEY_CONFLICT for the same client photo id with different bytes or filename,
+     *     or 409 INVENTORY_EVENT_ALREADY_SUBMITTED once the observation exists
+     */
     public FindingViews.PhotoReceipt upload(
             RequisitionActorContext.Actor actor,
             long taskId,
@@ -122,7 +168,8 @@ public class InventoryPhotoService {
                             if (scopes.isEmpty()) {
                                 db.update(
                                         "INSERT INTO"
-                                            + " fams_inventory_upload_scope(task_id,client_event_id,actor_account_id,binding_id,device_id,created_at)"
+                                            + " fams_inventory_upload_scope(task_id,client_event_id,actor_account_id,"
+                                            + "binding_id,device_id,created_at)"
                                             + " VALUES (?,?,?,?,?,?)",
                                         taskId,
                                         eventId.toString(),
@@ -186,7 +233,8 @@ public class InventoryPhotoService {
                                     "INVENTORY_EVENT", id, 0, current.id(), filename, attachment);
                             db.update(
                                     "INSERT INTO"
-                                        + " fams_inventory_photo_receipt(scope_id,client_photo_id,object_id,content_sha256,original_filename)"
+                                        + " fams_inventory_photo_receipt(scope_id,client_photo_id,object_id,"
+                                        + "content_sha256,original_filename)"
                                         + " VALUES (?,?,?,?,?)",
                                     id,
                                     photoId.toString(),
@@ -195,7 +243,9 @@ public class InventoryPhotoService {
                                     filename);
                             db.update(
                                     "INSERT INTO"
-                                        + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                                        + " fams_audit_event(request_id,actor_account_id,actor_role,action,"
+                                        + "resource_type,resource_id,before_version,after_version,occurred_at,"
+                                        + "detail_json)"
                                         + " VALUES"
                                         + " (?,?,?,'INVENTORY_PHOTO_UPLOADED','INVENTORY_TASK',?,?,?,?,?)",
                                     actor.requestId().toString(),

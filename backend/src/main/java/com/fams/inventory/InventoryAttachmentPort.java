@@ -19,6 +19,14 @@ import java.util.Set;
 public final class InventoryAttachmentPort implements AttachmentBusinessPort {
     private final JdbcTemplate db;
 
+    /**
+     * Wires the only collaborator of this port. All visibility rules below are expressed as direct
+     * SQL over fams_inventory_upload_scope, fams_inventory_observation,
+     * fams_inventory_participant and fams_inventory_task, so nothing else is injected.
+     *
+     * @param db JDBC template used to read upload scopes, their live observations and the
+     *     participant roster of the owning inventory task
+     */
     public InventoryAttachmentPort(JdbcTemplate db) {
         this.db = db;
     }

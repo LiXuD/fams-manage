@@ -67,6 +67,14 @@ public final class FindingViews {
 
     /** Envelope of the finding-targets exit (legacy {@code Map.of("items", ...)}). */
     public record FindingTargets(List<Target> items) {
+        /**
+         * Copies the candidate list of the finding-targets envelope. Null stays null rather than an
+         * empty list, which keeps the ALWAYS-included key distinguishable from the "no candidate
+         * matched this code or receipt number" case the exit really emits as an empty list.
+         *
+         * @param items formal-inbound or duplicate-asset candidates the admin may bind the finding
+         *     to, or null when the envelope was not projected
+         */
         public FindingTargets {
             items = items == null ? null : List.copyOf(items);
         }
@@ -304,6 +312,18 @@ public final class FindingViews {
             SubjectProjection subject,
             List<DecisionHistoryRow> history,
             long historyTotal) {
+        /**
+         * Copies the three list segments of the finding detail body. The copy freezes the read order
+         * the exit documents (subject, history, TIME subjects, recollections, history count) against
+         * any later mutation of the query results.
+         *
+         * @param timeSubject fams_inventory_review_subject rows of the TIME dimension, or null when
+         *     absent
+         * @param recollections recollection decisions joined to their counter observation, in
+         *     descending decision_version order and capped at 100, or null when absent
+         * @param history FINDING decisions with their finding-link columns, in descending
+         *     after_version order and capped at 100, or null when absent
+         */
         public FindingDetail {
             timeSubject = timeSubject == null ? null : List.copyOf(timeSubject);
             recollections = recollections == null ? null : List.copyOf(recollections);
@@ -317,6 +337,13 @@ public final class FindingViews {
      */
     public record ObservationPage(
             List<ObservationRow> items, long total, int page, int pageSize) {
+        /**
+         * Copies the observation rows of the frozen items page. Null stays null rather than an empty
+         * list, keeping the ALWAYS-included key distinguishable from a projected but empty page.
+         *
+         * @param items observation rows of this page in ascending observation id order, or null when
+         *     the page was not projected
+         */
         public ObservationPage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -357,6 +384,14 @@ public final class FindingViews {
             ReviewState review,
             boolean canAcceptNormal,
             String blockedReason) {
+        /**
+         * Copies the movement events of this review item. An item whose asset context could not be
+         * resolved is projected with an empty list rather than null, so a null here means the row was
+         * built outside the review detail exit.
+         *
+         * @param movementEvents period movements of the asset behind the item's snapshot, or null
+         *     when the segment was not projected
+         */
         public ReviewTaskItem {
             movementEvents = movementEvents == null ? null : List.copyOf(movementEvents);
         }
@@ -370,6 +405,13 @@ public final class FindingViews {
             int page,
             int pageSize,
             long reviewedCount) {
+        /**
+         * Copies the review item page of the frozen document. Null stays null rather than an empty
+         * list, keeping the ALWAYS-included key distinguishable from a projected but empty page.
+         *
+         * @param items review items of this page in ascending asset_id order, or null when the page
+         *     was not projected
+         */
         public ReviewTaskDetail {
             items = items == null ? null : List.copyOf(items);
         }
@@ -398,6 +440,14 @@ public final class FindingViews {
             int conflicts,
             List<NormalBatchItem> items,
             long reviewedCount) {
+        /**
+         * Copies the per-item outcomes into the receipt that is replayed from
+         * fams_inventory_review_receipt.response_json, so an ACCEPT_NORMAL retry must return the
+         * identical outcome list. Null stays null rather than becoming an empty list.
+         *
+         * @param items one outcome per requested item in the stable asset_id order the batch locked
+         *     them in, or null when absent
+         */
         public NormalBatchReceipt {
             items = items == null ? null : List.copyOf(items);
         }
@@ -418,6 +468,14 @@ public final class FindingViews {
      * suite, so the record stays where that test can reach it).
      */
     public record PhotoList(List<InventoryPhotoReadService.Photo> items) {
+        /**
+         * Copies the photo rows of the observation list envelope. Null stays null rather than an
+         * empty list, so the ALWAYS-included key keeps telling an unprojected envelope apart from an
+         * INVENTORY_EVENT scope that holds no photo.
+         *
+         * @param items frozen photo projections of the authorized upload scope, or null when the
+         *     envelope was not projected
+         */
         public PhotoList {
             items = items == null ? null : List.copyOf(items);
         }
@@ -429,6 +487,14 @@ public final class FindingViews {
      * raw JDBC value (Timestamp or LocalDateTime across drivers).
      */
     public record RepairPhotoList(List<AttachmentEvidencePort.Metadata> items) {
+        /**
+         * Copies the metadata rows of the repair-evidence list envelope. Null stays null rather than
+         * an empty list, so the ALWAYS-included key keeps telling an unprojected envelope apart from
+         * a repair whose evidence lists no photo id.
+         *
+         * @param items attachment metadata rows filtered to the repair evidence photo ids, or null
+         *     when the envelope was not projected
+         */
         public RepairPhotoList {
             items = items == null ? null : List.copyOf(items);
         }

@@ -42,6 +42,13 @@ public final class InventoryViews {
     /** GET /inventory-tasks/catalog/{kind}: the masterdata choices without a total key. */
     public record InventoryReferenceChoicePage(
             List<InventoryReferencePort.Choice> items, int page, int pageSize) {
+        /**
+         * Copies the choice list into the frozen page body. A {@code null} list stays {@code null}
+         * rather than becoming an empty list, because the legacy Map exit emitted an explicit null
+         * key and the global JsonConfiguration inclusion is ALWAYS.
+         *
+         * @param items masterdata choices of this page, or null when the port returned none
+         */
         public InventoryReferenceChoicePage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -150,6 +157,12 @@ public final class InventoryViews {
             int page,
             int pageSize,
             boolean canManage) {
+        /**
+         * Copies the role-gated task views into the frozen list body. Null stays null so an absent
+         * page keeps emitting an explicit {@code items: null} key like the legacy Map did.
+         *
+         * @param items task views of the current page, or null when no page was projected
+         */
         public InventoryTaskPage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -163,6 +176,12 @@ public final class InventoryViews {
             int page,
             int pageSize,
             boolean canManage) {
+        /**
+         * Copies the item rows into the frozen detail body. Null stays null, so a detail built
+         * without an item page still emits an explicit {@code items: null} key.
+         *
+         * @param items fams_inventory_item projections of the current page, or null when absent
+         */
         public InventoryTaskDetail {
             items = items == null ? null : List.copyOf(items);
         }
@@ -275,6 +294,12 @@ public final class InventoryViews {
             int pageSize,
             long total,
             boolean supplementOnly) {
+        /**
+         * Copies the late case views into the frozen list body. Null stays null rather than an empty
+         * list, matching the legacy Map exit's explicit null key.
+         *
+         * @param items late case views of the current page, or null when no page was projected
+         */
         public InventoryLateCasePage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -290,6 +315,13 @@ public final class InventoryViews {
     /** Decision history page of the late case detail exit. */
     public record InventoryLateDecisionPage(
             List<InventoryLateDecisionRow> items, int page, int pageSize, long total) {
+        /**
+         * Copies the late decision rows into the frozen history page. Null stays null so an empty
+         * history keeps emitting an explicit {@code items: null} key.
+         *
+         * @param items fams_inventory_late_decision rows in ascending decision_version order, or
+         *     null when the history was not projected
+         */
         public InventoryLateDecisionPage {
             items = items == null ? null : List.copyOf(items);
         }
@@ -344,6 +376,13 @@ public final class InventoryViews {
     /** Damage decision history page of the damage detail exit. */
     public record InventoryLateDamageDecisionPage(
             List<InventoryLateDamageDecisionRow> items, int page, int pageSize, long total) {
+        /**
+         * Copies the damage decision rows into the frozen history page. Null stays null so an empty
+         * damage history keeps emitting an explicit {@code items: null} key.
+         *
+         * @param items fams_inventory_late_damage_decision rows in ascending after_version order, or
+         *     null when the damage history was not projected
+         */
         public InventoryLateDamageDecisionPage {
             items = items == null ? null : List.copyOf(items);
         }

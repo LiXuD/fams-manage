@@ -30,6 +30,14 @@ public class InventoryPhotoReadService {
     private final AttachmentEvidencePort attachments;
     private final JdbcTemplate db;
 
+    /**
+     * Injects the collaborators this reader needs to authorize and serve inventory event photos.
+     *
+     * @param actors revalidates the caller session under the task lock before any scope lookup
+     * @param business enforces the inventory participation and admin reader policy per upload scope
+     * @param attachments lists, grants and reads the quarantined INVENTORY_EVENT evidence bytes
+     * @param db resolves the fams_inventory_upload_scope id of a task and client event id
+     */
     public InventoryPhotoReadService(
             RequisitionActorContext actors,
             InventoryAttachmentPort business,
@@ -57,6 +65,21 @@ public class InventoryPhotoReadService {
         return scope;
     }
 
+    /**
+     * Lists the photo metadata of one inventory upload scope after authorizing the caller against it.
+     * Authorization is re-checked on every call, so a participation revoked after the observation was
+     * submitted stops the list immediately instead of serving stale evidence.
+     *
+     * @param source caller to revalidate under lock; must be an ASSET_ADMIN or the scope's own
+     *     participant
+     * @param task inventory task owning the upload scope
+     * @param event client event id that identifies the scope within the task
+     * @return attachment metadata rows of the INVENTORY_EVENT scope, possibly empty
+     * @throws InventoryFailure 404 INVENTORY_PHOTO_NOT_FOUND when no scope matches the task and event
+     *     id, when the scope has no non-expired observation, 403 INVENTORY_PARTICIPATION_REVOKED for
+     *     a revoked participant, or 403 INVENTORY_PHOTO_NOT_AUTHORIZED for a caller who is neither an
+     *     admin nor the scope owner
+     */
     @Transactional
     public List<AttachmentEvidencePort.Metadata> list(
             RequisitionActorContext.Actor source, long task, UUID event) {
@@ -79,6 +102,14 @@ public class InventoryPhotoReadService {
             Object createdAt) {
     }
 
+    /**
+     * Projects one attachment metadata row into the frozen photo wire item, copying every key and
+     * rewriting only {@code createdAt}: both driver shapes become ISO instant strings while any other
+     * value passes through untouched, exactly as the pre-refactor controller did.
+     *
+     * @param row attachment metadata of the INVENTORY_EVENT scope to project
+     * @return the wire item with a normalized {@code createdAt}
+     */
     public static Photo photo(AttachmentEvidencePort.Metadata row) {
         Object created = row.createdAt();
         if (created instanceof java.sql.Timestamp time) {
@@ -96,6 +127,21 @@ public class InventoryPhotoReadService {
                 created);
     }
 
+    /**
+     * Signs a short-lived download grant for one photo of an inventory upload scope. The grant is
+     * bound to the caller's identity, auth epoch and authorization version, so revoking the session
+     * invalidates a grant that was already handed out.
+     *
+     * @param source caller to revalidate under lock and to bind the grant identity to
+     * @param task inventory task owning the upload scope
+     * @param event client event id that identifies the scope within the task
+     * @param object photo object id to grant a download for
+     * @return signed grant with its expiry epoch second
+     * @throws InventoryFailure 404 INVENTORY_PHOTO_NOT_FOUND when no scope matches the task and event
+     *     id or the scope has no non-expired observation, 403 INVENTORY_PARTICIPATION_REVOKED for a
+     *     revoked participant, or 403 INVENTORY_PHOTO_NOT_AUTHORIZED for a caller who is neither an
+     *     admin nor the scope owner
+     */
     @Transactional
     public AttachmentGrantSigner.Grant grant(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object) {
@@ -104,6 +150,23 @@ public class InventoryPhotoReadService {
         return attachments.grant("INVENTORY_EVENT", scope, identity(source, object));
     }
 
+    /**
+     * Reads one photo's bytes after re-authorizing the caller against the upload scope. Grant
+     * verification, metadata resolution and the content hash check stay with the attachment port, so
+     * a token issued for another identity or a tampered object never reaches this domain's caller.
+     *
+     * @param source caller to revalidate under lock and to match the grant identity against
+     * @param task inventory task owning the upload scope
+     * @param event client event id that identifies the scope within the task
+     * @param object photo object id to read
+     * @param token signed grant token previously returned by {@link #grant}
+     * @return original filename, content type and bytes of the photo
+     * @throws IOException when the quarantined object cannot be opened or read from storage
+     * @throws InventoryFailure 404 INVENTORY_PHOTO_NOT_FOUND when no scope matches the task and event
+     *     id or the scope has no non-expired observation, 403 INVENTORY_PARTICIPATION_REVOKED for a
+     *     revoked participant, or 403 INVENTORY_PHOTO_NOT_AUTHORIZED for a caller who is neither an
+     *     admin nor the scope owner
+     */
     @Transactional
     public AttachmentReadService.Content read(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object, String token)

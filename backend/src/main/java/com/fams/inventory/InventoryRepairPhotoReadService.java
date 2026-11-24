@@ -30,6 +30,14 @@ public class InventoryRepairPhotoReadService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
+    /**
+     * Injects the collaborators needed to serve original inventory evidence through the repair owner.
+     *
+     * @param repairs proves the caller owns the formal repair and exposes the evidence lineage
+     * @param attachments lists, grants and reads the quarantined INVENTORY_EVENT evidence bytes
+     * @param db resolves the submitted, non-discarded upload scope of the original observation
+     * @param json compares the stored observation facts with the repair-side original facts
+     */
     public InventoryRepairPhotoReadService(
             InventoryRepairPort repairs,
             AttachmentEvidencePort attachments,
@@ -77,6 +85,21 @@ public class InventoryRepairPhotoReadService {
         return ((Number) rows.getFirst().get("id")).longValue();
     }
 
+    /**
+     * Signs a download grant for one original inventory photo as seen through its formal repair. The
+     * grant is bound to the caller's identity, auth epoch and authorization version, so losing the
+     * repair ownership also invalidates a grant that was already handed out.
+     *
+     * @param actor caller whose repair ownership is revalidated on this call
+     * @param repair formal repair id the caller owns
+     * @param observation original inventory observation whose evidence is requested
+     * @param object photo object id to grant a download for
+     * @return signed grant with its expiry epoch second
+     * @throws InventoryFailure the mapped status and code of a repair-port refusal, 404
+     *     INVENTORY_REPAIR_PHOTO_NOT_FOUND when the object is neither in the repair evidence nor in
+     *     the stored observation facts, or 409 INVENTORY_REPAIR_SOURCE_CHANGED when no single
+     *     submitted scope row matches or the stored facts differ from the repair's original facts
+     */
     @Transactional
     public AttachmentGrantSigner.Grant grant(
             Actor actor, long repair, long observation, UUID object) {
@@ -87,6 +110,21 @@ public class InventoryRepairPhotoReadService {
                 identity(actor, object));
     }
 
+    /**
+     * Lists the original inventory photos that back a formal repair. A repair whose evidence carries
+     * no photo id returns an empty list without touching the upload scope; otherwise the first photo
+     * id authorizes the scope and the result is filtered to the evidence's own ids, so unrelated
+     * photos of the same client event are never exposed.
+     *
+     * @param actor caller whose repair ownership is revalidated on this call
+     * @param repair formal repair id the caller owns
+     * @param observation original inventory observation whose evidence is requested
+     * @return attachment metadata rows of the evidence photo ids, possibly empty
+     * @throws InventoryFailure the mapped status and code of a repair-port refusal, 404
+     *     INVENTORY_REPAIR_PHOTO_NOT_FOUND when the authorizing object is missing from the evidence or
+     *     the stored facts, or 409 INVENTORY_REPAIR_SOURCE_CHANGED when no single submitted scope row
+     *     matches or the stored facts differ from the repair's original facts
+     */
     @Transactional
     public java.util.List<AttachmentEvidencePort.Metadata> list(
             Actor actor, long repair, long observation) {
@@ -109,6 +147,23 @@ public class InventoryRepairPhotoReadService {
                 .toList();
     }
 
+    /**
+     * Reads one original inventory photo's bytes through its formal repair, revalidating the repair
+     * owner and the evidence lineage on every byte read. Grant verification and the content hash
+     * check stay with the attachment port.
+     *
+     * @param actor caller whose repair ownership is revalidated on this call
+     * @param repair formal repair id the caller owns
+     * @param observation original inventory observation whose evidence is requested
+     * @param object photo object id to read
+     * @param token signed grant token previously returned by {@link #grant}
+     * @return original filename, content type and bytes of the photo
+     * @throws IOException when the quarantined object cannot be opened or read from storage
+     * @throws InventoryFailure the mapped status and code of a repair-port refusal, 404
+     *     INVENTORY_REPAIR_PHOTO_NOT_FOUND when the object is neither in the repair evidence nor in
+     *     the stored observation facts, or 409 INVENTORY_REPAIR_SOURCE_CHANGED when no single
+     *     submitted scope row matches or the stored facts differ from the repair's original facts
+     */
     @Transactional
     public AttachmentReadService.Content read(
             Actor actor, long repair, long observation, UUID object, String token)

@@ -28,6 +28,16 @@ public class InventorySealEvidence {
     private final ObjectMapper json;
     private final InventoryDifferenceService differences;
 
+    /**
+     * Wires the read-only lineage validator. It holds no state of its own and reuses the difference
+     * service purely for its {@code requiredDimensions} derivation, so the sealing check and the
+     * review-time preparation always agree on which dimensions an observation owes.
+     *
+     * @param db JDBC template used to read observations, review subjects, selection events and
+     *     unobserved reasons under FOR SHARE
+     * @param json mapper used to re-read stored snapshots and to compute the movement digest
+     * @param differences source of the authoritative required-dimension derivation
+     */
     public InventorySealEvidence(
             JdbcTemplate db, ObjectMapper json, InventoryDifferenceService differences) {
         this.db = db;
@@ -35,6 +45,25 @@ public class InventorySealEvidence {
         this.differences = differences;
     }
 
+    /**
+     * Proves that one item's stored review lineage still supports the conclusion about to be sealed,
+     * without writing anything. A NOT_OBSERVED review must have a stored unobserved reason and only
+     * EXPIRED observations; any other review must be ACCEPTED with a verified observation time and
+     * must be traceable either to a closed NORMAL subject with an unmoved physical snapshot, or to a
+     * SELECTED/ACCEPTED selection-event pair whose movement digest still equals the live asset
+     * context. Every non-selected observation of the item must additionally carry a disposition for
+     * the selected review version, and all its subjects must be CLOSED or TRANSFERRED.
+     *
+     * @param task locked fams_inventory_task row supplying the task id for the dimension derivation
+     * @param item locked fams_inventory_item row whose snapshot_json and recheck_generation are
+     *     compared against the live asset context
+     * @param review fams_inventory_item_review row of the current recheck generation, empty when the
+     *     item was never reviewed
+     * @param context live asset context and movement list read through the asset review port, null
+     *     when the asset card is no longer available
+     * @throws InventoryFailure with a 409 status and one of the INVENTORY_SEAL_* codes when any part
+     *     of the lineage is missing, stale or contradictory
+     */
     public void validate(
             Map<String, Object> task,
             Map<String, Object> item,

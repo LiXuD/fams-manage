@@ -212,7 +212,8 @@ public class InventorySelectionService {
             db.update(
                     "INSERT INTO"
                         + " fams_inventory_item_review(item_id,recheck_generation,task_id,observation_id,"
-                        + "review_status,verified_observed_at,reviewed_asset_version,reason,evidence,reviewer_account_id,reviewer_username,reviewed_at,version)"
+                        + "review_status,verified_observed_at,reviewed_asset_version,reason,evidence,"
+                        + "reviewer_account_id,reviewer_username,reviewed_at,version)"
                         + " VALUES (?,?,?,?,'SELECTED',?,?,?,?,?,?,?,?)",
                     itemId,
                     input.recheckGeneration(),
@@ -229,7 +230,8 @@ public class InventorySelectionService {
         } else {
             db.update(
                     "UPDATE fams_inventory_item_review SET observation_id=?,verified_observed_at=?,"
-                        + "reviewed_asset_version=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                        + "reviewed_asset_version=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,"
+                        + "reviewed_at=?,version=?"
                         + " WHERE item_id=? AND recheck_generation=? AND version=?",
                     input.observationId(),
                     Timestamp.from(selectedTime),
@@ -248,7 +250,8 @@ public class InventorySelectionService {
                 "INSERT INTO"
                     + " fams_inventory_selection_event(item_id,recheck_generation,review_version,task_id,"
                     + "observation_id,review_status,verified_observed_at,time_source,reviewed_asset_version,"
-                    + "physical_snapshot_json,movement_digest,movement_count,reason,evidence,actor_account_id,actor_username,recorded_at)"
+                    + "physical_snapshot_json,movement_digest,movement_count,reason,evidence,actor_account_id,"
+                    + "actor_username,recorded_at)"
                     + " VALUES (?,?,?,?,?,'SELECTED',?,?,?,?,?,?,?,?,?,?,?)",
                 itemId,
                 input.recheckGeneration(),
@@ -280,7 +283,8 @@ public class InventorySelectionService {
         audit(actor, current, task, "INVENTORY_EVIDENCE_SELECTED", response);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,'SELECT_EVIDENCE',?,?,?,?)",
                 taskId,
                 current.id(),
@@ -537,7 +541,8 @@ public class InventorySelectionService {
             long before = number(subject, "version");
             db.update(
                     "UPDATE fams_inventory_review_subject SET"
-                        + " subject_status='CLOSED',method=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=version+1"
+                        + " subject_status='CLOSED',method=?,reason=?,evidence=?,reviewer_account_id=?,"
+                        + "reviewer_username=?,reviewed_at=?,version=version+1"
                         + " WHERE observation_id=? AND dimension=? AND version=?",
                     input.method(),
                     input.reason(),
@@ -550,7 +555,9 @@ public class InventorySelectionService {
                     before);
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,actor_username,occurred_at)"
+                        + " fams_inventory_review_decision(task_id,observation_id,dimension,before_version,"
+                        + "after_version,method,subject_status,reason,evidence,reviewed_asset_version,actor_account_id,"
+                        + "actor_username,occurred_at)"
                         + " VALUES (?,?,?,?,?,?,'CLOSED',?,?,?,?,?,?)",
                     taskId,
                     input.observationId(),
@@ -569,7 +576,9 @@ public class InventorySelectionService {
         if (!chosen) {
             db.update(
                     "INSERT INTO"
-                        + " fams_inventory_evidence_disposition(observation_id,task_id,item_id,recheck_generation,counter_observation_id,counter_review_version,disposition,reviewed_asset_version,context_digest,reason,evidence,actor_account_id,actor_username,recorded_at)"
+                        + " fams_inventory_evidence_disposition(observation_id,task_id,item_id,recheck_generation,"
+                        + "counter_observation_id,counter_review_version,disposition,reviewed_asset_version,"
+                        + "context_digest,reason,evidence,actor_account_id,actor_username,recorded_at)"
                         + " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     input.observationId(),
                     taskId,
@@ -697,7 +706,8 @@ public class InventorySelectionService {
         long after = input.reviewVersion() + 1;
         db.update(
                 "UPDATE fams_inventory_item_review SET"
-                    + " review_status='ACCEPTED',reviewed_asset_version=?,reason=?,evidence=?,reviewer_account_id=?,reviewer_username=?,reviewed_at=?,version=?"
+                    + " review_status='ACCEPTED',reviewed_asset_version=?,reason=?,evidence=?,reviewer_account_id=?,"
+                    + "reviewer_username=?,reviewed_at=?,version=?"
                     + " WHERE item_id=? AND recheck_generation=? AND version=?",
                 input.assetVersion(),
                 input.reason(),
@@ -711,7 +721,10 @@ public class InventorySelectionService {
                 input.reviewVersion());
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_selection_event(item_id,recheck_generation,review_version,task_id,observation_id,review_status,verified_observed_at,time_source,reviewed_asset_version,physical_snapshot_json,movement_digest,movement_count,reason,evidence,actor_account_id,actor_username,recorded_at)"
+                    + " fams_inventory_selection_event(item_id,recheck_generation,review_version,task_id,"
+                    + "observation_id,review_status,verified_observed_at,time_source,reviewed_asset_version,"
+                    + "physical_snapshot_json,movement_digest,movement_count,reason,evidence,actor_account_id,"
+                    + "actor_username,recorded_at)"
                     + " VALUES (?,?,?,?,?,'ACCEPTED',?,?,?,?,?,?,?,?,?,?,?)",
                 itemId,
                 input.recheckGeneration(),
@@ -957,7 +970,8 @@ public class InventorySelectionService {
         audit(actor, current, task, operation, response);
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 task.get("id"),
                 current.id(),
@@ -1088,7 +1102,8 @@ public class InventorySelectionService {
                 now());
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),

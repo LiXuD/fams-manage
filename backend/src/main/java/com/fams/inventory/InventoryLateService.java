@@ -38,6 +38,16 @@ public class InventoryLateService {
     private final InventoryService inventory;
     private final Clock clock;
 
+    /**
+     * Injects the collaborators the supplemental late review flow needs.
+     *
+     * @param db reads and writes the late case, late decision, todo and receipt tables
+     * @param json projects the recursive late wire and serializes stored receipt texts
+     * @param actors revalidates the caller session and proves the ASSET_ADMIN role
+     * @param evidence appends a terminal observation as a new late case with its frozen snapshot
+     * @param inventory copies the terminal task into the recheck draft a follow-up decision opens
+     * @param clock stamps every persisted decision instant
+     */
     public InventoryLateService(
             JdbcTemplate db,
             ObjectMapper json,
@@ -53,6 +63,21 @@ public class InventoryLateService {
         this.clock = clock;
     }
 
+    /**
+     * Lists one page of the late cases of a terminal task. Each case row is assembled with its three
+     * FOR SHARE companion reads - latest decision, damage row and todo probe - before the COUNT query
+     * runs, which keeps the frozen lock read order. Nothing is written.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param page one-based page number
+     * @param size maximum number of cases per page
+     * @return task header, the case page in ascending observation id order, the paging echo, the case
+     *     total and the supplement-only flag
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 409
+     *     INVENTORY_LATE_RECHECK_NOT_FOUND for an unknown task, or 409
+     *     INVENTORY_LATE_TERMINAL_TASK_REQUIRED while the task is not terminal
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateCasePage list(Actor actor, long taskId, int page, int size) {
         admin(actor);
@@ -82,6 +107,24 @@ public class InventoryLateService {
                 true);
     }
 
+    /**
+     * Assembles one late case with its decision history. The read order stays frozen - decision page
+     * rows then its COUNT, then the case view with the latest decision, the damage row and the todo
+     * probe - and the history is paged in ascending decision_version order while the case chip always
+     * shows the newest decision. Nothing is written.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param observationId observation whose late case is requested
+     * @param page one-based page number of the decision history
+     * @param size maximum number of decisions per page
+     * @return task header, the case with its review chip, damage chip and todo state, the decision
+     *     history page and the supplement-only flag
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 409
+     *     INVENTORY_LATE_RECHECK_NOT_FOUND for an unknown task, 409
+     *     INVENTORY_LATE_TERMINAL_TASK_REQUIRED while the task is not terminal, or 404
+     *     INVENTORY_LATE_CASE_NOT_FOUND when the observation has no late case in this task
+     */
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public InventoryViews.InventoryLateCaseDetail detail(
             Actor actor, long taskId, long observationId, int page, int size) {
@@ -119,6 +162,29 @@ public class InventoryLateService {
                 true);
     }
 
+    /**
+     * Opens late cases for the terminal task's unhandled supplemental evidence. One run takes at most
+     * 100 LATE_REVIEW or TIME_REVIEW observations that have neither a late case nor sealed evidence
+     * yet, in ascending observation id order, and appends each through the late evidence port; the
+     * receipt reports whether another run may still be needed. The request id makes the call idempotent
+     * against the stored PREPARE_LATE receipt.
+     *
+     * <p>State impact: appends one fams_inventory_late_case row per newly handled observation, audits
+     * INVENTORY_LATE_PREPARED and stores the receipt. The task version is not bumped.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param version task version the caller read, compared against the locked task row
+     * @param key client request id used for the review receipt
+     * @return receipt with the task id, the number of cases prepared, whether more may remain, the task
+     *     version and the supplement-only flag
+     * @throws InventoryReviewConflict INVENTORY_LATE_TASK_CHANGED when the task version differs, or
+     *     INVENTORY_LATE_IDEMPOTENCY_CONFLICT when the request id was already used with a different
+     *     payload; both are audited and do not roll the transaction back
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 409
+     *     INVENTORY_LATE_RECHECK_NOT_FOUND for an unknown task, or 409
+     *     INVENTORY_LATE_TERMINAL_TASK_REQUIRED while the task is not terminal
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -164,6 +230,43 @@ public class InventoryLateService {
         return response;
     }
 
+    /**
+     * Records one supplemental decision on a late case, always as a new decision version and never as an
+     * update of the terminal source. The expected version is the latest decision_version of the case, so
+     * two reviewers cannot append the same version. NOTE closes a case that needs no recheck, LINK_RECHECK
+     * copies the terminal task into a new recheck draft and leaves a follow-up open, REPLACE_RECHECK opens
+     * a fresh draft only when the previous follow-up task is already terminal, and CONFIRM_RECHECK closes
+     * the case after proving the linked recheck completed with an ACCEPTED sealed snapshot of the same
+     * asset. The request id makes the call idempotent against the stored LATE_DECISION receipt.
+     *
+     * <p>State impact: appends the decision row, opens or closes the LATE_EVIDENCE_REVIEW todo, creates
+     * the recheck draft task through {@code InventoryService.copy} when the method asks for one, audits
+     * INVENTORY_LATE_DECIDED and stores the receipt.
+     *
+     * @param actor caller who must hold the ASSET_ADMIN role
+     * @param taskId inventory task, which must already be COMPLETED, CANCELLED or TERMINATED
+     * @param observationId observation whose late case is decided
+     * @param version latest decision version the caller read, 0 for a never-decided case
+     * @param key client request id used for the review receipt
+     * @param input method, reason of at least three characters, evidence of at least three characters
+     *     and, for the two recheck-opening methods, the draft of the recheck task
+     * @return receipt with the task id, observation id, the new decision version, the result, method,
+     *     linked task id, decider name and time, and the two supplement flags
+     * @throws InventoryReviewConflict INVENTORY_LATE_VERSION_CONFLICT when the case was decided again
+     *     in the meantime, or INVENTORY_LATE_IDEMPOTENCY_CONFLICT when the request id was already used
+     *     with a different payload; both are audited and do not roll the transaction back
+     * @throws InventoryFailure 403 INVENTORY_REVIEW_ADMIN_REQUIRED without the ASSET_ADMIN role, 409
+     *     INVENTORY_LATE_RECHECK_NOT_FOUND for an unknown task or missing recheck task, 409
+     *     INVENTORY_LATE_TERMINAL_TASK_REQUIRED while the task is not terminal, 404
+     *     INVENTORY_LATE_CASE_NOT_FOUND when the observation has no late case, 400
+     *     INVENTORY_LATE_DECISION_INVALID for an unknown method or a reason/evidence shorter than three
+     *     characters, 400 INVENTORY_LATE_UNEXPECTED_RECHECK when NOTE or CONFIRM_RECHECK carries a
+     *     draft, 400 INVENTORY_LATE_RECHECK_INPUT_REQUIRED when a recheck method carries none, 409
+     *     INVENTORY_LATE_RECHECK_REQUIRED when the case still needs a recheck, 409
+     *     INVENTORY_LATE_FOLLOWUP_ALREADY_OPEN, 409 INVENTORY_LATE_FOLLOWUP_REQUIRED, 409
+     *     INVENTORY_LATE_RECHECK_REPLACEMENT_REFUSED, 409 INVENTORY_LATE_FINDING_FOLLOWUP_REQUIRED, 409
+     *     INVENTORY_LATE_RECHECK_NOT_COMPLETED or 409 INVENTORY_LATE_RECHECK_ACCEPTED_ASSET_REQUIRED
+     */
     @Transactional(
         isolation = Isolation.REPEATABLE_READ,
         rollbackFor = Exception.class,
@@ -264,7 +367,8 @@ public class InventoryLateService {
         var now = now();
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_late_decision(observation_id,decision_version,method,result,reason,evidence,linked_task_id,actor_account_id,actor_username,decided_at)"
+                    + " fams_inventory_late_decision(observation_id,decision_version,method,result,reason,evidence,"
+                    + "linked_task_id,actor_account_id,actor_username,decided_at)"
                     + " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 observationId,
                 version + 1,
@@ -279,7 +383,8 @@ public class InventoryLateService {
         if ("FOLLOWUP_OPEN".equals(result)) {
             db.update(
                     "INSERT INTO"
-                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
+                        + " fams_todo(pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,"
+                        + "opened_at)"
                         + " VALUES"
                         + " ('ASSET_ADMIN',NULL,'INVENTORY_LATE',?,'LATE_EVIDENCE_REVIEW','OPEN',?)"
                         + " ON DUPLICATE KEY UPDATE id=id",
@@ -455,7 +560,8 @@ public class InventoryLateService {
             Object response) {
         db.update(
                 "INSERT INTO"
-                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,response_json,created_at)"
+                    + " fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,payload_sha256,"
+                    + "response_json,created_at)"
                     + " VALUES (?,?,?,?,?,?,?)",
                 task,
                 current.id(),
@@ -514,7 +620,8 @@ public class InventoryLateService {
                 now);
         db.update(
                 "INSERT INTO"
-                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
+                    + " fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,resource_id,"
+                    + "before_version,after_version,occurred_at,detail_json)"
                     + " VALUES (?,?,'ASSET_ADMIN',?,'INVENTORY_TASK',?,?,?,?,?)",
                 actor.requestId().toString(),
                 current.id(),
