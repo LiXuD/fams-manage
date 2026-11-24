@@ -18,9 +18,35 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class AssetInventoryReviewPort {
+    /**
+     * One asset movement since the inventory source was published. The timeline event id is
+     * stringified because it is only an opaque ordering key for the review UI; {@code type} is the
+     * fams_asset_timeline_event.event_type and {@code occurredAt} the instant it was recorded.
+     * Pure bookkeeping event types are filtered out before this record is built, so a movement
+     * always means something physically changed.
+     *
+     * @param id timeline event id as an opaque string
+     * @param type event type recorded on fams_asset_timeline_event
+     * @param occurredAt instant the movement occurred
+     */
     public record Movement(String id, String type, Instant occurredAt) {}
 
+    /**
+     * Review context of a single asset: the published source snapshot plus everything that moved
+     * afterwards. The snapshot is returned as the raw stored JSON text so the reviewer sees the
+     * exact bytes that were frozen at publication, and the movement list lets the review decide
+     * whether the snapshot is still trustworthy.
+     *
+     * @param snapshotJson verbatim fams_asset_inventory_source_v1.snapshot_json text
+     * @param movements ordered movements recorded at or after the publication instant
+     */
     public record Context(String snapshotJson, List<Movement> movements) {
+        /**
+         * Freezes the movement list of one review context. The copy keeps the published context
+         * immutable against later mutation by the caller's collection.
+         *
+         * @param movements movements to retain; copied, never kept by reference
+         */
         public Context {
             movements = List.copyOf(movements);
         }
@@ -28,10 +54,30 @@ public class AssetInventoryReviewPort {
 
     private final JdbcTemplate db;
 
+    /**
+     * Wires the review port to raw JDBC. The class-level {@code MANDATORY} propagation makes the
+     * caller own the transaction, so the {@code FOR SHARE} reads taken here stay consistent with
+     * the rest of the inventory review instead of opening a separate read-only unit of work.
+     *
+     * @param db JDBC handle used for the shared-lock snapshot, movement and version reads
+     */
     public AssetInventoryReviewPort(JdbcTemplate db) {
         this.db = db;
     }
 
+    /**
+     * Loads the review context for a batch of assets in one pass. Both queries take
+     * {@code FOR SHARE} locks in ascending asset id order, which is the same order the seal path
+     * uses for its exclusive locks, so a concurrent seal cannot deadlock against a review. Assets
+     * without a published snapshot are simply absent from the result. Movements are limited to
+     * those recorded at or after {@code publishedAt} and exclude bookkeeping-only event types.
+     *
+     * @param assets fams_asset primary keys to review; at most 200, all positive, duplicates allowed
+     * @param publishedAt instant from which movements count as post-publication changes
+     * @return immutable map of asset id to its context, empty when {@code assets} is empty
+     * @throws IllegalArgumentException when the batch exceeds 200 ids or contains a null or
+     *     non-positive id
+     */
     public Map<Long, Context> contexts(List<Long> assets, Instant publishedAt) {
         if (assets.isEmpty()) {
             return Map.of();
@@ -78,6 +124,17 @@ public class AssetInventoryReviewPort {
         return Map.copyOf(result);
     }
 
+    /**
+     * Confirms under an exclusive lock that one asset is still active at the version the reviewer
+     * read. The row lock is deliberately taken here so the review cannot publish a decision against
+     * a card that another writer is mid-flight on; a cancelled or version-drifted card reports a
+     * mismatch instead of throwing.
+     *
+     * @param asset fams_asset primary key to lock and compare
+     * @param expectedVersion optimistic version the reviewer read earlier
+     * @return {@code true} only when the row exists, its card stage is ACTIVE and the stored version
+     *     equals {@code expectedVersion}
+     */
     public boolean matchesVersion(long asset, long expectedVersion) {
         var rows =
                 db.queryForList(

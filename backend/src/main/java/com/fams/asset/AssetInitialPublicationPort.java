@@ -20,6 +20,39 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 @Profile("fams-product")
 public class AssetInitialPublicationPort {
+    /**
+     * One approved initial-import row, already validated and resolved by the import domain. It is
+     * never serialized: {@link #create} reads it component-by-component into the fams_asset insert
+     * map, so the component names carry no stored or wire shape and only the Chinese {@code state}
+     * vocabulary is contractual. The state fields describe what the sheet said, while
+     * {@code preScrapState} and {@code preRepairState} carry the opening state that a pending-scrap
+     * or repair overlay replaced. Non-null {@code repairFacts} or {@code lossFacts} is what opens
+     * the corresponding downstream record, and {@code factoryDisposition} selects the
+     * factory-disposition scrap variant.
+     *
+     * @param code asset code as typed, or blank to allocate one from the category sequence
+     * @param name asset name, required and trimmed to at most 256 characters
+     * @param categoryId resolved fams_asset_category id and code-allocation scope
+     * @param organizationId resolved owning organization id
+     * @param model manufacturer model text, stored as given
+     * @param unit measurement unit text, stored as given
+     * @param serial serial number; blank becomes null and the uppercase form is derived from it
+     * @param state Chinese sheet state: 在库, 在用个人, 借出, 在用公用 or 待报废
+     * @param warehouseId storage warehouse id, only kept when the opening state is 在库
+     * @param locationId current location id for every custody type
+     * @param usingOrganizationId using organization id, only kept outside storage custody
+     * @param employeeId responsible employee id, routed to the personal or shared column by custody
+     * @param borrowedDate borrowing start date, compared against repair and loss acceptance times
+     * @param expectedReturnDate expected return date carried into the opened loan
+     * @param preScrapState opening state recorded before the 待报废 overlay was applied
+     * @param scrapReason trimmed scrap reason for the pending-scrap request
+     * @param scrapCondition trimmed physical condition for the pending-scrap request
+     * @param proposedDisposition trimmed proposed disposition for the pending-scrap request
+     * @param preRepairState opening state recorded before the repair overlay was applied
+     * @param repairFacts non-null repair opening facts, including the optional factory leg
+     * @param lossFacts non-null loss opening facts driving the loss-sourced scrap variant
+     * @param factoryDisposition non-null factory disposition facts driving that scrap variant
+     */
     public record InitialAsset(String code, String name, long categoryId, long organizationId,
                                String model, String unit, String serial, String state,
                                Long warehouseId, Long locationId, Long usingOrganizationId,
@@ -28,8 +61,33 @@ public class AssetInitialPublicationPort {
                                String proposedDisposition, String preRepairState, InitialRepairPort.Facts repairFacts,
                                InitialScrapPort.LossFacts lossFacts,
                                InitialScrapPort.FactoryDisposition factoryDisposition) { }
+    /**
+     * Execution context shared by every row of one import batch. It is read component-by-component
+     * into the insert map and the event summary, so no component name reaches storage except through
+     * the explicit {@code batchId}/{@code sheetRow} event keys. {@code timezone} is the frozen zone
+     * of the batch parameter version and is used to compare sheet dates against acceptance instants;
+     * {@code now} is the single instant stamped on the card, tag and event.
+     *
+     * @param batchId import batch identity recorded in every event and downstream opening
+     * @param sheetRow 1-based sheet row number, must be at least 2 because row 1 is the header
+     * @param actorId importing account id, used as creator and event actor
+     * @param username account name snapshot stored on the card
+     * @param parameterId parameter version id frozen for the batch
+     * @param businessDate created and inbound business date written to the card
+     * @param now instant stamped on the card, tag and timeline event
+     * @param administratorId administrator account passed to a repair opening
+     * @param timezone frozen zone id used to interpret sheet dates
+     */
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
                           long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
+    /**
+     * Identity of the card just published. Both components are returned to the import domain, which
+     * uses {@code id} to open downstream records and {@code code} for the per-row result sheet; the
+     * record is never serialized as a whole.
+     *
+     * @param id generated fams_asset primary key
+     * @param code asset code finally stored, either the typed one or a freshly allocated one
+     */
     public record Created(long id, String code) { }
 
     private final AssetMapper mapper;
@@ -55,6 +113,27 @@ public class AssetInitialPublicationPort {
         this.downstream = java.util.List.copyOf(downstream);
     }
 
+    /**
+     * Publishes one approved import row as a live asset card inside its own transaction. The
+     * published card is ACTIVE at version 0 with source text INITIAL_IMPORT, its tag token is
+     * minted and stored both encrypted and hashed, and every downstream fact the row asserted
+     * (borrowing, repair, pending scrap and its loss, factory-disposition or repair variants) is
+     * opened before the method returns, so a row is never published half-way. A blank code
+     * allocates one from the category sequence and marks that reservation used only after the
+     * insert succeeded. Custody is derived from the Chinese state and drives which of the three
+     * responsibility columns receives the employee id.
+     *
+     * @param asset approved row to publish; must be non-null with a name of at most 256 characters
+     * @param context batch execution context; must be non-null with a positive actor id and a sheet
+     *     row of at least 2
+     * @return generated card id and the asset code actually stored
+     * @throws IllegalArgumentException when either argument is malformed, the actor id is not
+     *     positive, the sheet row is below 2, the code exceeds 128 characters, the name is missing
+     *     or too long, or the sheet state is not one of the five known values
+     * @throws IllegalStateException when a borrowing start date falls after the repair acceptance
+     *     instant or after the loss last-seen instant, reported with the corresponding
+     *     ASSET_IMPORT_INITIAL_*_BORROW_TIME_INVALID marker
+     */
     @Transactional
     public Created create(InitialAsset asset, Context context) {
         if (asset == null || context == null || context.actorId() < 1 || context.sheetRow() < 2) {
@@ -154,6 +233,18 @@ public class AssetInitialPublicationPort {
         return new Created(id, code);
     }
 
+    /**
+     * Rollback precondition check for one published card. Every downstream domain is asked first
+     * whether its opening is still exactly the untouched initial-import one, then each registered
+     * {@link AssetDownstreamUsePort} is polled for a published use. Nothing is written here; the
+     * method only decides whether {@link #cancel} may run at all, and it runs inside the caller's
+     * transaction so the locks the delegated ports take are held until the rollback commits.
+     *
+     * @param assetId fams_asset primary key whose publication is being rolled back
+     * @param batchId import batch the publication belonged to; downstream rows must still carry it
+     * @throws IllegalStateException with marker ASSET_IMPORT_ROLLBACK_DOWNSTREAM when any
+     *     downstream opening has moved on or any consumer reports a published use
+     */
     @Transactional
     public void assertReversible(long assetId, UUID batchId) {
         loans.assertReversible(assetId, batchId);
@@ -164,6 +255,25 @@ public class AssetInitialPublicationPort {
         }
     }
 
+    /**
+     * Undoes one publication after {@link #assertReversible} accepted it. The card is re-checked
+     * under a lock because the assertion and the cancellation are separate calls: it must still be
+     * ACTIVE, still carry source text INITIAL_IMPORT and still sit at version 0, and its tag row
+     * must still exist. Downstream repair, borrowing and scrap openings are cancelled first, the
+     * tag token is archived with reason INITIAL_IMPORT_ROLLBACK and then deleted, and only then is
+     * the card itself cancelled and the ASSET_INITIAL_ROLLED_BACK event written. The method declares
+     * no propagation of its own and therefore must be called inside the rollback service's
+     * transaction.
+     *
+     * @param assetId fams_asset primary key to cancel
+     * @param batchId import batch id embedded in the rollback event summary
+     * @param actorId account id recorded as the cancelling actor
+     * @param reason operator-facing rollback reason stored on the card and in the event
+     * @param now instant stamped on the tag archive, the card and the event
+     * @throws IllegalStateException with marker ASSET_IMPORT_ROLLBACK_DOWNSTREAM when the card is
+     *     missing, no longer an untouched initial import, when its tag row is gone, or when the
+     *     final cancellation did not affect exactly one row
+     */
     public void cancel(long assetId, UUID batchId, long actorId, String reason, Instant now) {
         Map<String, Object> asset = mapper.lock(assetId);
         if (asset == null || !"ACTIVE".equals(asset.get("card_stage"))

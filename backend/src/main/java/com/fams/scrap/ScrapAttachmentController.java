@@ -26,6 +26,25 @@ import java.io.IOException;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * REST surface for scrap request evidence, mounted on both the operator prefix and the WeChat mini
+ * program prefix {@code /api/v1/mini} so one implementation serves both clients. The controller is
+ * only created when {@code fams.attachments.quarantine-root} is configured, because without a
+ * quarantine directory the shared attachment intake cannot store bytes at all.
+ *
+ * <p>Actor resolution is uniform: every handler captures the caller through
+ * {@link RequisitionActorContext} and passes it down, so authorisation never depends on the URL
+ * prefix used. The four operations are capability discovery, listing uploaded objects of one kind,
+ * uploading, and the two-step download of a signed grant followed by the content fetch.
+ *
+ * <p>Upload accepts an optional declared filename and content type alongside the multipart part. WeChat
+ * clients may send an opaque part name and a generic MIME type, so when either declaration is present
+ * the pair is validated as a whole — filename non-blank, at most 255 characters, free of path
+ * separators and ISO control characters, content type inside the fixed image/PDF allow-list, and the
+ * part MIME either {@code application/octet-stream} or equal to the declaration — before replacing the
+ * part values. Any violation is rejected with 422 {@code SCRAP_ATTACHMENT_INVALID}; the intake still
+ * inspects the real bytes afterwards, so the declaration is a label and never a trust decision.
+ */
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 @Validated
@@ -35,6 +54,13 @@ public class ScrapAttachmentController {
     private final ScrapAttachmentService photos;
     private final RequisitionActorContext actors;
 
+    /**
+     * Wires the evidence service and the actor context. Both are singletons shared with the rest of the
+     * scrap API; the controller keeps no state of its own beyond these references.
+     *
+     * @param photos scrap attachment service performing the authorisation, intake and read work
+     * @param actors request-scoped actor context used to capture the caller for every handler
+     */
     public ScrapAttachmentController(ScrapAttachmentService photos, RequisitionActorContext actors) {
         this.photos = photos;
         this.actors = actors;

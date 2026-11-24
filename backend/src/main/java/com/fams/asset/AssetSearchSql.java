@@ -52,10 +52,23 @@ public final class AssetSearchSql {
 
     private AssetSearchSql() { }
 
+    /**
+     * Ledger list statement: the whitelisted predicates plus the shared physical projection,
+     * ordered by descending id and closed with the caller-supplied {@code limit}/{@code offset}
+     * parameters so paging never interpolates user values.
+     *
+     * @return dynamic {@code <script>} statement yielding one fams_asset row per match
+     */
     public static String list() {
         return where("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " ") + " ORDER BY a.id DESC LIMIT #{limit} OFFSET #{offset}</script>";
     }
 
+    /**
+     * Ledger total for the same predicate set as {@link #list()}, so the page footer counts exactly
+     * the rows the list would return without paging.
+     *
+     * @return dynamic {@code <script>} statement yielding a single {@code COUNT(*)} value
+     */
     public static String count() {
         return where("SELECT COUNT(*) ") + "</script>";
     }

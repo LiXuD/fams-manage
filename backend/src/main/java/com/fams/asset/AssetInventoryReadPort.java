@@ -40,6 +40,17 @@ public final class AssetInventoryReadPort {
         this.codec = codec;
     }
 
+    /**
+     * Resolves an inventory identifier to asset cards without locking. Tag scans are hashed with
+     * {@link AssetSecretCodec} and matched against fams_asset_tag, so the raw token is never
+     * compared or logged; code entry matches fams_asset.asset_code exactly. Both paths exclude
+     * draft, cancelled and not-yet-inbound cards. A malformed scan token yields an empty result
+     * rather than an error, because the scanner cannot know the alphabet in advance.
+     *
+     * @param source identifier kind: {@code SCAN} for a tag token, anything else for an asset code
+     * @param value raw scanned tag token (43 base64url characters) or the typed asset code
+     * @return identified cards, empty when nothing matches or the scan token shape is invalid
+     */
     public List<Identification> identify(String source, String value) {
         if ("SCAN".equals(source)) {
             if (!value.matches("[A-Za-z0-9_-]{43}")) {
@@ -63,6 +74,14 @@ public final class AssetInventoryReadPort {
                 .toList();
     }
 
+    /**
+     * Reads the published inventory source snapshot of one asset. The JSON column is cast to CHAR
+     * and returned verbatim, so the inventory domain compares the exact bytes it published. No lock
+     * is taken: the seal path locks assets separately through {@link AssetInventorySealPort}.
+     *
+     * @param assetId fams_asset primary key whose snapshot is requested
+     * @return stored snapshot JSON, or {@code null} when the asset has no published snapshot
+     */
     public String currentSnapshot(long assetId) {
         var rows =
                 db.queryForList(

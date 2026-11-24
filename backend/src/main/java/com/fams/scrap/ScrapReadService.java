@@ -26,6 +26,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Read side of the scrap domain. It answers five queries — scrap-eligible assets, the request list,
+ * overdue dispositions, one request detail and the execution choice catalog — and owns the row-level
+ * visibility predicate that all of them share.
+ *
+ * <p>Visibility is expressed once in {@code SCOPE} as a disjunction of role-based branches over the
+ * joined request and asset rows, and is applied identically by the list query, the count query and the
+ * single-row {@code visible} lookup, so a row a caller cannot see is indistinguishable from a row that
+ * does not exist: both surface as 404 {@code SCRAP_NOT_FOUND}. The branches are asset administrators,
+ * the creator, audit-only readers restricted to their specified organizations, the responsible
+ * employee, the using organization's department asset manager, and warehouse operators holding an
+ * approved decision or an own or claimable correction. Organization and employee identifiers are read
+ * out of {@code source_snapshot_json} with {@code JSON_EXTRACT}, which is why the snapshot keys the
+ * submission froze are part of the read contract and not only of the stored shape.
+ *
+ * <p>An audit-only caller who holds no other role is recognised by {@code auditOnly} and receives every
+ * action flag false, so the read surface stays available for inspection without offering any mutation.
+ */
 @Service
 @Profile("fams-product")
 public class ScrapReadService {
@@ -52,6 +70,18 @@ public class ScrapReadService {
     private final AssetScrapPort assets;
     private final Clock clock;
 
+    /**
+     * Wires the database access, the snapshot mapper, the actor revalidation source, the asset-side
+     * scrap port and the clock. The port is a dependency because the eligible query is defined by the
+     * asset domain — only it knows which asset states may enter scrap — while the clock is needed to
+     * resolve the overdue cutoff against the configured business timezone.
+     *
+     * @param db JDBC template running the scoped scrap queries
+     * @param json mapper used to parse snapshot JSON and to read the business parameter timezone
+     * @param actors actor context supplying the locked identity revalidation used by every query
+     * @param assets asset-side scrap port answering the eligible-asset page
+     * @param clock time source for the overdue cutoff and the business date
+     */
     public ScrapReadService(JdbcTemplate db, ObjectMapper json, RequisitionActorContext actors,
             AssetScrapPort assets, Clock clock) {
         this.db = db;
@@ -61,12 +91,40 @@ public class ScrapReadService {
         this.clock = clock;
     }
 
+    /**
+     * Pages the assets currently eligible to enter scrap. The rule is owned by the asset domain, so this
+     * method only revalidates the actor under the identity lock and forwards the request; it adds no
+     * scrap-side filter of its own.
+     *
+     * @param actor warehouse operator or administrator asking which assets may be scrapped
+     * @param page one-based page number, already constrained to positive by the controller
+     * @param size page size, already constrained to at most 100 by the controller
+     * @return eligible page envelope defined by {@link AssetScrapPort}, stringifying asset identifiers
+     * @throws AssetHandoverPort.Failure as raised by the asset port when the actor may not run the query
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional
     public AssetScrapPort.EligiblePage eligible(Actor actor, int page, int size) {
         LOG.debug("Listing scrap-eligible assets actor={} page={} size={}", actor.id(), page, size);
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
+    /**
+     * Pages the scrap requests visible to the caller, newest first by id. The actor is revalidated with
+     * the scrap-reader variant, which additionally admits the audit-only role, and the shared scope
+     * predicate is bound to both the row query and the count query so the total always matches the
+     * visible set rather than the whole table.
+     *
+     * <p>The returned page carries the {@code canListOverdueDispositions} flag, letting a client show or
+     * hide the follow-up entry point without a second call, and no {@code businessDate}, which only the
+     * overdue projection defines.
+     *
+     * @param actor reading actor whose roles and identifiers select the visible rows
+     * @param page one-based page number, already constrained to positive by the controller
+     * @param size page size, already constrained to at most 100 by the controller
+     * @return page envelope of request views without history, plus the visible total and the follow-up flag
+     * @throws com.fams.auth.AuthOperationException when the caller holds no role the scrap reader accepts
+     */
     @Transactional
     public ScrapViews.RequestPage list(Actor actor, int page, int size) {
         LOG.debug("Listing scrap requests actor={} page={} size={}", actor.id(), page, size);
@@ -83,6 +141,31 @@ public class ScrapReadService {
                 page, size, canListOverdue(current), null);
     }
 
+    /**
+     * Pages the scrap dispositions that are past their follow-up deadline, oldest due date first. This
+     * is a work queue rather than a general listing, so it is restricted to asset administrators and
+     * warehouse operators; anyone else receives 403 {@code SCRAP_DISPOSITION_FOLLOW_UP_FORBIDDEN} rather
+     * than an empty page, because the endpoint is not part of the ordinary read surface.
+     *
+     * <p>Overdue is evaluated two ways against the same instant. A disposition carrying a precise
+     * {@code due_at} is overdue once that timestamp has passed; a legacy row with only a
+     * {@code due_date} is overdue once that date is strictly before today. Today is resolved in the
+     * timezone held in the active business parameter snapshot, not in the server zone, so the queue
+     * boundary matches the business calendar the due dates were entered against.
+     *
+     * <p>Administrators see every overdue disposition; a warehouse operator sees only the ones assigned
+     * to them as processor. Only rows whose request is {@code EXECUTED} and whose disposition is still
+     * {@code PENDING_DISPOSITION} qualify.
+     *
+     * @param actor asset administrator or warehouse operator reading the follow-up queue
+     * @param page one-based page number, already constrained to positive by the controller
+     * @param size page size, already constrained to at most 100 by the controller
+     * @return page envelope of request views without history, with the follow-up flag true and
+     *     {@code businessDate} set to the resolved business today
+     * @throws AssetHandoverPort.Failure 403 when the actor holds neither role, or as raised by the
+     *     projection when a request row cannot be read
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional
     public ScrapViews.RequestPage overdueDispositions(Actor actor, int page, int size) {
         LOG.debug("Listing overdue scrap dispositions actor={} page={} size={}", actor.id(), page, size);
@@ -112,6 +195,25 @@ public class ScrapReadService {
         return current.has(Role.ASSET_ADMIN) || current.has(Role.WAREHOUSE_OPERATOR);
     }
 
+    /**
+     * Reads the full detail of one scrap request. This is the only query that assembles the history, so
+     * the returned view carries the {@code history} key while list projections leave it null. Events are
+     * read newest first and capped at 100 rows, which bounds the payload for a long-lived request that
+     * has passed through decision, claim, execution, correction, reversal and recovery.
+     *
+     * <p>Visibility uses the same scoped predicate as the list, so a request outside the caller's scope
+     * is reported as absent rather than as forbidden. The actor is revalidated with the scrap-reader
+     * variant, which admits the audit-only role; that role then receives every action flag false from
+     * the projection.
+     *
+     * @param actor reading actor whose scope decides visibility and whose roles decide the action flags
+     * @param id fams_scrap_request primary key to read
+     * @return request view including locks, disposition, the newest correction, reversal and recovery
+     *     rows, computed actions and up to 100 history entries
+     * @throws AssetHandoverPort.Failure 404 {@code SCRAP_NOT_FOUND} when the request does not exist or
+     *     is not visible to the actor
+     * @throws com.fams.auth.AuthOperationException when the caller holds no role the scrap reader accepts
+     */
     @Transactional
     public ScrapViews.Request get(Actor actor, long id) {
         LOG.debug("Reading scrap request detail actor={} requestId={}", actor.id(), id);
@@ -123,6 +225,39 @@ public class ScrapReadService {
         return view(current, row, history);
     }
 
+    /**
+     * Pages the selectable targets for one step of one scrap request. The catalog is not a generic
+     * lookup: admission is decided per request and per kind, so a caller only ever sees the choices that
+     * the step they are about to take can actually consume. Each choice carries the current row version,
+     * which the caller echoes back as the pinned {@code locationVersion} of the execution payload; a
+     * target that moved in between is then rejected by the review service instead of being written.
+     *
+     * <p>Three follow-up intents bypass the warehouse-operator requirement, because they are opened by
+     * other roles: an administrator starting a correction of a {@code RESTORE_REQUIRED} standalone
+     * request, a reversal requester facing a pending disposition, and a recovery requester facing a loss
+     * write-off. Each is additionally blocked when an active row of that follow-up already exists, so
+     * the catalog cannot be used to prepare a duplicate. Without one of those intents the caller must be
+     * a warehouse operator who either processes this {@code PROCESSING} request or owns its
+     * {@code PENDING_DISPOSITION} row when asking for employees; anything else is 403
+     * {@code SCRAP_PROCESSOR_REQUIRED}.
+     *
+     * <p>Only usable rows are offered. Locations must be {@code ACTIVE} and, when they belong to a
+     * warehouse, that warehouse must be {@code ACTIVE} too; bins must additionally be of type
+     * {@code BIN} with an active warehouse; employees must be {@code ACTIVE} inside an {@code ACTIVE}
+     * organization.
+     *
+     * @param actor caller preparing an execution, correction, reversal or recovery payload
+     * @param id fams_scrap_request primary key the step belongs to
+     * @param kind catalog to read: {@code location} for any active location, {@code bin} for active bin
+     *     locations only, or {@code employee} for active employees
+     * @param page one-based page number, already constrained to positive by the controller
+     * @param size page size, already constrained to at most 100 by the controller
+     * @return page of choices ordered by id, each stringifying its identifier and carrying its version
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_CATALOG_INVALID} for any other kind, 403
+     *     {@code SCRAP_PROCESSOR_REQUIRED} when no admissible intent applies, or 404
+     *     {@code SCRAP_NOT_FOUND} when the request does not exist or is not visible
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional
     public ScrapViews.ChoicePage catalog(Actor actor, long id, String kind, int page, int size) {
         LOG.debug("Reading scrap catalog actor={} requestId={} kind={} page={}", actor.id(), id, kind, page);

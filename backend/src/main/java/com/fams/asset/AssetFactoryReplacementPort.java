@@ -58,6 +58,12 @@ public class AssetFactoryReplacementPort {
 
     /** Frozen {@code Map.of("items", ...)} envelope of the trace endpoint. */
     public record Trace(List<TraceItem> items) {
+        /**
+         * Freezes the item list of the response envelope. The copy makes the published body
+         * immutable, so a later mutation of the caller's list cannot change what was serialized.
+         *
+         * @param items ordered provenance rows to publish; copied, never retained by reference
+         */
         public Trace {
             items = List.copyOf(items);
         }
@@ -70,6 +76,18 @@ public class AssetFactoryReplacementPort {
     private final ObjectMapper json;
     private final Clock clock;
 
+    /**
+     * Wires the port to the asset write path, the mapper, the requisition actor context, raw JDBC
+     * for the provenance table and the clock. The class-level {@code MANDATORY} propagation means
+     * the caller must already have opened the transaction that this port joins.
+     *
+     * @param service asset service used to create the replacement card and to gate trace reads
+     * @param mapper fams_asset locking and timeline-event writer
+     * @param actors context that revalidates the requisition actor against the live account
+     * @param db raw JDBC handle for fams_asset_factory_replacement_origin and the trace query
+     * @param json codec used to copy the typed create request before forcing its source
+     * @param clock timestamp source for provenance rows and events
+     */
     public AssetFactoryReplacementPort(AssetService service, AssetMapper mapper,
             RequisitionActorContext actors, JdbcTemplate db, ObjectMapper json, Clock clock) {
         this.service = service;
@@ -80,6 +98,26 @@ public class AssetFactoryReplacementPort {
         this.clock = clock;
     }
 
+    /**
+     * Creates the replacement card and records its immutable origin link in one caller-owned
+     * transaction. The original asset must still be locked at the expected version and be under
+     * repair, the new serial must be present, at most 128 characters and different from the
+     * original one, and the request source must be absent or already
+     * {@code FACTORY_REPLACEMENT}. Domain failures are translated so the requisition caller only
+     * ever sees {@code AssetHandoverPort.Failure}.
+     *
+     * @param actor requisition actor revalidated for the warehouse-operator role
+     * @param source idempotency source id, also passed to the asset service as the create key
+     * @param oldAsset original fams_asset id being replaced
+     * @param oldVersion optimistic version of the original asset the caller read
+     * @param repair repair request id recorded in the provenance row
+     * @param round factory-repair round id recorded in the provenance row
+     * @param input create payload copied and forced to the factory-replacement source
+     * @return id and version of the newly created replacement card
+     * @throws AssetHandoverPort.Failure 403 without the warehouse-operator role, 409 when the
+     *     original changed, when the serial is missing or not distinct, or when the origin insert
+     *     hits a duplicate identity, and 400 when the request source is invalid
+     */
     public Replaced create(RequisitionActorContext.Actor actor, UUID source,
             long oldAsset, long oldVersion, long repair, long round, AssetCreateRequest input) {
         try {
@@ -133,6 +171,21 @@ public class AssetFactoryReplacementPort {
         return new Replaced(created.getId(), created.getVersion());
     }
 
+    /**
+     * Reads the replacement provenance trace of one asset. This is the only method in the port that
+     * opens a transaction of its own, a read-only REQUIRED one, because a trace must stay readable
+     * outside a factory-replacement write. Reading the asset through the service first applies the
+     * ordinary card visibility rules, and the trace query repeats the same draft and cancelled
+     * exclusion so a replacement the actor may not see is not leaked through the provenance of the
+     * original. Both directions are returned: rows where the asset is the replacement and rows where
+     * it is the original, ordered by recording time then replacement id.
+     *
+     * @param actor read actor whose visibility scope filters draft and cancelled replacements
+     * @param asset fams_asset primary key whose provenance is traced, as either side of the link
+     * @return trace envelope whose single {@code items} key holds the ordered provenance rows
+     * @throws AssetOperationException as raised by the asset service when the actor may not read the
+     *     card at all
+     */
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Trace trace(AssetActorContext.Actor actor, long asset) {
         service.get(actor, asset);

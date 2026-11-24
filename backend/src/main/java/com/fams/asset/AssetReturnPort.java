@@ -56,6 +56,25 @@ public class AssetReturnPort {
                 ((Number) row.get("version")).longValue());
     }
 
+    /**
+     * Applies the physical inspection outcome to the locked asset. A {@code MISSING} result only
+     * bumps the version and records the report, leaving custody untouched; {@code NORMAL} or
+     * {@code DAMAGED} moves the asset into storage custody, clears the using organization and both
+     * responsibility columns, and lands it in {@code IN_STOCK} or {@code UNDER_REPAIR} respectively.
+     * One timeline event is written in every branch.
+     *
+     * @param asset fams_asset primary key to lock and update
+     * @param version optimistic version the caller read; a mismatch is a concurrent change
+     * @param result inspection outcome: {@code MISSING}, {@code NORMAL} or {@code DAMAGED}
+     * @param warehouse inbound warehouse id, required unless the result is {@code MISSING}
+     * @param location inbound location id, required unless the result is {@code MISSING}
+     * @param actor account id recorded as updater and event actor
+     * @param source asset-return request id embedded in the event summary
+     * @param time business timestamp written to the row and the timeline event
+     * @throws AssetHandoverPort.Failure 404 when the asset row does not exist, 409 when the version,
+     *     card stage, lifecycle or exception status no longer match an inspectable return, or 400
+     *     when the result is unknown or a received result lacks its warehouse and location
+     */
     public void inspect(long asset, long version, String result, Long warehouse, Long location,
             long actor, long source, Instant time) {
         var rows = db.queryForList("SELECT * FROM fams_asset WHERE id=? FOR UPDATE", asset);

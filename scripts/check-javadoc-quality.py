@@ -26,8 +26,9 @@ from collections import Counter, defaultdict
 
 TYPE = re.compile(r"^\s{0,4}(?:public\s+|final\s+|abstract\s+|static\s+)*"
                   r"(?:class|interface|record|enum)\s+(\w+)")
+# 只匹配声明起始；参数表用括号配平向后收集，因为本仓大量方法签名跨多行
 METHOD = re.compile(r"^\s{4}(?:public\s+)(?:static\s+|final\s+|synchronized\s+)*"
-                    r"([\w<>\[\],.?\s]+?)\s+(\w+)\s*\(([^)]*)\)\s*(?:throws [\w.,\s]+)?\{")
+                    r"([\w<>\[\],.?\s]+?)\s+(\w+)\s*\(")
 JDOC_OPEN = re.compile(r"^\s*/\*\*")
 TAG = re.compile(r"^\s*\*\s*@(\w+)")
 STOPWORDS = {"the", "a", "an", "this", "that", "is", "are", "of", "for", "to", "in", "on",
@@ -42,6 +43,42 @@ def words(text: str) -> set[str]:
 def camel_parts(name: str) -> set[str]:
     parts = re.findall(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)", name)
     return {p.lower() for p in parts if len(p) >= 3} - STOPWORDS
+
+
+def collect_params(lines: list[str], start: int) -> str:
+    """从声明行的左括号起按括号配平收集参数表（支持跨多行签名）。"""
+    depth = 0
+    buf = []
+    for i in range(start, min(start + 40, len(lines))):
+        for ch in lines[i]:
+            if ch == "(":
+                depth += 1
+                if depth == 1:
+                    continue
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    return "".join(buf)
+            if depth >= 1:
+                buf.append(ch)
+        buf.append(",")  # 行分隔不参与，仅用于避免跨行粘连
+    return "".join(buf)
+
+
+def count_params(param_text: str) -> int:
+    t = param_text.strip()
+    if not t:
+        return 0
+    depth = 0
+    n = 1
+    for ch in t:
+        if ch in "<([":
+            depth += 1
+        elif ch in ">)]":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            n += 1
+    return n
 
 
 def javadoc_blocks(lines: list[str]) -> list[tuple[int, list[str]]]:
@@ -101,6 +138,11 @@ def check_file(path: str, rel: str) -> list[str]:
         if mt and mt.group(1).strip() in ("record", "class", "interface", "enum"):
             mt = None  # record/class 声明不是方法；组件文档由类型级 Javadoc 承载，
             #            与 checkstyle JavadocMethod 口径一致
+        if mt:
+            # 返回类型行里若出现 record/class 关键字或分号，说明不是方法声明
+            head = line.split("(")[0]
+            if ";" in head or re.search(r"\b(class|record|interface|enum)\b", head):
+                mt = None
         if not (mt or tt):
             continue
         entry = doc_for.get(i)
@@ -110,10 +152,10 @@ def check_file(path: str, rel: str) -> list[str]:
         desc, tags, _ = block_text(block)
         name = (mt.group(2) if mt else tt.group(1))
         if mt:
-            params = [p for p in re.split(r",(?![^<]*>)", mt.group(3)) if p.strip()]
+            nparams = count_params(collect_params(lines, i))
             given = tags.get("param", [])
-            if params and len(given) < len(params):
-                issues.append(f"{rel}:{i + 1} T1 {name}() 参数 {len(params)} 个但 @param 只有 {len(given)} 条")
+            if nparams and len(given) < nparams:
+                issues.append(f"{rel}:{i + 1} T1 {name}() 参数 {nparams} 个但 @param 只有 {len(given)} 条")
             ret = mt.group(1).strip()
             if ret not in ("void",) and not tags.get("return"):
                 issues.append(f"{rel}:{i + 1} T2 {name}() 返回 {ret[:28]} 但缺 @return")

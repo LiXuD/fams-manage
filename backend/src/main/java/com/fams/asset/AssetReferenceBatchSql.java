@@ -6,6 +6,17 @@ import java.util.Map;
 public final class AssetReferenceBatchSql {
     private AssetReferenceBatchSql() { }
 
+    /**
+     * Builds the batched {@code SELECT id,version} statement for one reference kind. The kind
+     * selects a table from a closed switch, so caller input can only choose among the seven
+     * whitelisted tables and never reaches the SQL text; the ids stay {@code #{id}} bound
+     * parameters inside the foreach.
+     *
+     * @param parameters MyBatis provider map carrying {@code kind} (category, organization,
+     *     warehouse, location, brand, manufacturer or employee) and {@code ids}
+     * @return dynamic {@code <script>} statement returning one {@code id,version} row per id
+     * @throws IllegalArgumentException when {@code kind} is not one of the seven known kinds
+     */
     public static String select(Map<String, Object> parameters) {
         String table = switch ((String) parameters.get("kind")) {
             case "category" -> "fams_asset_category";

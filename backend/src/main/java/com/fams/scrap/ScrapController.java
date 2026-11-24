@@ -26,6 +26,25 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * REST surface of the scrap domain, mounted on both the operator prefix and the WeChat mini program
+ * prefix {@code /api/v1/mini}. Handlers stay deliberately thin: each one captures the actor through
+ * {@link RequisitionActorContext} and delegates to {@link ScrapReadService} for queries,
+ * {@link ScrapService} for submission, or {@link ScrapReviewService} for the decision, claim, execute,
+ * correction, reversal, recovery and disposition steps. No authorisation or state rule lives here.
+ *
+ * <p>Every mutating handler requires the {@code Idempotency-Key} header and, where it acts on an
+ * already persisted row, the {@code If-Match-Version} header; both are passed through untouched so the
+ * services own the receipt replay and the optimistic-concurrency comparison. Paging parameters are
+ * constrained at the boundary: {@code page} is positive up to 1000000 and {@code pageSize} positive up
+ * to 100.
+ *
+ * <p>The handlers at the bottom of the class are local {@code @ExceptionHandler}s. They exist because
+ * scrap execution reaches into the repair, loan and loss domains, whose own refusals must be reported
+ * with their own codes rather than being flattened into a scrap error. The port failure types keep the
+ * status they carry, while {@code LoanRepairPort.Failure} and {@code LoanLossPort.Failure} are pinned
+ * to 409 because a loan-side refusal during scrap execution is always a conflict with the live loan.
+ */
 @Profile("fams-product")
 @RestController
 @RequestMapping({"/api/v1/scrap-requests", "/api/v1/mini/scrap-requests"})
@@ -35,6 +54,17 @@ public class ScrapController {
     private final ScrapReviewService review;
     private final RequisitionActorContext actors;
 
+    /**
+     * Wires the three scrap services and the actor context. The field order differs from the parameter
+     * order because {@code review} is declared before {@code reads} in the signature; assignment is by
+     * name, so the mapping stays {@code reads} to the read service and {@code review} to the review
+     * service.
+     *
+     * @param scrap submission service owning creation of standalone, loss, repair and factory requests
+     * @param review review service owning decision, claim, execution, correction, reversal and recovery
+     * @param reads read service owning list, overdue disposition, eligible, detail and catalog queries
+     * @param actors request-scoped actor context used to capture the caller for every handler
+     */
     public ScrapController(ScrapService scrap, ScrapReviewService review, ScrapReadService reads, RequisitionActorContext actors) {
         this.scrap = scrap;
         this.reads = reads;

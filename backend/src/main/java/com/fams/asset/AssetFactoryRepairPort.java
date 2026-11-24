@@ -51,6 +51,17 @@ public class AssetFactoryRepairPort {
     private final AssetHandoverPort identity;
     private final ObjectMapper json;
 
+    /**
+     * Wires the port to raw JDBC, the mapper, the physical-identity verifier and the JSON codec. The
+     * class-level {@code MANDATORY} propagation means the repair service must already have opened
+     * the transaction, so the asset locks taken here are held together with the factory-round write
+     * instead of committing separately.
+     *
+     * @param db JDBC handle for the locked fams_asset reads and the factory movement updates
+     * @param mapper timeline-event writer for the factory dispatch, receipt and parts events
+     * @param identity handover port reused to verify the operator physically holds the asset
+     * @param json codec used to replay the frozen original identity and to build event details
+     */
     public AssetFactoryRepairPort(
             JdbcTemplate db, AssetMapper mapper, AssetHandoverPort identity, ObjectMapper json) {
         this.db = db;
@@ -59,6 +70,23 @@ public class AssetFactoryRepairPort {
         this.json = json;
     }
 
+    /**
+     * Locks the asset and freezes its physical identity for a factory movement. The lifecycle
+     * argument selects which side of the movement is being recorded and must be the value actually
+     * stored on the row, so a dispatch cannot be recorded against an asset that was never received
+     * and vice versa. The returned identity is what the caller persists as the round's original
+     * identity and replays on every later step of the same round.
+     *
+     * @param asset fams_asset primary key to lock
+     * @param version optimistic version the caller read; it is echoed into the identity unchanged
+     * @param lifecycle expected stored lifecycle, either UNDER_REPAIR or FACTORY_REPAIR
+     * @return locked physical identity with frozen camelCase keys and the expected lifecycle
+     * @throws IllegalArgumentException when {@code lifecycle} is neither UNDER_REPAIR nor
+     *     FACTORY_REPAIR
+     * @throws AssetHandoverPort.Failure 404 with code REPAIR_FACTORY_ASSET_NOT_FOUND when the asset
+     *     does not exist, or 409 with code REPAIR_FACTORY_ASSET_CHANGED when the version, lifecycle,
+     *     card stage or exception status no longer match the expected movement source
+     */
     public Identity snapshot(long asset, long version, String lifecycle) {
         if (!java.util.List.of("UNDER_REPAIR", "FACTORY_REPAIR").contains(lifecycle)) {
             throw new IllegalArgumentException("Unsupported factory lifecycle");
@@ -77,6 +105,18 @@ public class AssetFactoryRepairPort {
         return Identity.of(asset, version, row, lifecycle);
     }
 
+    /**
+     * Replays the round's frozen original identity against the freshly locked one. Only asset id,
+     * asset code and serial number are compared: those three are what proves the physical item is
+     * still the one dispatched, while name and lifecycle are allowed to have moved on. A stored
+     * explicit-null serial is compared as null rather than as the empty string, so an asset that
+     * never had a serial cannot be matched against a later-entered one.
+     *
+     * @param current identity just produced by {@link #snapshot(long, long, String)}
+     * @param originalJson original_identity_json persisted when the factory round was opened
+     * @throws AssetHandoverPort.Failure 409 with code REPAIR_FACTORY_ORIGINAL_CHANGED when the id,
+     *     code or serial no longer match the frozen original
+     */
     public void requireOriginal(Identity current, String originalJson) {
         var original = json.readTree(originalJson);
         if (!Objects.equals(current.assetId(), original.path("assetId").asText())
@@ -142,6 +182,38 @@ public class AssetFactoryRepairPort {
         return version + 1;
     }
 
+    /**
+     * Records one factory movement: dispatch away to the factory or receipt of the original back.
+     * Only {@code lifecycle_status} is written, so the frozen formal custody and return target stay
+     * untouched while the item is physically absent. Both directions re-verify the round's original
+     * identity, the operator's physical possession of the asset and, when the asset has a serial,
+     * the observed serial against it case-insensitively. Receipt additionally requires a real
+     * location pinned by version whose warehouse is still active, because the asset returns to a
+     * place that must exist. A trace event is written in both directions with the actual business
+     * time kept separate from the recording time.
+     *
+     * @param asset fams_asset primary key to move
+     * @param version optimistic version the caller read; the row must still be at it
+     * @param originalJson original_identity_json persisted when the factory round was opened
+     * @param receiving {@code true} to receive the original back, {@code false} to dispatch it away
+     * @param observedCode asset code or scanned tag token proving physical possession
+     * @param observedSerial serial read off the physical item, compared only when one is stored
+     * @param actualLocation location the original actually returned to, required when receiving
+     * @param locationVersion pinned version of that location, required when receiving
+     * @param actor account id recorded as updater and event actor
+     * @param repair repair request id embedded in the event detail
+     * @param round factory round id embedded in the event detail
+     * @param actualTime business time the movement physically happened
+     * @param recordedTime time the movement was recorded, stamped on the row and the event
+     * @return the asset version after the guarded update, that is {@code version} plus one
+     * @throws AssetHandoverPort.Failure 404 or 409 as raised by {@link #snapshot}, 409 with code
+     *     REPAIR_FACTORY_ORIGINAL_CHANGED or REPAIR_FACTORY_ORIGINAL_SERIAL_MISMATCH when identity
+     *     replay fails, 409 with code ASSET_PHYSICAL_MISMATCH or ASSET_NOT_FOUND from the possession
+     *     check, 400 with code REPAIR_FACTORY_LOCATION_REQUIRED when a receipt omits the location or
+     *     its version, 409 with code REPAIR_FACTORY_LOCATION_CHANGED when that location or its
+     *     warehouse is gone or inactive, and 409 with code REPAIR_FACTORY_ASSET_CHANGED when the
+     *     guarded update matched no row
+     */
     public long move(
             long asset,
             long version,

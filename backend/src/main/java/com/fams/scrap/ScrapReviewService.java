@@ -43,6 +43,40 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Owns every state transition a scrap request goes through after submission: the administrative
+ * decision, the warehouse claim, the three execution flavours, cancellation, the follow-up completion
+ * of a physical disposal, and the three follow-up flows that undo or repair an executed scrap —
+ * correction, reversal and recovery. Submission itself lives in {@link ScrapService} and reads live in
+ * {@link ScrapReadService}; the asset lifecycle changes are delegated to {@link AssetScrapPort}, which
+ * is why this service never writes {@code fams_asset} directly.
+ *
+ * <p>All twenty-one entry points follow one fixed sequence, and the order is load-bearing. The actor is
+ * revalidated under the identity lock and the required role is asserted first, so an unauthorised caller
+ * cannot probe a row. The request row is then taken {@code SELECT ... FOR UPDATE} before any sub-record,
+ * which makes the disposition, correction, reversal and recovery flows serialise against each other and
+ * against evidence registration in the same order. Only then is idempotency resolved: a SHA-256
+ * fingerprint of the pinned version plus the whole input payload is compared with the receipt stored for
+ * this actor, operation and client key, and a match replays the stored receipt without touching a row
+ * while a mismatch is a conflict. Status and version guards come next, then the cross-domain calls, then
+ * the row updates, the todo maintenance, the audit event and finally the new receipt.
+ *
+ * <p>The request status vocabulary is {@code PENDING_ADMIN_DECISION}, {@code WAITING_WAREHOUSE_CLAIM},
+ * {@code PROCESSING} and {@code EXECUTED}, plus the terminal {@code REJECTED}, {@code CANCELLED},
+ * {@code RESTORE_REQUIRED} and {@code CORRECTED}. A repair-sourced or factory-loss-sourced request
+ * inherits its processor from the repair domain and therefore skips the claim step, going straight from
+ * an approval to {@code PROCESSING}. {@code RESTORE_REQUIRED} is the escape hatch for a rejection or
+ * cancellation whose asset could not be restored automatically — because a loan opened in between, or the
+ * repair side no longer matches — and it is the only state from which a correction may be requested.
+ *
+ * <p>Physical reversibility is enforced at three levels. {@code physicalSource} limits the physical
+ * execution, the disposition follow-up and the reversal to {@code STANDALONE} and {@code REPAIR}
+ * requests, since a loss write-off and a factory replacement have no physical asset left to move. Every
+ * physical step additionally demands a verified identity, an evidence text of at least ten characters and
+ * an occurrence instant that is millisecond-precise and falls inside the window opened by the row it
+ * completes; and a disposal method that differs from the approved one is always refused as outside the
+ * approval rather than being silently accepted.
+ */
 @Service
 @Profile("fams-product")
 public class ScrapReviewService {
@@ -59,6 +93,24 @@ public class ScrapReviewService {
     private final com.fams.auth.ScrapSensitiveAccess sensitive;
     private final ObjectProvider<AttachmentEvidencePort> evidence;
 
+    /**
+     * Wires the review flow to its store, its cross-domain ports and the optional evidence port. The
+     * attachment port is injected as an {@link ObjectProvider} rather than directly because the whole
+     * attachment surface is conditional on {@code fams.attachments.quarantine-root}; a deployment without
+     * quarantine storage must still be able to review and execute scrap requests.
+     *
+     * @param db JDBC template owning the request, correction, reversal, recovery, disposition, lock, todo,
+     *     event and receipt writes
+     * @param json mapper serialising decision, approval and execution snapshots and the fingerprint payloads
+     * @param clock time source for the truncated millisecond timestamp shared by every row of one transition
+     * @param actors actor context supplying the locked revalidation used by every entry point
+     * @param assets asset-side scrap port performing the lifecycle transitions and the version assertions
+     * @param loans loan-domain port asserting and terminating borrowings affected by a loss write-off
+     * @param losses loss-domain port re-reading the confirmed loss evidence at execution time
+     * @param repairs repair-domain port closing, restoring and validating repair and factory sources
+     * @param sensitive gate consulted before attachment evidence is folded into a decision snapshot
+     * @param evidence optional attachment evidence port, absent when quarantine storage is not configured
+     */
     public ScrapReviewService(JdbcTemplate db, ObjectMapper json, Clock clock,
             RequisitionActorContext actors, AssetScrapPort assets, com.fams.loan.LoanLossPort loans,
             LossScrapSourcePort losses, RepairService repairs, com.fams.auth.ScrapSensitiveAccess sensitive,
@@ -75,6 +127,18 @@ public class ScrapReviewService {
         this.evidence = evidence;
     }
 
+    /**
+     * Administrative decision payload for a pending scrap request. The result is validated against the
+     * two accepted literals inside {@link #decide} rather than by an annotation, because the additional
+     * rule — an approval must carry a disposition — depends on which literal was chosen.
+     *
+     * @param assetVersion pinned fams_asset version the decision expects, compared under lock
+     * @param lockVersion pinned version of the unreleased scrap business lock the decision expects
+     * @param result either {@code APPROVE} or {@code REJECT}
+     * @param reason justification of the decision, at most 1000 characters
+     * @param approvedDisposition disposal method the administrator approves, at most 500 characters;
+     *     required on approval, ignored on rejection, and for a loss source it must be a write-off
+     */
     public record Decision(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion,
@@ -82,13 +146,42 @@ public class ScrapReviewService {
             @NotBlank @Size(max = 1000) String reason,
             @Size(max = 500) String approvedDisposition) {}
 
+    /**
+     * Warehouse claim payload. It carries no field of its own beyond the two pinned versions, because
+     * claiming only records who will process the request; everything else is read from the locked row.
+     *
+     * @param assetVersion pinned fams_asset version the claim expects, compared under lock
+     * @param lockVersion pinned version of the unreleased scrap business lock the claim expects
+     */
     public record Claim(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion) {}
 
+    /**
+     * Cancellation payload. Cancellation is the only way out of a pending request that leaves an audit
+     * reason behind without a decision, so the reason is mandatory even though nothing is being judged.
+     *
+     * @param assetVersion pinned fams_asset version the cancellation expects, compared under lock
+     * @param lockVersion pinned version of the unreleased scrap business lock to release
+     * @param reason justification of the cancellation, at most 1000 characters
+     */
     public record Cancellation(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Acknowledgement of any review transition, serialised into {@code fams_scrap_receipt.response_json}
+     * and replayed verbatim on an idempotent retry. It reports the version of the row the transition
+     * acted on — the request row for a request-level step, the sub-record for a correction, reversal or
+     * recovery step — which is why a client can chain the returned version straight into the next call.
+     *
+     * @param id stringified fams_scrap_request primary key the transition belongs to
+     * @param assetId stringified fams_asset primary key the request targets
+     * @param version version of the acted-on row after the transition
+     * @param assetVersion asset version after the transition, bumped only when the asset itself moved
+     * @param ownershipVersion ownership version after the transition, bumped by a claim
+     * @param status resulting status of the acted-on row
+     * @param processorAccountId stringified account now processing the request, null when it is unassigned
+     */
     public record Receipt(String id, String assetId, long version, long assetVersion,
             long ownershipVersion, String status, String processorAccountId) {}
 
@@ -104,6 +197,39 @@ public class ScrapReviewService {
                 && List.of("WAITING_WAREHOUSE_CLAIM", "PROCESSING").contains(status);
     }
 
+    /**
+     * Cancels a standalone scrap request and puts its asset back. Only a {@code STANDALONE} request can
+     * be cancelled, because a loss-sourced or repair-sourced one is the only scrap record of an event
+     * that already happened elsewhere and must instead be rejected so the source flow is restored. While
+     * the request is still awaiting a decision the creator may cancel it themselves; once it has been
+     * claimed or is being processed only an asset administrator may, since a warehouse operator is
+     * already working on it.
+     *
+     * <p>Restoring the asset is attempted rather than assumed. When a borrowing opened against the asset
+     * after the scrap froze it, or the asset side cannot restore the frozen custody, the cancellation
+     * still succeeds but the request ends in {@code RESTORE_REQUIRED} with an administrator todo instead
+     * of {@code CANCELLED}, and the business lock is deliberately left unreleased so the asset stays
+     * blocked until the manual restore happens. Only a fully restored cancellation releases the lock, and
+     * that release compares the pinned lock version, so a concurrent lock change is a conflict.
+     *
+     * <p>The approval, claim and execute todos are closed in every branch, so a cancelled request never
+     * leaves work items behind.
+     *
+     * @param actor cancelling actor, who must be an asset administrator or the request creator
+     * @param id fams_scrap_request primary key to cancel
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CANCEL:<id>}
+     * @param input cancellation payload carrying the pinned asset and lock versions and the reason
+     * @return receipt reporting the request version after cancellation, the asset version, the resulting
+     *     {@code CANCELLED} or {@code RESTORE_REQUIRED} status and any inherited processor
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_CANCEL_FORBIDDEN} when the actor is neither an
+     *     administrator nor the creator, 404 {@code SCRAP_NOT_FOUND}, 409
+     *     {@code SCRAP_CANCEL_NOT_ALLOWED} when the source, status or a pinned version does not permit
+     *     cancellation, 409 {@code SCRAP_ASSET_OR_LOCK_CHANGED} when the lock release does not affect
+     *     exactly one row, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key with a different
+     *     fingerprint, or any refusal {@link AssetScrapPort#requirePending} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt cancel(Actor actor, long id, long version, UUID key, Cancellation input) {
         var current = actors.revalidateLocked(actor);
@@ -159,23 +285,96 @@ public class ScrapReviewService {
                 Objects.toString(request.get("processor_account_id"), null)), time);
     }
 
+    /**
+     * Correction initiation payload. A correction exists because a cancelled or rejected scrap could not
+     * restore its asset automatically, leaving the request in {@code RESTORE_REQUIRED}; the administrator
+     * therefore names the bin the asset is to be returned to at initiation time, and that choice is
+     * pinned by version and re-checked at approval and at execution.
+     *
+     * @param assetVersion pinned fams_asset version, still held by the unreleased scrap business lock
+     * @param lockVersion pinned version of that lock, which the completed correction releases
+     * @param locationId bin location to return the asset to
+     * @param locationVersion pinned version of that bin, compared again before each later step
+     * @param reason justification for the correction, at most 1000 characters
+     */
     public record CorrectionRequest(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion, @NotNull @Positive Long locationId,
             @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Correction decision payload. The target bin is not part of it: an administrator approves or rejects
+     * the bin the initiator already pinned, and a different bin requires a fresh correction request.
+     *
+     * @param assetVersion pinned fams_asset version the decision expects
+     * @param lockVersion pinned version of the scrap business lock the decision expects
+     * @param result either {@code APPROVE} or {@code REJECT}, validated inside {@link #decideCorrection}
+     * @param reason justification of the decision, at most 1000 characters
+     */
     public record CorrectionDecision(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion, @NotBlank String result,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Correction claim payload, and also the internal shape the other correction steps reuse to carry a
+     * pair of pinned versions into the shared guard. Claiming assigns the correction to the calling
+     * warehouse operator and bumps its ownership version; nothing else is supplied by the client.
+     *
+     * @param assetVersion pinned fams_asset version the claim expects
+     * @param lockVersion pinned version of the scrap business lock the claim expects
+     */
     public record CorrectionClaim(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion) {}
 
+    /**
+     * Correction execution payload, carrying the physical facts the warehouse operator observed while
+     * returning the asset to the pinned bin. This is the step that actually moves the asset, so it pins
+     * four versions and demands evidence: the observed code and serial must match the card, the identity
+     * must have been verified physically, and the occurrence instant must be millisecond-precise and fall
+     * between the correction's creation and now plus two seconds of clock tolerance.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param lockVersion pinned version of the scrap business lock to release on success
+     * @param ownershipVersion ownership version returned by the claim, proving the caller still holds it
+     * @param locationVersion pinned version of the target bin, re-read from the correction row and compared
+     * @param observedCode asset code read off the physical asset, at most 64 characters
+     * @param observedSerial serial number read off the physical asset, at most 128 characters, optional
+     * @param occurredAt instant the physical return happened, inside the window described above
+     * @param physicalIdentityVerified must be {@code true}; a false or null value is a 400
+     * @param evidence free-text description of what was verified, between 10 and 2000 characters
+     */
     public record CorrectionExecution(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion, @NotNull @PositiveOrZero Long ownershipVersion,
             @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 64) String observedCode,
             @Size(max = 128) String observedSerial, @NotNull Instant occurredAt,
             @NotNull Boolean physicalIdentityVerified, @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    /**
+     * Opens a correction for a scrap request stuck in {@code RESTORE_REQUIRED}. Only an asset
+     * administrator may initiate one, only for a {@code STANDALONE} request, and only while no active
+     * correction exists — the {@code active_guard} lookup enforces that, so two administrators racing
+     * produce one correction and one 409. The {@code RESTORE_REQUIRED} todo is closed and replaced by a
+     * decision todo, moving the work from "restore this somehow" to "decide this correction".
+     *
+     * <p>The request row itself is not bumped: the correction is a separate record with its own version
+     * chain, and the receipt therefore reports the unchanged request version together with the pinned
+     * asset version. The target bin must already be an active bin at the pinned version, so a correction
+     * cannot be opened against a location that was deactivated meanwhile.
+     *
+     * @param actor initiating asset administrator, recorded as the correction creator
+     * @param id fams_scrap_request primary key in {@code RESTORE_REQUIRED}
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CORRECTION:<id>}
+     * @param input correction payload pinning the asset and lock versions and naming the target bin
+     * @return receipt reporting the unchanged request version, the pinned asset version and the
+     *     {@code PENDING_ADMIN_DECISION} correction status with no processor yet
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the administrator role,
+     *     404 {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_CORRECTION_NOT_ALLOWED} when the source, status
+     *     or a pinned version does not permit a correction, 409 {@code SCRAP_CORRECTION_OPEN} when an
+     *     active correction already exists, 409 {@code SCRAP_CORRECTION_TARGET_CHANGED} when the bin is
+     *     no longer active at the pinned version, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key,
+     *     or any refusal {@link AssetScrapPort#requirePending} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt requestCorrection(Actor actor, long id, long version, UUID key, CorrectionRequest input) {
         var current = current(actor, Role.ASSET_ADMIN);
@@ -240,6 +439,37 @@ public class ScrapReviewService {
         return correction;
     }
 
+    /**
+     * Approves or rejects an open correction. The identifier is the correction row, not the request,
+     * which is why the receipt reports the parent request id read back from the locked correction.
+     *
+     * <p>The shared guard runs before the status check and re-asserts the whole chain: the correction at
+     * the pinned version, asset version and lock version, the parent request still in
+     * {@code RESTORE_REQUIRED}, and the asset still held by that lock at that version. An approval
+     * additionally re-checks that the target bin is still an active bin at the version pinned at
+     * initiation, so a location deactivated while the correction waited cannot be approved into.
+     *
+     * <p>The two outcomes move the todo in opposite directions: an approval closes the decision item and
+     * opens a claim item for the warehouse pool, while a rejection closes the decision item and reopens
+     * {@code RESTORE_REQUIRED} for administrators, because rejecting a correction leaves the asset just
+     * as unrestored as before.
+     *
+     * @param actor deciding asset administrator, recorded in the approval snapshot
+     * @param id fams_scrap_correction primary key to decide
+     * @param version correction row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CORRECTION_DECISION:<id>}
+     * @param input decision payload pinning the asset and lock versions and carrying the result and reason
+     * @return receipt naming the parent request, the correction version after the decision, the unchanged
+     *     asset version and the resulting {@code WAITING_WAREHOUSE_CLAIM} or {@code REJECTED} status
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_CORRECTION_INPUT_INVALID} for a result that is
+     *     neither {@code APPROVE} nor {@code REJECT}, 403 {@code SCRAP_ROLE_REQUIRED} without the
+     *     administrator role, 404 {@code SCRAP_CORRECTION_NOT_FOUND}, 409
+     *     {@code SCRAP_CORRECTION_CHANGED} on any version, parent-status or correction-status mismatch,
+     *     409 {@code SCRAP_CORRECTION_TARGET_CHANGED} when the pinned bin is no longer active, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requirePending} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt decideCorrection(Actor actor, long id, long version, UUID key, CorrectionDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
@@ -283,6 +513,28 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    /**
+     * Assigns an approved correction to the calling warehouse operator. Claiming is what makes the later
+     * execution single-writer: the processor column is set here and the execution step refuses anybody
+     * else, and the ownership version is bumped so the executor must prove it still holds the claim.
+     *
+     * <p>The claim todo is closed and an execute todo is opened against this specific operator, so the
+     * work item follows the person rather than staying in the pool.
+     *
+     * @param actor claiming warehouse operator, recorded as the correction processor
+     * @param id fams_scrap_correction primary key to claim
+     * @param version correction row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CORRECTION_CLAIM:<id>}
+     * @param input claim payload pinning the asset and lock versions
+     * @return receipt naming the parent request, the correction version after the claim, the bumped
+     *     ownership version, the {@code PROCESSING} status and the claiming operator
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 404 {@code SCRAP_CORRECTION_NOT_FOUND}, 409 {@code SCRAP_CORRECTION_CHANGED} when the
+     *     correction is not awaiting a claim or any pinned version moved, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requirePending} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt claimCorrection(Actor actor, long id, long version, UUID key, CorrectionClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -309,6 +561,40 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    /**
+     * Returns the asset to the pinned bin and closes both the correction and the scrap request. The
+     * processor check runs before the idempotency lookup, so an operator who never claimed this
+     * correction cannot replay somebody else's receipt.
+     *
+     * <p>This is the only step that ends a {@code RESTORE_REQUIRED} request successfully: the asset side
+     * restores the corrected custody and lifecycle, the scrap business lock is released with reason
+     * {@code SCRAP_CORRECTED} under the pinned lock version, the request moves to the terminal
+     * {@code CORRECTED} status and the correction to {@code COMPLETED} with the execution snapshot
+     * attached. The lock release is asserted to affect exactly one row, because a release that matched
+     * nothing would mean the asset is still blocked by a lock nobody can name.
+     *
+     * <p>The physical evidence window is anchored on the correction's own creation time, not on the
+     * request's, so an operator cannot backdate a return to before the correction existed. The target bin
+     * version is re-read from the correction row and compared with the payload, which catches a client
+     * that refreshed the location without re-pinning it.
+     *
+     * @param actor executing warehouse operator, who must hold the correction as processor
+     * @param id fams_scrap_correction primary key to execute
+     * @param version correction row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CORRECTION_EXECUTE:<id>}
+     * @param input execution payload pinning four versions and carrying the observed physical facts
+     * @return receipt naming the parent request, the correction version after execution, the asset
+     *     version after the restore, the {@code COMPLETED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_PHYSICAL_EVIDENCE_INVALID} when the identity was
+     *     not verified, the evidence is too short or the occurrence instant is outside the window, 403
+     *     {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_CORRECTION_NOT_FOUND}, 409 {@code SCRAP_CORRECTION_CHANGED} on a version or status
+     *     mismatch, 409 {@code SCRAP_CORRECTION_TARGET_CHANGED} when the pinned bin version differs, 409
+     *     {@code SCRAP_ASSET_OR_LOCK_CHANGED} when the lock release does not affect exactly one row, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal the asset port raises while
+     *     restoring the corrected asset
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeCorrection(Actor actor, long id, long version, UUID key, CorrectionExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -362,14 +648,55 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
 
+    /**
+     * Reversal initiation payload. A reversal is opened against an executed physical scrap whose
+     * disposition is still pending, so unlike a correction it pins no lock version: the scrap business
+     * lock was already released when the scrap was executed, and the asset is reversible precisely
+     * because nothing else has taken it since.
+     *
+     * @param assetVersion pinned fams_asset version, which the asset side asserts is still reversible
+     * @param locationId bin location to return the asset to
+     * @param locationVersion pinned version of that bin, compared again before each later step
+     * @param reason justification for undoing the scrap, at most 1000 characters
+     */
     public record ReversalRequest(@NotNull @PositiveOrZero Long assetVersion, @NotNull @Positive Long locationId,
             @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Reversal decision payload. As with a correction, the target bin is not re-choosable here; the
+     * administrator judges the reversal the initiator pinned.
+     *
+     * @param assetVersion pinned fams_asset version the decision expects
+     * @param result either {@code APPROVE} or {@code REJECT}, validated inside {@link #decideReversal}
+     * @param reason justification of the decision, at most 1000 characters
+     */
     public record ReversalDecision(@NotNull @PositiveOrZero Long assetVersion, @NotBlank String result,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Reversal claim payload, and the internal shape the other reversal steps reuse to carry the single
+     * pinned asset version into the shared guard. Claiming assigns the reversal to the calling warehouse
+     * operator and bumps its ownership version.
+     *
+     * @param assetVersion pinned fams_asset version the claim expects
+     */
     public record ReversalClaim(@NotNull @PositiveOrZero Long assetVersion) {}
 
+    /**
+     * Reversal execution payload, carrying the physical facts observed while putting the scrapped asset
+     * back into stock. The window for {@code occurredAt} is anchored on the reversal's creation time and
+     * the same evidence minimum applies as for a correction, because a reversal is equally a claim that a
+     * physical asset was found and identified.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param ownershipVersion ownership version returned by the claim, proving the caller still holds it
+     * @param locationVersion pinned version of the target bin, re-read from the reversal row and compared
+     * @param observedCode asset code read off the physical asset, at most 64 characters
+     * @param observedSerial serial number read off the physical asset, at most 128 characters, optional
+     * @param occurredAt instant the physical return happened, inside the window described above
+     * @param physicalIdentityVerified must be {@code true}; a false or null value is a 400
+     * @param evidence free-text description of what was verified, between 10 and 2000 characters
+     */
     public record ReversalExecution(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long locationVersion,
             @NotBlank @Size(max = 64) String observedCode, @Size(max = 128) String observedSerial,
@@ -379,6 +706,36 @@ public class ScrapReviewService {
     private static final List<Role> FOLLOW_UP_INITIATORS = List.of(Role.ASSET_ADMIN, Role.WAREHOUSE_OPERATOR,
             Role.DEPARTMENT_ASSET_MANAGER, Role.EMPLOYEE);
 
+    /**
+     * Opens a reversal against an executed physical scrap. Any of the four follow-up initiator roles may
+     * do so, because the person who notices that an asset was scrapped by mistake is often the one who
+     * originally reported it; an employee or a department asset manager is additionally restricted to
+     * requests they created, while administrators and warehouse operators may act on any. The role that
+     * matched first in the fixed order is the one recorded on the audit event.
+     *
+     * <p>Three conditions define the narrow window a reversal lives in: the request must be
+     * {@code EXECUTED} from a physical source, its disposition must still be {@code PENDING_DISPOSITION},
+     * and no active reversal may already exist. Once the disposal has been completed the asset is gone
+     * and only a recovery — not a reversal — can bring it back. Opening the reversal closes the
+     * disposition todo, so the warehouse pool is not simultaneously asked to dispose of an asset that is
+     * being given back.
+     *
+     * @param actor initiating actor, whose role and creator identity are both checked
+     * @param id fams_scrap_request primary key to reverse
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code REVERSAL:<id>}
+     * @param input reversal payload pinning the asset version and naming the target bin
+     * @return receipt naming the request, the unchanged request version, the pinned asset version and the
+     *     {@code PENDING_ADMIN_DECISION} reversal status with no processor yet
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_REVERSAL_FORBIDDEN} when the actor holds none of
+     *     the initiator roles or is not the creator of the request, 404 {@code SCRAP_NOT_FOUND}, 409
+     *     {@code SCRAP_REVERSAL_NOT_ALLOWED} when the source, status, disposition or a pinned version does
+     *     not permit a reversal, 409 {@code SCRAP_REVERSAL_OPEN} when one is already active, 409
+     *     {@code SCRAP_REVERSAL_TARGET_CHANGED} when the bin is not active at the pinned version, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requireReversibleAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt requestReversal(Actor actor, long id, long version, UUID key, ReversalRequest input) {
         var current = actors.revalidateLocked(actor);
@@ -463,6 +820,32 @@ public class ScrapReviewService {
         return reversal;
     }
 
+    /**
+     * Approves or rejects an open reversal. The identifier is the reversal row, not the request, and the
+     * shared guard locks the parent request before the reversal so this flow serialises identically with
+     * disposition completion — the two operations that compete for the same pending disposition.
+     *
+     * <p>An approval re-checks that the target bin is still active at the pinned version and moves the
+     * reversal to the warehouse claim queue. A rejection restores the disposition todo it displaced, and
+     * restores it against the operator already recorded as the disposition processor rather than against
+     * the pool, so the disposal work returns to the person who was holding it.
+     *
+     * @param actor deciding asset administrator, recorded in the approval snapshot
+     * @param id fams_scrap_reversal primary key to decide
+     * @param version reversal row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code REVERSAL_DECISION:<id>}
+     * @param input decision payload pinning the asset version and carrying the result and reason
+     * @return receipt naming the parent request, the reversal version after the decision, the unchanged
+     *     asset version and the resulting {@code WAITING_WAREHOUSE_CLAIM} or {@code REJECTED} status
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_REVERSAL_INPUT_INVALID} for a result that is
+     *     neither {@code APPROVE} nor {@code REJECT}, 403 {@code SCRAP_ROLE_REQUIRED} without the
+     *     administrator role, 404 {@code SCRAP_REVERSAL_NOT_FOUND}, 409 {@code SCRAP_REVERSAL_CHANGED}
+     *     when the parent is no longer an executed physical scrap, the pending disposition disappeared or
+     *     any pinned version moved, 409 {@code SCRAP_REVERSAL_TARGET_CHANGED} when the pinned bin is no
+     *     longer active, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requireReversibleAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt decideReversal(Actor actor, long id, long version, UUID key, ReversalDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
@@ -508,6 +891,25 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    /**
+     * Assigns an approved reversal to the calling warehouse operator and bumps its ownership version, so
+     * the execution step can require both the processor identity and the ownership version the claim
+     * returned. The claim todo is closed and an execute todo is opened against this operator.
+     *
+     * @param actor claiming warehouse operator, recorded as the reversal processor
+     * @param id fams_scrap_reversal primary key to claim
+     * @param version reversal row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code REVERSAL_CLAIM:<id>}
+     * @param input claim payload pinning the asset version
+     * @return receipt naming the parent request, the reversal version after the claim, the bumped
+     *     ownership version, the {@code PROCESSING} status and the claiming operator
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 404 {@code SCRAP_REVERSAL_NOT_FOUND}, 409 {@code SCRAP_REVERSAL_CHANGED} when the
+     *     reversal is not awaiting a claim or any guard condition moved, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requireReversibleAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt claimReversal(Actor actor, long id, long version, UUID key, ReversalClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -534,6 +936,37 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    /**
+     * Puts a scrapped asset back into stock and marks its pending disposition reversed. The asset side
+     * performs the lifecycle change; this method then requires the disposition update to affect exactly
+     * one row, which is what guarantees the reversal and a concurrent disposition completion cannot both
+     * succeed — whichever transaction loses the parent lock finds the disposition no longer pending.
+     *
+     * <p>The request row itself is deliberately left at {@code EXECUTED}: the scrap did happen and its
+     * history must stay intact, so the reversal is recorded on its own row and on the disposition rather
+     * than by rewriting the request status. Consequently the version in the receipt is the reversal row
+     * version, not the request version.
+     *
+     * <p>Both the execute todo and the disposition todo are closed, since a reversal removes the work the
+     * disposition todo was tracking.
+     *
+     * @param actor executing warehouse operator, who must hold the reversal as processor
+     * @param id fams_scrap_reversal primary key to execute
+     * @param version reversal row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code REVERSAL_EXECUTE:<id>}
+     * @param input execution payload pinning three versions and carrying the observed physical facts
+     * @return receipt naming the parent request, the reversal version after execution, the asset version
+     *     after the return to stock, the {@code COMPLETED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_PHYSICAL_EVIDENCE_INVALID} when the identity was
+     *     not verified, the evidence is too short or the occurrence instant is outside the window, 403
+     *     {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_REVERSAL_NOT_FOUND}, 409 {@code SCRAP_REVERSAL_CHANGED} when a guard condition
+     *     moved or the disposition was no longer pending to reverse, 409
+     *     {@code SCRAP_REVERSAL_TARGET_CHANGED} when the pinned bin version differs, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#reverseToStock} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeReversal(Actor actor, long id, long version, UUID key, ReversalExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -581,22 +1014,102 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
 
+    /**
+     * Recovery initiation payload. A recovery follows a loss write-off: the asset was financially removed
+     * and then physically found, so it has to be re-registered. That is a two-stage move and the payload
+     * names both stages up front — a temporary bin with a named temporary custodian where the asset is
+     * parked while the recovery is being approved, and the final target bin it will be returned to.
+     *
+     * @param assetVersion pinned fams_asset version, which the asset side asserts is still recoverable
+     * @param foundAt instant the asset was physically found; must not precede the write-off, must not be
+     *     more than two seconds in the future and must be millisecond-precise
+     * @param temporaryLocationId location the asset is parked in while the recovery is open
+     * @param temporaryLocationVersion pinned version of that temporary location
+     * @param temporaryCustodianEmployeeId employee made accountable for the parked asset, who must be
+     *     active inside an active organization
+     * @param locationId final bin location the asset is to be returned to
+     * @param locationVersion pinned version of that final bin, compared again before each later step
+     * @param reason justification for the recovery, at most 1000 characters
+     */
     public record RecoveryRequest(@NotNull @PositiveOrZero Long assetVersion, @NotNull Instant foundAt,
             @NotNull @Positive Long temporaryLocationId, @NotNull @PositiveOrZero Long temporaryLocationVersion,
             @NotNull @Positive Long temporaryCustodianEmployeeId, @NotNull @Positive Long locationId,
             @NotNull @PositiveOrZero Long locationVersion, @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Recovery decision payload. Neither the temporary parking arrangement nor the final bin is
+     * re-choosable here; the administrator judges the recovery the initiator pinned.
+     *
+     * @param assetVersion pinned fams_asset version the decision expects
+     * @param result either {@code APPROVE} or {@code REJECT}, validated inside {@link #decideRecovery}
+     * @param reason justification of the decision, at most 1000 characters
+     */
     public record RecoveryDecision(@NotNull @PositiveOrZero Long assetVersion, @NotBlank String result,
             @NotBlank @Size(max = 1000) String reason) {}
 
+    /**
+     * Recovery claim payload, and the internal shape the other recovery steps reuse to carry the single
+     * pinned asset version into the shared guard. Claiming assigns the recovery to the calling warehouse
+     * operator and bumps its ownership version.
+     *
+     * @param assetVersion pinned fams_asset version the claim expects
+     */
     public record RecoveryClaim(@NotNull @PositiveOrZero Long assetVersion) {}
 
+    /**
+     * Recovery execution payload, carrying the physical facts observed while re-registering the found
+     * asset. The evidence window is anchored on the recorded {@code foundAt} rather than on the recovery's
+     * creation time, so an operator cannot report a physical handling that predates the discovery.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param ownershipVersion ownership version returned by the claim, proving the caller still holds it
+     * @param locationVersion pinned version of the final target bin, re-read from the recovery row
+     * @param observedCode asset code read off the recovered physical asset, at most 64 characters
+     * @param observedSerial serial number read off the recovered asset, at most 128 characters, optional
+     * @param occurredAt instant the physical re-registration happened, at or after {@code foundAt}
+     * @param physicalIdentityVerified must be {@code true}; a false or null value is a 400
+     * @param evidence free-text description of what was verified, between 10 and 2000 characters
+     */
     public record RecoveryExecution(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long locationVersion,
             @NotBlank @Size(max = 64) String observedCode, @Size(max = 128) String observedSerial,
             @NotNull Instant occurredAt, @NotNull Boolean physicalIdentityVerified,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    /**
+     * Opens a recovery against a scrap whose disposition is a loss write-off. The same four initiator
+     * roles as for a reversal may open one, with employees and department asset managers again restricted
+     * to requests they created, because the person who finds a written-off asset is usually its former
+     * holder.
+     *
+     * <p>The write-off instant is read back out of the stored completion snapshot and used as the lower
+     * bound for {@code foundAt}; since both clients submit second-precision instants, the bound is floored
+     * to seconds so an asset found in the same second as its write-off is not rejected. Every reference
+     * the recovery will later depend on is validated at initiation — the temporary location, the
+     * temporary custodian's active employment inside an active organization, and the final bin — so a
+     * recovery cannot be approved against a target that no longer exists.
+     *
+     * <p>An active or already completed recovery blocks a second one, which is stricter than the reversal
+     * guard: a recovered asset must not be recoverable twice.
+     *
+     * @param actor initiating actor, whose role and creator identity are both checked
+     * @param id fams_scrap_request primary key whose loss was written off
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code RECOVERY:<id>}
+     * @param input recovery payload pinning the asset version and naming both locations and the custodian
+     * @return receipt naming the request, the unchanged request version, the pinned asset version and the
+     *     {@code PENDING_ADMIN_DECISION} recovery status with no processor yet
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_RECOVERY_FACTS_INVALID} when {@code foundAt} is
+     *     outside the write-off window or is not millisecond-precise, 403
+     *     {@code SCRAP_RECOVERY_FORBIDDEN} when the actor holds none of the initiator roles or is not the
+     *     creator, 404 {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_RECOVERY_NOT_ALLOWED} when the request is
+     *     not executed or its disposition is not a loss write-off, 409 {@code SCRAP_RECOVERY_OPEN} when a
+     *     recovery already exists, 409 {@code SCRAP_RECOVERY_TEMPORARY_CHANGED},
+     *     {@code SCRAP_RECOVERY_CUSTODIAN_CHANGED} or {@code SCRAP_RECOVERY_TARGET_CHANGED} when a pinned
+     *     reference is no longer usable, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any
+     *     refusal {@link AssetScrapPort#requireRecoverableAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt requestRecovery(Actor actor, long id, long version, UUID key, RecoveryRequest input) {
         var current = actors.revalidateLocked(actor);
@@ -697,6 +1210,33 @@ public class ScrapReviewService {
         return recovery;
     }
 
+    /**
+     * Approves or rejects an open recovery. The identifier is the recovery row, and the shared guard locks
+     * the parent request before the recovery so this flow serialises identically with any other write-off
+     * follow-up touching the same disposition.
+     *
+     * <p>An approval re-checks that the final target bin is still active at the pinned version and moves
+     * the recovery to the warehouse claim queue. A rejection simply closes the decision todo and records
+     * {@code REJECTED}: unlike a reversal rejection there is no displaced work item to restore, because a
+     * written-off disposition has no pending disposal waiting behind the recovery.
+     *
+     * @param actor deciding asset administrator, recorded in the approval snapshot
+     * @param id fams_scrap_recovery primary key to decide
+     * @param version recovery row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code RECOVERY_DECISION:<id>}
+     * @param input decision payload pinning the asset version and carrying the result and reason
+     * @return receipt naming the parent request, the recovery version after the decision, the unchanged
+     *     asset version and the resulting {@code WAITING_WAREHOUSE_CLAIM} or {@code REJECTED} status
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_RECOVERY_INPUT_INVALID} for a result that is
+     *     neither {@code APPROVE} nor {@code REJECT}, 403 {@code SCRAP_ROLE_REQUIRED} without the
+     *     administrator role, 404 {@code SCRAP_RECOVERY_NOT_FOUND}, 409 {@code SCRAP_RECOVERY_CHANGED}
+     *     when the parent is no longer executed, the write-off disposition disappeared, the recovery is
+     *     not awaiting a decision or a pinned version moved, 409
+     *     {@code SCRAP_RECOVERY_TARGET_CHANGED} when the pinned bin is no longer active, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requireRecoverableAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt decideRecovery(Actor actor, long id, long version, UUID key, RecoveryDecision input) {
         var current = current(actor, Role.ASSET_ADMIN);
@@ -738,6 +1278,25 @@ public class ScrapReviewService {
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
     }
 
+    /**
+     * Assigns an approved recovery to the calling warehouse operator and bumps its ownership version, so
+     * the execution step can require both the processor identity and the ownership version the claim
+     * returned. The claim todo is closed and an execute todo is opened against this operator.
+     *
+     * @param actor claiming warehouse operator, recorded as the recovery processor
+     * @param id fams_scrap_recovery primary key to claim
+     * @param version recovery row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code RECOVERY_CLAIM:<id>}
+     * @param input claim payload pinning the asset version
+     * @return receipt naming the parent request, the recovery version after the claim, the bumped
+     *     ownership version, the {@code PROCESSING} status and the claiming operator
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 404 {@code SCRAP_RECOVERY_NOT_FOUND}, 409 {@code SCRAP_RECOVERY_CHANGED} when the
+     *     recovery is not awaiting a claim or any guard condition moved, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#requireRecoverableAsset} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt claimRecovery(Actor actor, long id, long version, UUID key, RecoveryClaim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -764,6 +1323,33 @@ public class ScrapReviewService {
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    /**
+     * Re-registers a recovered asset and completes the recovery. The asset side performs the move from the
+     * temporary parking location to the final target bin in one step, using the temporary location pinned
+     * at initiation and the target version pinned in the payload, so the operator cannot redirect the
+     * asset to a third place.
+     *
+     * <p>Neither the request row nor its disposition is touched: the scrap stays {@code EXECUTED} and the
+     * disposition stays {@code LOSS_WRITTEN_OFF}, because the financial write-off really happened and must
+     * remain visible in the history. The recovery is the record that the asset came back, and the guard
+     * that refuses a second recovery once one is completed is what keeps that record singular.
+     *
+     * @param actor executing warehouse operator, who must hold the recovery as processor
+     * @param id fams_scrap_recovery primary key to execute
+     * @param version recovery row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code RECOVERY_EXECUTE:<id>}
+     * @param input execution payload pinning three versions and carrying the observed physical facts
+     * @return receipt naming the parent request, the recovery version after execution, the asset version
+     *     after re-registration, the {@code COMPLETED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_PHYSICAL_EVIDENCE_INVALID} when the identity was
+     *     not verified, the evidence is too short or the occurrence instant predates the recorded
+     *     discovery, 403 {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_RECOVERY_NOT_FOUND}, 409 {@code SCRAP_RECOVERY_CHANGED} on a version, status or
+     *     parent-state mismatch, 409 {@code SCRAP_RECOVERY_TARGET_CHANGED} when the pinned bin version
+     *     differs, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal
+     *     {@link AssetScrapPort#reregisterToStock} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeRecovery(Actor actor, long id, long version, UUID key, RecoveryExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -805,6 +1391,54 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
 
+    /**
+     * Decides a pending scrap request, which is the single step where the request leaves the
+     * administrator's queue. An approval moves it to {@code WAITING_WAREHOUSE_CLAIM}, or straight to
+     * {@code PROCESSING} when the request inherits its processor from a repair or factory-loss source and
+     * the warehouse operator who handled that source is therefore already known. A rejection tries to
+     * restore the asset to the state the frozen source snapshot recorded and ends in {@code REJECTED}, or
+     * in {@code RESTORE_REQUIRED} when restoration was not possible.
+     *
+     * <p>Restoration is refused rather than forced whenever the world moved on: for a loss source, an open
+     * borrowing that is not the one frozen in the evidence, or a factory-loss round the repair side no
+     * longer confirms; for a repair source, a repair order that no longer matches the frozen repair
+     * version, processor and borrowing. In those cases the request stays blocked in
+     * {@code RESTORE_REQUIRED} with an administrator todo and the business lock unreleased, which is the
+     * state a correction is later opened against. When restoration does succeed the lock is released with
+     * reason {@code SCRAP_REJECTED}, except for repair sources, whose lock belongs to the repair flow that
+     * takes it back.
+     *
+     * <p>Two approval-only re-validations protect the frozen evidence. A repair-sourced approval asks the
+     * repair domain whether the order could still be restored from this scrap, and a factory replacement
+     * additionally requires the approved disposition to equal the method the factory round approved, so an
+     * administrator cannot approve a different disposal than the one the replacement authorised. A
+     * factory-loss approval requires the recorded processor to still match and the round to still confirm.
+     *
+     * <p>Evidence uploaded against the request is folded into the decision snapshot as the frozen
+     * {@code attachmentEvidence} array. Because that discloses attachment detail to everybody who later
+     * reads the decision, an approval with any attachment first requires the caller to hold the scrap
+     * attachment sensitive read permission; the events are read {@code FOR UPDATE} so a concurrent upload
+     * cannot slip in after the permission check.
+     *
+     * @param actor deciding asset administrator, recorded in the decision snapshot and the audit event
+     * @param id fams_scrap_request primary key to decide
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code DECIDE:<id>}
+     * @param input decision payload pinning the asset and lock versions and carrying the result, reason
+     *     and, on approval, the approved disposition
+     * @return receipt reporting the request version after the decision, the asset version, the resulting
+     *     status and the processor when one was inherited
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_DECISION_INVALID} for an unknown result or an
+     *     approval without a disposition, 403 {@code SCRAP_ROLE_REQUIRED} without the administrator role,
+     *     404 {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_REQUEST_CHANGED} when the request is not pending
+     *     or a pinned version moved, 409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when a loss approval
+     *     is not a write-off or a factory approval differs from the approved method, 409
+     *     {@code SCRAP_SOURCE_OR_OWNERSHIP_CHANGED} when the repair or factory-loss side no longer
+     *     confirms the frozen evidence, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any
+     *     refusal the asset, repair or loan ports raise
+     * @throws com.fams.auth.AuthOperationException 403 when an approval carries attachments and the actor
+     *     lacks the scrap attachment sensitive read permission, or when the identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt decide(Actor actor, long id, long version, UUID key, Decision input) {
         var current = current(actor, Role.ASSET_ADMIN);
@@ -989,6 +1623,28 @@ public class ScrapReviewService {
         return source.equals(repairs.factoryLossScrap(source.repairId(), source.roundId(), asset, source.processorAccountId()));
     }
 
+    /**
+     * Assigns an approved scrap request to the calling warehouse operator. Only requests that went through
+     * the claim queue reach this step; a repair-sourced or factory-loss-sourced request inherited its
+     * processor at decision time and is already {@code PROCESSING}, so claiming it is a version conflict.
+     *
+     * <p>Claiming bumps the ownership version and records the processor, and it is the ownership version
+     * that the execution step requires back. That indirection is what makes a re-claim by a second
+     * operator invalidate the first operator's in-flight execution payload instead of letting both write.
+     *
+     * @param actor claiming warehouse operator, recorded as the request processor
+     * @param id fams_scrap_request primary key to claim
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code CLAIM:<id>}
+     * @param input claim payload pinning the asset and lock versions
+     * @return receipt reporting the request version after the claim, the unchanged asset version, the
+     *     bumped ownership version, the {@code PROCESSING} status and the claiming operator
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 404 {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_REQUEST_CHANGED} when the request is not
+     *     awaiting a claim or a pinned version moved, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused
+     *     key, or any refusal {@link AssetScrapPort#requirePending} raises
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt claim(Actor actor, long id, long version, UUID key, Claim input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -1013,6 +1669,31 @@ public class ScrapReviewService {
                 ownership, "PROCESSING", Long.toString(current.id())), time);
     }
 
+    /**
+     * Physical scrap execution payload for a {@code STANDALONE} or {@code REPAIR} source. It is the
+     * richest payload in the domain because executing a scrap is the point where the register is told
+     * what was physically observed: the asset is moved to a scrap custody under a named custodian, and a
+     * disposal deadline is opened for a follow-up that has not happened yet.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param lockVersion pinned version of the scrap business lock, released once execution succeeds
+     * @param ownershipVersion ownership version returned by the claim or the inherited decision
+     * @param observedCode asset code read off the physical asset, at most 64 characters
+     * @param observedSerial serial number read off the physical asset, at most 128 characters, optional
+     * @param locationId location the scrapped asset is moved to
+     * @param locationVersion pinned version of that location, compared by the asset port
+     * @param custodianEmployeeId employee made accountable for the scrapped asset, who must be active at
+     *     the pinned version inside an active organization
+     * @param custodianVersion pinned version of that employee record
+     * @param occurredAt instant the physical scrap happened; must be millisecond-precise and fall between
+     *     the request's last update and now plus two seconds of clock tolerance
+     * @param physicalIdentityVerified must be {@code true}; a false or null value is a 400
+     * @param evidence free-text description of what was verified, between 10 and 2000 characters
+     * @param dispositionMethod disposal method actually applied, at most 500 characters; must equal the
+     *     approved disposition, whitespace aside
+     * @param plannedDisposalDate intended disposal date, used as the disposition due date; when null the
+     *     due date defaults to thirty days after today in the configured business timezone
+     */
     public record Execution(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion,
@@ -1029,6 +1710,48 @@ public class ScrapReviewService {
             @NotBlank @Size(max = 500) String dispositionMethod,
             LocalDate plannedDisposalDate) {}
 
+    /**
+     * Executes a physical scrap for a {@code STANDALONE} or {@code REPAIR} source: the asset is moved into
+     * scrap custody, the request becomes {@code EXECUTED}, the business lock is released and a pending
+     * disposition is opened with a due date. The processor identity is checked before the idempotency
+     * lookup, so an operator who never claimed the request cannot replay the receipt of the one who did.
+     *
+     * <p>A repair-sourced execution has to unwind the repair first. The asset side asserts the frozen
+     * repair source still matches, the repair order is closed from the scrap, and any borrowing recorded
+     * in the frozen evidence is terminated as lost — the asset is not coming back to its borrower. A
+     * standalone execution instead only has to pass the loan-side assertion that no borrowing is open.
+     *
+     * <p>The disposal deadline is computed in the business timezone taken from the active parameter
+     * snapshot, which is read {@code FOR SHARE} so a concurrent parameter change cannot produce a due date
+     * that disagrees with the timezone stored on the disposition row. An explicit planned date is used as
+     * given and must not lie in the past; otherwise the due date defaults to thirty days out. The stored
+     * due instant is the start of the day after the due date in that zone, so the overdue queue flips over
+     * at a business midnight rather than at an arbitrary time.
+     *
+     * <p>The custody snapshot written to the disposition row is the execution payload itself, which is
+     * what a later reversal or completion compares the physical facts against.
+     *
+     * @param actor executing warehouse operator, who must hold the request as processor
+     * @param id fams_scrap_request primary key to execute
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code EXECUTE:<id>}
+     * @param input execution payload pinning three versions and carrying the observed physical facts, the
+     *     destination, the custodian and the disposal plan
+     * @return receipt reporting the request version after execution, the asset version after the move, the
+     *     {@code EXECUTED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_PHYSICAL_EVIDENCE_INVALID} when the identity was
+     *     not verified, the evidence is too short or the occurrence instant is outside the window, 400
+     *     {@code SCRAP_DISPOSITION_DATE_INVALID} for a planned disposal date in the past, 403
+     *     {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_REQUEST_CHANGED} when the request is not processing or
+     *     a pinned version moved, 409 {@code SCRAP_SOURCE_OR_OWNERSHIP_CHANGED} for a non-physical source
+     *     or a stale ownership version, 409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when the method
+     *     differs from the approved disposition, 409 {@code SCRAP_DISPOSITION_CUSTODIAN_CHANGED} when the
+     *     custodian is not active at the pinned version, 409 {@code SCRAP_ASSET_OR_LOCK_CHANGED} when the
+     *     lock release does not affect exactly one row, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused
+     *     key, or any refusal the asset, repair or loan ports raise
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt execute(Actor actor, long id, long version, UUID key, Execution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -1110,12 +1833,65 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }
 
+    /**
+     * Factory-replacement execution payload. It is far smaller than {@link Execution} because a factory
+     * replacement has no physical asset left to observe: the original was handed to the service partner
+     * and disposed of there, so the method, the recipient and the evidence were all fixed when the
+     * replacement round was approved. The operator only confirms when that disposal happened.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param lockVersion pinned version of the scrap business lock, released once execution succeeds
+     * @param ownershipVersion ownership version inherited from the decision, which assigned the processor
+     * @param occurredAt instant the factory disposal happened; must be millisecond-precise and fall between
+     *     the round's dispatch and its recorded observation, and for an initial-batch replacement it must
+     *     equal that recorded observation exactly
+     */
     public record FactoryExecution(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion,
             @NotNull @PositiveOrZero Long ownershipVersion,
             @NotNull Instant occurredAt) {}
 
+    /**
+     * Executes a factory-replacement scrap, which closes the whole flow in one step: the request becomes
+     * {@code EXECUTED} and its disposition is inserted already {@code DISPOSED}, with no pending disposal
+     * and therefore no disposition todo. There is nothing left to dispose of, because the service partner
+     * took the original asset under the method the replacement round approved.
+     *
+     * <p>The disposal facts are not supplied by the operator. They are re-derived from the approved factory
+     * evidence — method, provider as recipient, and the account that recorded it — and the operator only
+     * confirms the instant. That instant is constrained to the window between the round's dispatch and its
+     * recorded observation; for a replacement that came out of an initial publication batch it must equal
+     * the recorded observation exactly, because that disposition was already documented at import time and
+     * there is no second physical event to date.
+     *
+     * <p>The evidence attached to the completion snapshot differs by origin: an initial-batch disposal
+     * carries the textual evidence reference frozen in the source snapshot, while a normal replacement
+     * carries the identifiers of the attachment objects the repair domain holds, and those objects are
+     * re-validated before use so a deleted attachment cannot be cited.
+     *
+     * <p>The repair order is closed from the scrap and any frozen borrowing is terminated as lost, exactly
+     * as in the physical execution path, before the asset side writes the replacement outcome.
+     *
+     * @param actor executing warehouse operator, who must hold the request as inherited processor
+     * @param id fams_scrap_request primary key to execute
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code EXECUTE_FACTORY:<id>}
+     * @param input execution payload pinning three versions and confirming the disposal instant
+     * @return receipt reporting the request version after execution, the asset version after the factory
+     *     outcome, the {@code EXECUTED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_FACTORY_DISPOSITION_TIME_INVALID} when the
+     *     confirmed instant falls outside the approved window or is not millisecond-precise, 403
+     *     {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_REQUEST_CHANGED} when the request is not processing or
+     *     a pinned version moved, 409 {@code SCRAP_SOURCE_OR_OWNERSHIP_CHANGED} for a non-factory source
+     *     or a stale ownership version, 409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when the approved
+     *     factory evidence is gone or its method differs from the approved disposition, 409
+     *     {@code SCRAP_ASSET_OR_LOCK_CHANGED} when the lock release does not affect exactly one row, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal the asset, repair or loan
+     *     ports raise
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeFactory(Actor actor, long id, long version, UUID key, FactoryExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -1188,12 +1964,62 @@ public class ScrapReviewService {
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }
 
+    /**
+     * Loss write-off execution payload. A lost asset is not physically present, so the payload carries no
+     * observed code, serial, location or custodian — only the versions to pin and the evidence text that
+     * justifies removing the asset from the books.
+     *
+     * @param assetVersion pinned fams_asset version the execution expects
+     * @param lockVersion pinned version of the scrap business lock, released once execution succeeds
+     * @param ownershipVersion ownership version inherited from the decision, which assigned the processor
+     * @param evidence free-text justification of the write-off, between 10 and 2000 characters
+     */
     public record LossExecution(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long lockVersion,
             @NotNull @PositiveOrZero Long ownershipVersion,
             @NotBlank @Size(min = 10, max = 2000) String evidence) {}
 
+    /**
+     * Writes off a lost asset, which is the financial end of a loss-sourced scrap. The request becomes
+     * {@code EXECUTED} and its disposition is inserted directly as {@code LOSS_WRITTEN_OFF} with the
+     * write-off instant recorded in the completion snapshot — the single fact the read side keeps, since
+     * everything else in the execution snapshot is internal evidence.
+     *
+     * <p>Before anything is written, the loss report is re-read at the version frozen into the source
+     * snapshot and compared field by field: same asset, same lifecycle status, the same six custody fields
+     * under their two different key vocabularies, and a byte-equal confirmation tree. Any difference means
+     * the loss the administrator approved is not the loss being written off, and the execution is refused
+     * rather than proceeding on stale evidence.
+     *
+     * <p>The three loan situations frozen at submission are then unwound in the same order. A
+     * {@code BORROWED} loss terminates the open borrowing as lost using the loan id and version frozen in
+     * the evidence. A loss that happened during a factory repair round re-validates that the round still
+     * matches on repair, round and processor, closes the repair from the factory-loss scrap and terminates
+     * that round's borrowing if it had one. Any other lifecycle only has to pass the loan-side recovery
+     * assertion. Finally the loss report's own follow-up is closed, so the loss domain stops waiting for a
+     * scrap that has now happened.
+     *
+     * @param actor executing warehouse operator, who must hold the request as inherited processor
+     * @param id fams_scrap_request primary key to write off
+     * @param version request row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code EXECUTE_LOSS:<id>}
+     * @param input execution payload pinning three versions and carrying the write-off evidence text
+     * @return receipt reporting the request version after execution, the asset version after the write-off,
+     *     the {@code EXECUTED} status and the executing operator
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_LOSS_EVIDENCE_REQUIRED} when the evidence text is
+     *     shorter than ten characters, 403 {@code SCRAP_ROLE_REQUIRED} or 403
+     *     {@code SCRAP_PROCESSOR_REQUIRED}, 404 {@code SCRAP_NOT_FOUND}, 409
+     *     {@code SCRAP_REQUEST_CHANGED} when the request is not processing or a pinned version moved, 409
+     *     {@code SCRAP_SOURCE_OR_OWNERSHIP_CHANGED} for a non-loss source or a stale ownership version,
+     *     409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when the approved disposition is not a write-off,
+     *     409 {@code SCRAP_LOSS_SOURCE_CHANGED} when the loss report, its custody, its confirmation or its
+     *     factory round no longer matches the frozen evidence, 409
+     *     {@code SCRAP_ASSET_OR_LOCK_CHANGED} when the lock release does not affect exactly one row, 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, or any refusal the asset, loss, repair or
+     *     loan ports raise
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeLoss(Actor actor, long id, long version, UUID key, LossExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
@@ -1288,6 +2114,32 @@ public class ScrapReviewService {
         }
     }
 
+    /**
+     * Physical disposal completion payload, the follow-up that closes an executed scrap. The asset was
+     * already moved into scrap custody by {@link #execute}; this records that it has now actually left,
+     * to whom, when, on whose hands and with which evidence objects attached.
+     *
+     * <p>The method is not free text: it must equal the {@code dispositionMethod} frozen in the execution
+     * snapshot, so the follow-up cannot quietly change the disposal that was approved and executed. The
+     * operator employee is separate from the request processor and is pinned by version, because the person
+     * who physically handed the asset over is recorded by name in the completion snapshot and must be an
+     * active employee of an active organization at that moment.
+     *
+     * @param requestVersion pinned fams_scrap_request version, which must still be {@code EXECUTED}
+     * @param ownershipVersion pinned ownership version of that request
+     * @param observedCode asset code read off the physical asset, at most 64 characters, asserted against
+     *     the scrapped custody by the asset port
+     * @param observedSerial serial number read off the physical asset, at most 128 characters, optional
+     * @param occurredAt instant the disposal happened; must be millisecond-precise and fall between the
+     *     execution instant and now
+     * @param method disposal method actually applied, at most 500 characters, which must equal the method
+     *     frozen in the execution snapshot
+     * @param recipient party that received the asset, at most 500 characters
+     * @param operatorEmployeeId employee who physically performed the disposal
+     * @param operatorVersion pinned version of that employee record
+     * @param evidenceObjectIds one to fourteen attachment objects uploaded under the
+     *     {@code SCRAP_DISPOSITION} type by this operator, each of which must have a clean scan result
+     */
     public record DispositionCompletion(
             @NotNull @PositiveOrZero Long requestVersion,
             @NotNull @PositiveOrZero Long ownershipVersion,
@@ -1299,13 +2151,92 @@ public class ScrapReviewService {
             @NotNull @Positive Long operatorEmployeeId,
             @NotNull @PositiveOrZero Long operatorVersion,
             @NotNull @Size(min = 1, max = 14) List<@NotNull UUID> evidenceObjectIds) {
+        /**
+         * Copies the evidence object identifiers into an unmodifiable list so the payload that is written
+         * into the completion snapshot cannot be mutated afterwards by its caller. A null list is preserved
+         * as null rather than being normalised, leaving the {@code @NotNull} constraint to reject it.
+         *
+         * @param requestVersion pinned fams_scrap_request version expected to be {@code EXECUTED}
+         * @param ownershipVersion pinned ownership version of that request
+         * @param observedCode asset code observed on the physical asset
+         * @param observedSerial serial number observed on the physical asset, optional
+         * @param occurredAt instant the disposal happened
+         * @param method disposal method, which must match the executed one
+         * @param recipient party that received the asset
+         * @param operatorEmployeeId employee who performed the disposal
+         * @param operatorVersion pinned version of that employee record
+         * @param evidenceObjectIds attachment object identifiers, replaced by an immutable copy when non-null
+         */
         public DispositionCompletion {
             evidenceObjectIds = evidenceObjectIds == null ? null : List.copyOf(evidenceObjectIds);
         }
     }
 
+    /**
+     * Acknowledgement of a completed disposition. It is a separate, narrower shape than {@link Receipt}
+     * because the disposition step touches no asset and no request row: the asset version is unchanged and
+     * the ownership version is not involved, so reporting them would imply a movement that did not happen.
+     * Like every other receipt it is stored in {@code fams_scrap_receipt} and replayed verbatim on retry.
+     *
+     * @param id stringified fams_scrap_request primary key whose disposition was completed
+     * @param version disposition row version after the completion
+     * @param status resulting disposition status, always {@code DISPOSED}
+     */
     public record DispositionReceipt(String id, long version, String status) {}
 
+    /**
+     * Records that a scrapped asset has physically left, closing the disposition the execution opened.
+     * This is the last step of a physical scrap and the only entry point that returns a
+     * {@link DispositionReceipt}; it bumps the disposition row, never the request row, which stays
+     * {@code EXECUTED} with its history intact.
+     *
+     * <p>The lock order is deliberate and shared with evidence registration and with the reversal flow:
+     * the request row is taken {@code FOR UPDATE} first, then any active reversal is checked, then the
+     * disposition row. Reversal and completion are the two operations that compete for one pending
+     * disposition, and taking the parent first makes them serialise the same way in both directions. An
+     * active reversal therefore blocks the completion with a conflict instead of the two writing over each
+     * other. The disposition processor must be the caller, and the {@code DISPOSITION} todo assigned to
+     * that caller must close exactly one row, so a completion cannot succeed against a todo somebody else
+     * already took.
+     *
+     * <p>Every reference the completion cites is re-validated rather than trusted. The method must equal
+     * the executed one, the instant must fall between the execution and now, the asset port must accept the
+     * observed code and serial against the scrapped custody, and the operator employee must be active at
+     * the pinned version. Evidence objects must be distinct, must belong to this disposition scope and
+     * this operator, and must each carry a clean scan result; the caller must also hold the scrap
+     * attachment sensitive read permission, since the completion snapshot names the operator and cites the
+     * objects. A deployment without quarantine storage cannot satisfy that last requirement and reports
+     * the attachment surface as unavailable rather than completing without its evidence.
+     *
+     * <p>The completion snapshot stores the whole payload as {@code facts} alongside the resolved operator
+     * name, the recording account and the recording instant, which is exactly the shape the read side
+     * projects into {@link ScrapViews.Completion}.
+     *
+     * @param actor completing warehouse operator, who must hold the disposition as processor
+     * @param id fams_scrap_request primary key whose disposition is completed; the disposition is keyed by
+     *     request, so this is also the disposition identity
+     * @param version disposition row version the caller saw, echoed as {@code If-Match-Version}
+     * @param key client idempotency key scoping the receipt row for {@code COMPLETE_DISPOSITION:<id>}
+     * @param input completion payload pinning the request and ownership versions and carrying the physical
+     *     disposal facts and evidence objects
+     * @return receipt naming the request, the disposition version after completion and the
+     *     {@code DISPOSED} status
+     * @throws AssetHandoverPort.Failure 400 {@code SCRAP_DISPOSITION_DATE_INVALID} when the disposal
+     *     instant is outside the window opened by the execution or is not millisecond-precise, 403
+     *     {@code SCRAP_ROLE_REQUIRED} or 403 {@code SCRAP_PROCESSOR_REQUIRED}, 404
+     *     {@code SCRAP_NOT_FOUND}, 409 {@code SCRAP_DISPOSITION_REVERSAL_OPEN} while a reversal is active,
+     *     409 {@code SCRAP_DISPOSITION_CHANGED} when the request or disposition left the expected state or
+     *     the update did not affect exactly one row, 409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when
+     *     the method differs from the executed one, 409
+     *     {@code SCRAP_DISPOSITION_OPERATOR_CHANGED} when the operator employee is not active at the
+     *     pinned version, 409 {@code SCRAP_DISPOSITION_EVIDENCE_INVALID} for duplicated, foreign or
+     *     unclean evidence objects, 409 {@code SCRAP_DISPOSITION_TODO_CHANGED} when the disposition todo
+     *     was not the caller's to close, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key, 503
+     *     {@code SCRAP_ATTACHMENT_STORAGE_UNAVAILABLE} when the evidence port is absent, or any refusal
+     *     {@link AssetScrapPort#requireDispositionAsset} raises
+     * @throws com.fams.auth.AuthOperationException 403 when the actor lacks the scrap attachment sensitive
+     *     read permission, or when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public DispositionReceipt completeDisposition(Actor actor, long id, long version, UUID key,
             DispositionCompletion input) {

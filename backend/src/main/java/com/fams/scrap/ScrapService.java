@@ -49,6 +49,22 @@ public class ScrapService {
     private final LoanLossPort loans;
     private final RepairService repairs;
 
+    /**
+     * Wires the scrap document store to the four cross-domain ports a submission can originate from. The
+     * service never decides an asset lifecycle transition itself — it writes the request row, the lock
+     * and the receipt, and asks {@link AssetScrapPort} to freeze the asset. The three source ports exist
+     * because a loss report, a repair order and a loan each hold evidence the scrap request must carry
+     * into its frozen snapshot, and each of them validates that evidence under its own lock.
+     *
+     * @param db JDBC template writing the request, lock, todo, event, audit and receipt rows
+     * @param json mapper serialising the frozen source snapshot and the idempotency fingerprint payloads
+     * @param clock time source for the truncated millisecond timestamp shared by every row of one submission
+     * @param actors actor context supplying {@code revalidateLocked} for each submission entry point
+     * @param assets asset-side scrap port building the stored source and freezing the asset lifecycle
+     * @param losses loss-domain port supplying the confirmed loss evidence a loss-sourced scrap carries
+     * @param loans loan-domain port asserting the borrowing or recovery state a loss-sourced scrap needs
+     * @param repairs repair-domain port supplying repair and factory-replacement sources and the lock handoff
+     */
     public ScrapService(JdbcTemplate db, ObjectMapper json, Clock clock,
             RequisitionActorContext actors, AssetScrapPort assets, LossScrapSourcePort losses, LoanLossPort loans, RepairService repairs) {
         this.db = db;
@@ -61,6 +77,19 @@ public class ScrapService {
         this.repairs = repairs;
     }
 
+    /**
+     * Standalone scrap submission payload, and also the normalised internal shape every other source is
+     * converted into before the request row is written. The three text fields are stored stripped, and
+     * their size limits are enforced here rather than in the database so an oversized submission is a
+     * 400 at the boundary instead of a truncation.
+     *
+     * @param assetId fams_asset primary key to scrap, supplied by the client only for a standalone request
+     * @param assetVersion version of the asset the caller saw, pinned and compared under lock
+     * @param reason justification for scrapping, at most 2000 characters
+     * @param observedCondition reported physical condition, at most 2000 characters
+     * @param proposedDisposition disposition the requester proposes, at most 500 characters; the decision
+     *     may still choose another one
+     */
     public record Submission(
             @Positive long assetId,
             @NotNull @PositiveOrZero Long assetVersion,
@@ -68,8 +97,32 @@ public class ScrapService {
             @NotBlank @Size(max = 2000) String observedCondition,
             @NotBlank @Size(max = 500) String proposedDisposition) {}
 
+    /**
+     * Submission acknowledgement, serialised into {@code fams_scrap_receipt.response_json} and replayed
+     * verbatim whenever the same actor presents the same idempotency key inside the receipt window. A
+     * replay therefore returns the version and status recorded at the original submission, not the
+     * current row state, which is exactly what makes the retry safe.
+     *
+     * @param id stringified fams_scrap_request primary key created by the submission
+     * @param assetId stringified fams_asset primary key the request targets
+     * @param assetVersion asset version after the freeze, which is one above the pinned input version
+     * @param version request row version, always 0 at submission because no mutation has happened yet
+     * @param status request status after submission, always {@code PENDING_ADMIN_DECISION}
+     */
     public record Receipt(String id, String assetId, long assetVersion, long version, String status) {}
 
+    /**
+     * Loss-sourced scrap submission payload. It omits the asset identifier on purpose: the asset is taken
+     * from the confirmed loss report named in the path, so a client cannot scrap a different asset than
+     * the one that was lost. The report version travels in the {@code If-Match-Version} header and joins
+     * this payload in the idempotency fingerprint, which means reusing a key with a different report
+     * version is a conflict rather than a replay.
+     *
+     * @param assetVersion version of the lost asset the caller saw, pinned and compared under lock
+     * @param reason justification for scrapping the lost asset, at most 2000 characters
+     * @param observedCondition reported physical condition, at most 2000 characters
+     * @param proposedDisposition disposition the requester proposes, at most 500 characters
+     */
     public record LossSubmission(@NotNull @PositiveOrZero Long assetVersion,
             @NotBlank @Size(max = 2000) String reason,
             @NotBlank @Size(max = 2000) String observedCondition,
@@ -77,6 +130,30 @@ public class ScrapService {
 
     private record LossIntent(long reportVersion, LossSubmission input) {}
 
+    /**
+     * Creates a standalone scrap request for an asset that is not already the subject of a loss report,
+     * a repair order or a factory replacement. The actor is revalidated under the identity lock, the
+     * idempotency fingerprint is computed over the whole payload, and a matching prior receipt short
+     * circuits the rest of the method so no row is written twice.
+     *
+     * <p>The asset side supplies the stored source and then freezes the asset lifecycle. Because no other
+     * flow holds this asset, the shared creation path inserts a fresh {@code SCRAP} business lock keyed by
+     * the request id in both the business and the item column, so from that point the asset cannot be
+     * moved by any other flow until the request is decided, cancelled or executed. A submission event and
+     * an audit event are written with the payload facts, and an {@code ASSET_ADMIN} approval todo is opened.
+     *
+     * @param actor submitting actor, whose account becomes the request creator
+     * @param key client idempotency key scoping the receipt row for the {@code SUBMIT} operation
+     * @param input standalone submission payload carrying the asset and the three text fields
+     * @return receipt naming the created request, the asset, the frozen asset version and the pending status
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ASSET_NOT_ELIGIBLE} when the actor is neither a
+     *     global applicant nor the responsible employee nor the using organization's asset manager, 404
+     *     {@code ASSET_NOT_FOUND}, 409 {@code SCRAP_ASSET_CHANGED} on a version mismatch, 409
+     *     {@code SCRAP_SOURCE_NOT_ELIGIBLE} when the card is not active and normal in stock or in use, 409
+     *     {@code SCRAP_ASSET_LOCKED} when the asset already carries an unreleased business lock, or 409
+     *     {@code SCRAP_IDEMPOTENCY_CONFLICT} when the key is reused with a different fingerprint
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt submit(Actor actor, UUID key, Submission input) {
         var current = actors.revalidateLocked(actor);
@@ -90,6 +167,40 @@ public class ScrapService {
                 new AssetScrapPort.StoredSource(source, null, null, null), input, null, null);
     }
 
+    /**
+     * Creates a scrap request from a confirmed loss report, so that a lost asset can be written off
+     * financially. The report is re-read under its own lock at the pinned version and its confirmation
+     * evidence is copied into the frozen snapshot, which means the request keeps proving its origin even
+     * after the report itself moves on.
+     *
+     * <p>Three loan and repair situations are distinguished, because each leaves a different trace that
+     * the write-off must account for. A {@code BORROWED} loss still has an open borrowing, which is
+     * resolved and recorded by id and version. A loss that occurred during a factory repair round is
+     * resolved through the repair domain, and the repair processor becomes the scrap processor, so the
+     * request starts already assigned; when the repair side can no longer confirm the round, the
+     * submission is refused as a source change rather than being created without its proof. Any other
+     * lifecycle only has to pass the loan-side recovery assertion.
+     *
+     * <p>The asset is then frozen through the loss branch and a fresh {@code SCRAP} business lock is
+     * inserted, since no other flow was holding the asset.
+     *
+     * @param actor submitting actor, whose account becomes the request creator
+     * @param reportId fams_loss_report primary key the scrap originates from
+     * @param version loss report version the caller saw, pinned and joined into the idempotency fingerprint
+     * @param key client idempotency key scoping the receipt row for {@code SUBMIT_LOSS:<reportId>}
+     * @param input loss submission payload carrying the pinned asset version and the three text fields
+     * @return receipt naming the created request, the lost asset, the frozen asset version and the
+     *     pending status
+     * @throws AssetHandoverPort.Failure 409 {@code SCRAP_SOURCE_OR_OWNERSHIP_CHANGED} when the factory
+     *     repair round no longer confirms the loss, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key
+     *     with a different fingerprint, or any refusal the asset port raises while freezing the loss source
+     * @throws com.fams.loss.LossFailure 403 {@code SCRAP_LOSS_SOURCE_FORBIDDEN} when the actor may not use
+     *     this report as a source, 404 {@code LOSS_NOT_FOUND}, or 409 {@code SCRAP_LOSS_SOURCE_CHANGED}
+     *     when the report moved past the pinned version
+     * @throws com.fams.loan.LoanLossPort.Failure {@code LOSS_LOAN_IDENTITY_CHANGED} when the borrower or
+     *     using organization recorded on the loss no longer matches the loan side, reported as 409
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromLoss(Actor actor, long reportId, long version, UUID key, LossSubmission input) {
         var current = actors.revalidateLocked(actor);
@@ -131,6 +242,21 @@ public class ScrapService {
                 new AssetScrapPort.StoredSource(source, proof, null, null), input, null, processor);
     }
 
+    /**
+     * Repair-sourced scrap submission payload, used both for an internal repair that ended in scrapping
+     * the asset and for a factory replacement. It pins three independent versions instead of one, because
+     * three different rows have to agree before the handoff is safe: the asset, the asset ownership
+     * projection and the repair business lock that is about to be transferred to the new scrap request.
+     *
+     * @param assetVersion version of the asset the caller saw, compared by the repair and asset domains
+     * @param ownershipVersion version of the asset ownership projection the caller saw
+     * @param lockVersion version of the repair business lock to hand over; a mismatch means another flow
+     *     already touched the lock and the submission is refused
+     * @param reason justification for scrapping, at most 2000 characters
+     * @param observedCondition reported physical condition, at most 2000 characters
+     * @param proposedDisposition disposition the requester proposes, at most 500 characters; for a
+     *     factory replacement it must equal the method already approved in the repair round
+     */
     public record RepairSubmission(@NotNull @PositiveOrZero Long assetVersion,
             @NotNull @PositiveOrZero Long ownershipVersion, @NotNull @PositiveOrZero Long lockVersion,
             @NotBlank @Size(max = 2000) String reason, @NotBlank @Size(max = 2000) String observedCondition,
@@ -138,6 +264,33 @@ public class ScrapService {
 
     private record RepairLink(RepairService.ScrapSource source, long lockVersion, Long replacementId) {}
 
+    /**
+     * Creates a scrap request from an internal repair order that physically accepted the asset and then
+     * concluded it must be scrapped. The warehouse operator role is asserted before the idempotency
+     * lookup, so a caller without the role cannot even probe whether a key was used.
+     *
+     * <p>The repair domain re-reads the order under its own lock at all four pinned versions and returns
+     * the evidence bundle — original snapshot, approval and physical-handling context, and any open
+     * borrowing — which is copied into the frozen source snapshot. Because the repair already holds a
+     * business lock on the asset, the shared creation path does not insert a new one; the repair lock is
+     * transferred to the new request and the repair order is closed and bumped in the same transaction.
+     *
+     * @param actor submitting warehouse operator, who must also own the repair order
+     * @param repairId fams_repair_request primary key the scrap originates from
+     * @param version repair order version the caller saw, pinned and joined into the idempotency fingerprint
+     * @param key client idempotency key scoping the receipt row for {@code SUBMIT_REPAIR:<repairId>}
+     * @param input repair submission payload carrying the three pinned versions and the three text fields
+     * @return receipt naming the created request, the asset, the frozen asset version and the pending
+     *     status, with the repair processor recorded as the scrap processor
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key with a different fingerprint, or
+     *     any refusal the asset port raises while freezing the repair source
+     * @throws com.fams.repair.RepairFailure as raised by the repair domain, for example 409
+     *     {@code REPAIR_PHYSICAL_ACCEPTANCE_REQUIRED} when the order never accepted the asset physically
+     * @throws com.fams.loan.LoanRepairPort.Failure when the open borrowing no longer matches the loan the
+     *     repair order was created against
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromRepair(Actor actor, long repairId, long version, UUID key, RepairSubmission input) {
         var current = actors.revalidateLocked(actor);
@@ -154,6 +307,43 @@ public class ScrapService {
         return createFromRepair(actor, current, operation, key, hash, input, repair, null);
     }
 
+    /**
+     * Creates a scrap request for the original asset of one factory replacement. A factory repair
+     * replaces an asset at a service partner, and the asset that came back is scrapped under the disposal
+     * method that the replacement round already approved; this method therefore pins two more versions
+     * than the internal repair path — the repair order and the round — and identifies the request by the
+     * replacement rather than by the repair, since one repair can have several rounds and replacements.
+     *
+     * <p>The proposed disposition is compared against the approved {@code method} inside the repair
+     * context, after stripping surrounding whitespace, and any difference is refused: the scrap may only
+     * execute a disposal that already went through factory approval, so a caller cannot widen the
+     * approved outcome by wording the proposal differently.
+     *
+     * <p>The created request records the replacement id in its source item column, which is what lets the
+     * read side and the asset-side trace walk between the original and its replacement. The repair lock
+     * is handed over exactly as in the internal repair path, and the repair processor becomes the scrap
+     * processor.
+     *
+     * @param actor submitting warehouse operator, who must also own the repair order
+     * @param repairId fams_repair_request primary key the factory round belongs to
+     * @param roundId fams_repair_factory_round primary key the replacement belongs to
+     * @param replacementId fams_repair_factory_replacement primary key whose original asset is scrapped
+     * @param version repair order version the caller saw, joined into the idempotency fingerprint
+     * @param roundVersion factory round version the caller saw, joined into the idempotency fingerprint
+     * @param key client idempotency key scoping the receipt row for {@code SUBMIT_FACTORY:<replacementId>}
+     * @param input repair submission payload carrying the three pinned versions and the three text fields
+     * @return receipt naming the created request, the original asset, the frozen asset version and the
+     *     pending status, with the repair processor recorded as the scrap processor
+     * @throws AssetHandoverPort.Failure 403 {@code SCRAP_ROLE_REQUIRED} without the warehouse operator
+     *     role, 409 {@code SCRAP_DISPOSITION_OUTSIDE_APPROVAL} when the proposed disposition differs from
+     *     the approved factory method, 409 {@code SCRAP_IDEMPOTENCY_CONFLICT} on a reused key with a
+     *     different fingerprint, or any refusal the asset port raises while freezing the repair source
+     * @throws com.fams.repair.RepairFailure as raised by the repair domain when the order, round or
+     *     replacement does not match the pinned versions or the actor may not act on it
+     * @throws com.fams.loan.LoanRepairPort.Failure when the open borrowing no longer matches the loan the
+     *     repair order was created against
+     * @throws com.fams.auth.AuthOperationException when the actor identity is no longer valid
+     */
     @Transactional(rollbackFor = Exception.class)
     public Receipt submitFromFactory(Actor actor, long repairId, long roundId, long replacementId, long version,
             long roundVersion, UUID key, RepairSubmission input) {
