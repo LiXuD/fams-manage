@@ -64,8 +64,7 @@ class BrandService {
         return new MasterdataViews.Page<>(items, brandRepository.countActive(), page, pageSize);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Brand get(long id) {
+    Brand get(long id) {
         return toBrand(require(id));
     }
 

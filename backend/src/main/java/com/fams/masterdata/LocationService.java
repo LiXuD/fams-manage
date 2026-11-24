@@ -63,8 +63,7 @@ class LocationService {
         return new MasterdataViews.Page<>(items, locationRepository.countActive(), page, pageSize);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Location get(long id) {
+    Location get(long id) {
         return toLocation(require(id));
     }
 

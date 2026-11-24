@@ -15,7 +15,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -65,8 +64,7 @@ class SealedInventoryReportService {
         this.clock = clock;
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Page list(LocalDate from, LocalDate until, Long before, int pageSize) {
+    Page list(LocalDate from, LocalDate until, Long before, int pageSize) {
         var rows = query(from, until, before, pageSize + 1);
         if (rows.size() <= pageSize) {
             return new Page(rows, null);
@@ -118,8 +116,7 @@ class SealedInventoryReportService {
                 Timestamp.from(until.atStartOfDay().toInstant(ZoneOffset.UTC)), before, before, limit);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public ProgressPage progress(Long before, int pageSize) {
+    ProgressPage progress(Long before, int pageSize) {
         var rows = db.query("""
                 SELECT t.id,t.name,t.task_status,t.due_at,t.expected_count,
                     (SELECT COUNT(*) FROM fams_inventory_item i JOIN fams_inventory_item_review r

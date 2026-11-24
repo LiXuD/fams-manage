@@ -64,8 +64,7 @@ class ManufacturerService {
         return new ManufacturerActiveReferencePage(page, pageSize, manufacturerRepository.countActive(), items);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Manufacturer get(long id) {
+    Manufacturer get(long id) {
         return toManufacturer(require(id));
     }
 

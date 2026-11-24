@@ -63,8 +63,7 @@ class AssetCategoryService {
         return new MasterdataViews.Page<>(items, assetCategoryRepository.countActive(), page, pageSize);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public AssetCategory get(long id) {
+    AssetCategory get(long id) {
         return toCategory(require(id));
     }
 

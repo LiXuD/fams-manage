@@ -55,8 +55,7 @@ class BusinessParameterService {
         return new PageBusinessParameterVersion(page, pageSize, businessParameterRepository.count(), items);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public BusinessParameterVersion get(long id) {
+    BusinessParameterVersion get(long id) {
         BusinessParameterRow row = businessParameterRepository.find(id);
         if (row == null) {
             throw MasterDataOperationException.notFound("The business-parameter version");

@@ -86,18 +86,15 @@ class IdentityMasterDataService {
                         .toList());
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Organization getOrganization(long id) {
+    Organization getOrganization(long id) {
         return toOrganization(requireOrganization(id));
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Employee getEmployee(long id) {
+    Employee getEmployee(long id) {
         return toEmployee(requireEmployee(id));
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public OrganizationActiveReferencePage listActiveOrganizations(int page, int pageSize) {
+    OrganizationActiveReferencePage listActiveOrganizations(int page, int pageSize) {
         List<OrganizationActiveReference> items = identityMasterDataRepository
                 .listOrganizations((page - 1) * pageSize, pageSize).stream()
                 .filter(row -> "ACTIVE".equals(row.status()))

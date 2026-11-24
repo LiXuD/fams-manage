@@ -55,8 +55,7 @@ class NumberingRuleService {
         return new PageNumberingRule(page, pageSize, numberingRuleRepository.count(), items);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public NumberingRule get(long id) {
+    NumberingRule get(long id) {
         return toRule(require(id));
     }
 

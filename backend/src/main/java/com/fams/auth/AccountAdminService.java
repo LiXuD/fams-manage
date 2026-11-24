@@ -77,8 +77,7 @@ class AccountAdminService {
         return new PageSystemAccount(page, pageSize, accountAdminRepository.countAccounts(), items);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public SystemAccount getAccount(long accountId) {
+    SystemAccount getAccount(long accountId) {
         return toContract(requireAccount(accountId));
     }
 

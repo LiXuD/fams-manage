@@ -64,8 +64,7 @@ class WarehouseService {
         return new WarehouseActiveReferencePage(page, pageSize, warehouseRepository.countActive(), items);
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Warehouse get(long id) {
+    Warehouse get(long id) {
         return toWarehouse(require(id));
     }
 

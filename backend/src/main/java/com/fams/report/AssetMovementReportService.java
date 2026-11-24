@@ -19,7 +19,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -34,8 +33,7 @@ class AssetMovementReportService {
         this.clock = clock;
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
-    public Page list(Filter filter, Cursor before, int pageSize) {
+    Page list(Filter filter, Cursor before, int pageSize) {
         var rows = query(filter, before, pageSize + 1);
         if (rows.size() <= pageSize) {
             return new Page(rows, null);
