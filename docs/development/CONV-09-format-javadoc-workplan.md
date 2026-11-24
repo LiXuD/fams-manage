@@ -70,3 +70,34 @@ V87 预存红未修 → 167 个 docker 并发/幂等/原子性用例跑不完。
   （按域：repair 48、scrap 42、transfer 32、loss 28、inventory 26、loan 24、requisition 21、
   auth 20…），§1 表里的 748 是 public 与 package 两个 scope 相加的**重叠计数**，不作验收基数。
   §4 的门禁取 `scope=public`，验收基数即 **340**；`MissingJavadocMethod(scope=public)` 为 **837**。
+
+## 6. 关键补充：`LineLength` 不能按原样启用（实测后定的门禁口径）
+
+仓库 checkstyle 执行绑定 `includeTestSourceDirectory=true`，实测确认**测试源确实被扫描**
+（执行绑定的 `checkstyle:check@check-java-conventions` 扫到 main 479 + test 176 个文件；
+`checkstyle:check` 默认 cli 则只扫 main，且 `-Dcheckstyle.config.location` 会被执行里的
+`<configLocation>` 覆盖——审计时必须用执行绑定的 goal 才是真实口径）。
+
+因此启用 `LineLength(120)` 会连测试源一起判。测试源实测 **1727 行超 120 字符 / 95 个文件**，
+按风险分类：
+
+| 类别 | 行数 | 能否重排 |
+|---|---|---|
+| 文本块 `"""` 内 | 741 | **禁改**：内容即字符串值 |
+| 含字符串字面量 | 935 | **禁改**：WireShape 与运行时用例的期望 JSON 逐字节冻结，重排即改断言 |
+| 纯代码行 | 51 | 可安全重排 |
+
+`auth` 一个域就占 1528 行，正是冻结断言最密集处。**结论：测试源不做重排。**
+
+**门禁口径裁决**：`LineLength` 用 `SuppressionSingleFilter` 按文件正则只对
+`.*/src/test/.*` 抑制该一条规则，其余 9 条规则（`UnusedImports`/`NeedBraces`/`EqualsHashCode` 等）
+对测试源继续全量生效。**不得**为此把 `includeTestSourceDirectory` 改成 false——那会连带关掉
+测试源的其它规则，是拿门禁强度换便利。
+
+main 侧 581 行的处置：457 行文本块外按 §3 重排；**124 行在文本块内**（SQL 与 CSV 字面量，
+JAVA 系列已冻结存储形状）用 `// CHECKSTYLE:OFF` / `// CHECKSTYLE:ON` 逐块包裹并配
+`SuppressWithPlainTextCommentFilter`（该 filter 正是为 `LineLength` 这类 Checker 级检查设计），
+包裹处须注明"冻结 SQL/CSV 字面量，重排即改值"。两类都不许改字符串内容。
+
+验收基数据此改为：main 文本块外超长行归零 + 文本块内 124 行全部处于显式 OFF 区间 +
+测试源 LineLength 抑制生效且其余规则仍全量扫描测试源。
