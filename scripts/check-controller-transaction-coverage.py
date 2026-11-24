@@ -88,6 +88,24 @@ def member_annotations(lines: list[str]) -> dict[int, str]:
     return owner
 
 
+def method_body(lines: list[str], start: int) -> str:
+    """按花括号配平取出方法体，避免固定行数窗口溢进下一个方法而误判读写。"""
+    depth = 0
+    started = False
+    out = []
+    for i in range(start, len(lines)):
+        for ch in lines[i]:
+            if ch == "{":
+                depth += 1
+                started = True
+            elif ch == "}":
+                depth -= 1
+        out.append(lines[i])
+        if started and depth <= 0:
+            break
+    return "\n".join(out)
+
+
 def scan(root: str) -> list[str]:
     calls = controller_call_points(root)
     gaps: list[str] = []
@@ -123,7 +141,7 @@ def scan(root: str) -> list[str]:
                 public = (visibility or "").strip() == "public"
                 if annotated and public:
                     continue
-                body = "\n".join(lines[i : i + 45])
+                body = method_body(lines, i)
                 kind = "W" if WRITE.search(body) else ("R-lock" if LOCK.search(body) else "R")
                 reason = []
                 if not annotated:
