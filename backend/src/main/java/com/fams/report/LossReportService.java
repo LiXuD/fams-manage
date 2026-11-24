@@ -79,7 +79,8 @@ class LossReportService {
                     var recovered = row.getTimestamp("recovered_at");
                     return new Row(row.getString("id"), row.getString("asset_id"), row.getString("asset_code"),
                             row.getString("organization"), State.valueOf(row.getString("state")),
-                            row.getTimestamp("created_at").toInstant(), confirmed == null ? null : confirmed.toInstant(),
+                            row.getTimestamp("created_at").toInstant(),
+                            confirmed == null ? null : confirmed.toInstant(),
                             recovered == null ? null : recovered.toInstant());
                 }, filter.organizationId(), filter.organizationId(), filter.stateName(), filter.stateName(),
                 before, before, limit);

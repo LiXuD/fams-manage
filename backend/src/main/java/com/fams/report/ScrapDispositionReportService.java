@@ -92,7 +92,8 @@ class ScrapDispositionReportService {
                     return new Row(row.getString("id"), row.getString("asset_id"), row.getString("asset_code"),
                             row.getString("processor"), State.valueOf(row.getString("state")),
                             row.getObject("due_date", LocalDate.class), recorded == null ? null : recorded.toInstant());
-                }, cutoff, date, filter.processorId(), filter.processorId(), filter.stateName(), cutoff, date, filter.stateName(),
+                }, cutoff, date, filter.processorId(), filter.processorId(), filter.stateName(),
+                cutoff, date, filter.stateName(),
                 before, before, limit);
     }
 

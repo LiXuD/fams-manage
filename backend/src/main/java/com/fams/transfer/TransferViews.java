@@ -270,7 +270,8 @@ public final class TransferViews {
             String parameterVersionId) {
     }
 
-    public record PhysicalView(String destination, String deliveryEvidence, String deliveredAt, String receiptDeadlineAt) {
+    public record PhysicalView(String destination, String deliveryEvidence, String deliveredAt,
+            String receiptDeadlineAt) {
     }
 
     public record TargetChangeContext(
@@ -460,7 +461,8 @@ public final class TransferViews {
     }
 
     static OpenRequisitionRef openRequisitionRef(Map<String, Object> row) {
-        return new OpenRequisitionRef(id(row, "id"), (String) row.get("request_no"), (String) row.get("request_status"));
+        return new OpenRequisitionRef(id(row, "id"), (String) row.get("request_no"),
+                (String) row.get("request_status"));
     }
 
     static Operator operator(Map<String, Object> row) {

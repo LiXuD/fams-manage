@@ -12,19 +12,22 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 interface BusinessParameterMapper {
 
-    @Select("SELECT current_version, current_version_id FROM fams_business_parameter_state WHERE singleton_id = 1 FOR UPDATE")
+    @Select("SELECT current_version, current_version_id FROM fams_business_parameter_state "
+            + "WHERE singleton_id = 1 FOR UPDATE")
     BusinessParameterState lockState();
 
     @Select("SELECT current_version, current_version_id FROM fams_business_parameter_state WHERE singleton_id = 1")
     BusinessParameterState state();
 
-    @Select("SELECT id, version, status, effective_at, actor_account_id, actor_username, snapshot_json FROM fams_business_parameter_version WHERE id = #{id}")
+    @Select("SELECT id, version, status, effective_at, actor_account_id, actor_username, snapshot_json "
+            + "FROM fams_business_parameter_version WHERE id = #{id}")
     BusinessParameterRow find(@Param("id") long id);
 
     @Select("SELECT COUNT(*) FROM fams_business_parameter_version")
     long count();
 
-    @Select("SELECT id, version, status, effective_at, actor_account_id, actor_username, snapshot_json FROM fams_business_parameter_version ORDER BY version DESC LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id, version, status, effective_at, actor_account_id, actor_username, snapshot_json "
+            + "FROM fams_business_parameter_version ORDER BY version DESC LIMIT #{limit} OFFSET #{offset}")
     List<BusinessParameterRow> list(@Param("offset") int offset, @Param("limit") int limit);
 
     @Select("SELECT username FROM fams_system_account WHERE id = #{id}")

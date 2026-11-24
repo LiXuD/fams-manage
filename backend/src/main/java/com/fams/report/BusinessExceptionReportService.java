@@ -64,7 +64,8 @@ class BusinessExceptionReportService {
                     var processed = row.getTimestamp("processed_at");
                     return new Row(row.getString("id"), row.getString("business_type"), row.getString("business_id"),
                             row.getString("asset_code"), row.getString("fact_status"),
-                            row.getTimestamp("registered_at").toInstant(), processed == null ? null : processed.toInstant());
+                            row.getTimestamp("registered_at").toInstant(),
+                            processed == null ? null : processed.toInstant());
                 }, filter.businessId(), filter.businessId(), filter.status(), filter.status(), before, before, limit);
     }
 

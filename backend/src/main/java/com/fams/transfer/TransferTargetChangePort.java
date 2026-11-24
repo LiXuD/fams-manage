@@ -27,7 +27,8 @@ class TransferTargetChangePort implements TargetChangePort {
     @Override public void lockHeader(long business) { translate(() -> { ownership.lockHeader(business);
             return null;
         }); }
-    @Override public void requireProcessor(long account, long business) { translate(() -> { ownership.requireProcessor(account, business);
+    @Override public void requireProcessor(long account,
+            long business) { translate(() -> { ownership.requireProcessor(account, business);
             return null;
         }); }
     @Override public com.fams.targetchange.TargetChangeViews.Context context(Actor actor, long business, long item) {
@@ -41,7 +42,8 @@ class TransferTargetChangePort implements TargetChangePort {
             return null;
         });
     }
-    @Override public void apply(Actor actor, long business, long item, JsonNode target, String observedCode, long proposal) {
+    @Override public void apply(Actor actor, long business, long item, JsonNode target, String observedCode,
+            long proposal) {
         translate(() -> { transfers.applyChangedTarget(actor, business, item, decode(target), observedCode, proposal);
             return null;
         });
@@ -49,12 +51,14 @@ class TransferTargetChangePort implements TargetChangePort {
     private AssetTransferPort.Target decode(JsonNode input) {
         try {
             var target = json.treeToValue(input, AssetTransferPort.Target.class);
-            if (target == null || target.locationId() < 1 || target.custodyType() == null || target.referenceVersions() == null
+            if (target == null || target.locationId() < 1 || target.custodyType() == null
+                    || target.referenceVersions() == null
                     || target.referenceVersions().values().stream().anyMatch(value -> value == null || value < 0)) {
                 throw TargetChangeFailure.invalid("TRANSFER_TARGET_INVALID");
             }
             return target;
-        } catch (JacksonException | IllegalArgumentException error) { throw TargetChangeFailure.invalid("TRANSFER_TARGET_INVALID"); }
+        } catch (JacksonException | IllegalArgumentException error) { throw TargetChangeFailure.invalid(
+                "TRANSFER_TARGET_INVALID"); }
     }
     private <T> T translate(Supplier<T> action) {
         try { return action.get(); }

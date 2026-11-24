@@ -5,7 +5,10 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import tools.jackson.databind.JsonNode;
 
-/** Enterprise calendar shared by every deadline and reminder; an object keeps using the snapshot it froze at creation. */
+/**
+ * Enterprise calendar shared by every deadline and reminder; an object keeps using the snapshot it
+ * froze at creation.
+ */
 public final class BusinessCalendar {
     private BusinessCalendar() { }
 

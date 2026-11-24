@@ -59,8 +59,8 @@ class AssetMovementReportService {
                 filter.assetId(), rows.size());
         return "\uFEFFkind,factId,businessId,assetId,assetCode,occurredAt,outcome\r\n"
                 + rows.stream().map(row -> String.join(",", csv(filter.kind().name()), csv(row.factId()),
-                        csv(row.businessId()), csv(row.assetId()), csv(row.assetCode()), csv(row.occurredAt().toString()),
-                        csv(row.outcome()))).collect(Collectors.joining("\r\n"));
+                        csv(row.businessId()), csv(row.assetId()), csv(row.assetCode()),
+                        csv(row.occurredAt().toString()), csv(row.outcome()))).collect(Collectors.joining("\r\n"));
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -178,7 +178,8 @@ class AssetMovementReportService {
 
     record Cursor(Instant occurredAt, String factId) {}
     record Page(List<Row> items, Cursor nextBefore) {}
-    record Row(String factId, String businessId, String assetId, String assetCode, Instant occurredAt, String outcome) {}
+    record Row(String factId, String businessId, String assetId, String assetCode, Instant occurredAt,
+               String outcome) {}
 
     static final class ExportLimit extends RuntimeException {}
 }

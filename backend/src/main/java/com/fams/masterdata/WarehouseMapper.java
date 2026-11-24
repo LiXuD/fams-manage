@@ -54,13 +54,15 @@ interface WarehouseMapper {
     @Select("SELECT COUNT(*) FROM fams_warehouse")
     long count();
 
-    @Select("SELECT id, code, name, description, status, version FROM fams_warehouse ORDER BY id LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id, code, name, description, status, version FROM fams_warehouse "
+            + "ORDER BY id LIMIT #{limit} OFFSET #{offset}")
     List<WarehouseRow> list(@Param("offset") int offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM fams_warehouse WHERE status = 'ACTIVE'")
     long countActive();
 
-    @Select("SELECT id, code, name, description, status, version FROM fams_warehouse WHERE status = 'ACTIVE' ORDER BY id LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id, code, name, description, status, version FROM fams_warehouse "
+            + "WHERE status = 'ACTIVE' ORDER BY id LIMIT #{limit} OFFSET #{offset}")
     List<WarehouseRow> listActive(@Param("offset") int offset, @Param("limit") int limit);
 
     @Insert("""

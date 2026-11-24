@@ -45,7 +45,8 @@ class BusinessExceptionReportController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         actors.requireAssetAdmin();
         return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
-                .body(reports.list(new BusinessExceptionReportService.Filter(kind, businessId, status), before, pageSize));
+                .body(reports.list(new BusinessExceptionReportService.Filter(kind, businessId, status),
+                        before, pageSize));
     }
 
     @GetMapping("/business-exceptions.csv")

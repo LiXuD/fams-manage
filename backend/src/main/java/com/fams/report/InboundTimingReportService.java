@@ -68,7 +68,8 @@ class InboundTimingReportService {
                             row.getString("processor_account_id"), row.getString("stage_result"),
                             started == null ? null : started.toInstant(), finished.toInstant(),
                             started == null || finished.before(started) ? null
-                                    : java.time.Duration.between(started.toInstant(), finished.toInstant()).toSeconds());
+                                    : java.time.Duration.between(started.toInstant(),
+                                            finished.toInstant()).toSeconds());
                 }, filter.receiptId(), filter.receiptId(), filter.status(), filter.status(), before, before, limit);
     }
 
@@ -89,7 +90,7 @@ class InboundTimingReportService {
                 JOIN fams_inbound_decision d ON d.receipt_id=r.id AND d.decision_result='APPROVED'
                 WHERE a.resource_type='INBOUND' AND a.action='INBOUND_WAREHOUSE_CLAIMED'
                 """),
-        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         FIRST_EXECUTION("""
                 SELECT r.id,r.id AS receipt_id,r.receipt_no,CAST(a.accepted_by_account_id AS CHAR) AS processor_account_id,
                     'ACCEPTED' AS stage_result,o.acquired_at AS started_at,a.accepted_at AS finished_at

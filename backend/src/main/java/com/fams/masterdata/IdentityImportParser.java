@@ -18,7 +18,8 @@ final class IdentityImportParser {
         }
         List<List<String>> records = records(csv);
         if (records.isEmpty() || !String.join(",", records.getFirst()).equals(HEADER)) {
-            throw MasterDataOperationException.invalid("The identity import header does not match the standard template.");
+            throw MasterDataOperationException.invalid(
+                    "The identity import header does not match the standard template.");
         }
         if (records.size() == 1) {
             throw MasterDataOperationException.invalid("The identity import contains no data rows.");

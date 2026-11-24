@@ -72,7 +72,7 @@ class TagCoverageReportService {
                     .append(csv(verified ? "COVERED" : row.tagVersion() == null ? "NO_TAG" : "EVIDENCE_MISSING"))
                     .append("\r\n");
         }
-        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update("""
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)
@@ -91,6 +91,7 @@ class TagCoverageReportService {
     }
 
     record Summary(Instant evaluatedAt, long total, long covered, long placement, long inventory, long withoutTag) {}
-    private record Evidence(String assetId, String tagVersion, String taskId, Timestamp placement, Timestamp recognition) {}
+    private record Evidence(String assetId, String tagVersion, String taskId, Timestamp placement,
+                            Timestamp recognition) {}
     static final class ExportLimit extends RuntimeException {}
 }

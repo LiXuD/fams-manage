@@ -10,13 +10,15 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 interface NotificationChannelMapper {
 
-    @Select("SELECT current_version, current_version_id FROM fams_notification_channel_state WHERE singleton_id = 1 FOR UPDATE")
+    @Select("SELECT current_version, current_version_id FROM fams_notification_channel_state "
+            + "WHERE singleton_id = 1 FOR UPDATE")
     NotificationChannelState lockState();
 
     @Select("SELECT current_version, current_version_id FROM fams_notification_channel_state WHERE singleton_id = 1")
     NotificationChannelState state();
 
-    @Select("SELECT id, version, status, sms_template, wechat_template, actor_account_id, actor_username, created_at FROM fams_notification_channel_version WHERE id = #{id}")
+    @Select("SELECT id, version, status, sms_template, wechat_template, actor_account_id, "
+            + "actor_username, created_at FROM fams_notification_channel_version WHERE id = #{id}")
     NotificationChannelRow find(@Param("id") long id);
 
     @Select("SELECT username FROM fams_system_account WHERE id = #{id}")

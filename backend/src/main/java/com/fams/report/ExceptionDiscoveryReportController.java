@@ -32,7 +32,8 @@ class ExceptionDiscoveryReportController {
         if (!validWindow(from, toExclusive)) {
             return ResponseEntity.badRequest().build();
         }
-        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(report.summary(from, toExclusive));
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(report.summary(from, toExclusive));
     }
 
     @GetMapping("/exception-discovery.csv")

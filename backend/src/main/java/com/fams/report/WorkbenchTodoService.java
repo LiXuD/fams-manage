@@ -69,7 +69,8 @@ class WorkbenchTodoService {
                 """ + visible
                         + " AND (? IS NULL OR todo_type=?) AND (? IS NULL OR id < ?) ORDER BY id DESC LIMIT ?",
                 (row, index) -> new Todo(row.getString("id"), row.getString("business_type"),
-                        row.getString("business_id"), row.getString("todo_type"), row.getTimestamp("opened_at").toInstant()),
+                        row.getString("business_id"), row.getString("todo_type"),
+                        row.getTimestamp("opened_at").toInstant()),
                 parameters.toArray());
         if (rows.size() <= pageSize) {
             return new Page(rows, null, counts);

@@ -51,7 +51,8 @@ class AssetMovementReportController {
             return ResponseEntity.badRequest().build();
         }
         var before = beforeAt == null ? null : new AssetMovementReportService.Cursor(beforeAt, beforeId.toString());
-        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(reports.list(filter, before, pageSize));
+        return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(reports.list(filter, before, pageSize));
     }
 
     @GetMapping("/movements.csv")

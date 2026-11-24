@@ -27,6 +27,7 @@ class SealedInventoryReportService {
                  WHEN t.published_at IS NOT NULL AND t.task_status IN ('CANCELLED','TERMINATED') THEN 'RETAINED'
                  ELSE 'MISSING' END
             """;
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     private static final String PUBLISHED_TRACEABILITY = """
             WITH basis AS (
                 SELECT t.id,t.name,t.task_status,t.published_at,COALESCE(s.expected_count,t.expected_count) AS expected,
@@ -55,6 +56,7 @@ class SealedInventoryReportService {
                 FROM coverage c
             )
             """;
+    // CHECKSTYLE.ON: LineLength
 
     private final JdbcTemplate db;
     private final Clock clock;
@@ -149,7 +151,7 @@ class SealedInventoryReportService {
         }
         var task = tasks.getFirst();
         if (task.source() == ExecutorSource.SEALED) {
-            // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
+            // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
             var rows = executorRows("""
                     SELECT NULLIF(CAST(NULLIF(i.snapshot_json->>'$.item.executor_account_id','null') AS UNSIGNED),0)
                             AS executor_id,
@@ -211,7 +213,8 @@ class SealedInventoryReportService {
                     JSON_OBJECT('rows',?,'expected',?,'counted',?))
                 """, actor.requestId(), actor.id(), actor.role(),
                 breakdown.source().name() + "_INVENTORY_EXECUTORS",
-                taskId, Timestamp.from(clock.instant()), breakdown.items().size(), breakdown.expected(), breakdown.counted());
+                taskId, Timestamp.from(clock.instant()), breakdown.items().size(), breakdown.expected(),
+                breakdown.counted());
         // The comma-safe fields are only database IDs and integer counts.
         return "taskId,executorAccountId,expected,accepted,differences,notObserved\r\n"
                 + breakdown.items().stream().map(row -> String.join(",", breakdown.taskId(),
@@ -246,7 +249,8 @@ class SealedInventoryReportService {
                 VALUES (?,?,?,'OPERATIONS_REPORT_EXPORTED','PUBLISHED_INVENTORY_TRACEABILITY',0,?,
                     JSON_OBJECT('from',?,'toExclusive',?,'rows',?,'traceable',?))
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()),
-                from.toString(), until.toString(), rows.size(), rows.stream().filter(TraceabilityTask::traceable).count());
+                from.toString(), until.toString(), rows.size(),
+                rows.stream().filter(TraceabilityTask::traceable).count());
         return "taskId,taskName,status,publishedAt,source,expected,counted,traceable\r\n"
                 + rows.stream().map(row -> String.join(",", row.taskId(),
                         "\"" + AssetImportWorkbook.safeExportCell(row.name()).replace("\"", "\"\"") + "\"",
@@ -262,7 +266,8 @@ class SealedInventoryReportService {
                 """, (row, index) -> new TraceabilityTask(row.getString("id"), row.getString("name"),
                         row.getString("task_status"), row.getTimestamp("published_at").toInstant(),
                         ExecutorSource.valueOf(row.getString("source")), row.getLong("expected"),
-                        row.getLong("counted"), row.getBoolean("traceable")), utc(from), utc(until), before, before, limit);
+                        row.getLong("counted"), row.getBoolean("traceable")),
+                        utc(from), utc(until), before, before, limit);
     }
 
     private static Timestamp utc(LocalDate date) {

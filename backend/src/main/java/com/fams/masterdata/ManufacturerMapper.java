@@ -16,19 +16,22 @@ interface ManufacturerMapper {
     @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer WHERE id = #{id}")
     ManufacturerRow find(@Param("id") long id);
 
-    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer WHERE code_normalized = #{code}")
+    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer "
+            + "WHERE code_normalized = #{code}")
     ManufacturerRow findByCode(@Param("code") String normalizedCode);
 
     @Select("SELECT COUNT(*) FROM fams_manufacturer")
     long count();
 
-    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer ORDER BY id LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer "
+            + "ORDER BY id LIMIT #{limit} OFFSET #{offset}")
     List<ManufacturerRow> list(@Param("offset") int offset, @Param("limit") int limit);
 
     @Select("SELECT COUNT(*) FROM fams_manufacturer WHERE status = 'ACTIVE'")
     long countActive();
 
-    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer WHERE status = 'ACTIVE' ORDER BY id LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT id, code, name, description, status, version FROM fams_manufacturer "
+            + "WHERE status = 'ACTIVE' ORDER BY id LIMIT #{limit} OFFSET #{offset}")
     List<ManufacturerRow> listActive(@Param("offset") int offset, @Param("limit") int limit);
 
     @Insert("""

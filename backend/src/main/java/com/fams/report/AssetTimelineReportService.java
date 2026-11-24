@@ -41,7 +41,7 @@ class AssetTimelineReportService {
         if (rows.size() > EXPORT_LIMIT) {
             throw new ExportLimit();
         }
-        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping would change the string value
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update("""
                 INSERT INTO fams_audit_event (request_id,actor_account_id,actor_role,action,resource_type,
                     resource_id,occurred_at,detail_json)

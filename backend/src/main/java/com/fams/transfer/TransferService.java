@@ -76,7 +76,8 @@ class TransferService {
                 db.queryForList(
                         "SELECT"
                             + " a.id,a.asset_code,a.name,a.version,a.lifecycle_status,a.custody_type,"
-                            + "a.owning_organization_id,a.using_organization_id,a.responsible_employee_id,a.department_responsible_employee_id,"
+                            + "a.owning_organization_id,a.using_organization_id,"
+                            + "a.responsible_employee_id,a.department_responsible_employee_id,"
                             + "a.storage_warehouse_id,a.current_location_id"
                                 + from
                                 + " ORDER BY a.id LIMIT ? OFFSET ?",
@@ -192,7 +193,8 @@ class TransferService {
                             + " a.id=o.processor_account_id WHERE (d.target_employee_id=? OR"
                             + " d.target_department_employee_id=? OR a.employee_id=?) AND"
                             + " r.request_status IN"
-                            + " ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM','WAREHOUSE_PROCESSING','WAITING_HANDOVER')"
+                            + " ('PENDING_ADMIN_DECISION','WAITING_WAREHOUSE_CLAIM',"
+                            + "'WAREHOUSE_PROCESSING','WAITING_HANDOVER')"
                             + " ORDER BY r.id",
                         employee,
                         employee,
@@ -313,7 +315,9 @@ class TransferService {
             }
             db.update(
                     "INSERT INTO fams_transfer_item"
-                        + " (request_id,asset_id,asset_version,source_snapshot_json,target_snapshot_json,parameter_snapshot_json,receiver_employee_id,receipt_required)"
+                        + " (request_id,asset_id,asset_version,source_snapshot_json,"
+                        + "target_snapshot_json,parameter_snapshot_json,"
+                        + "receiver_employee_id,receipt_required)"
                         + " VALUES (?,?,?,?,?,?,?,?)",
                     id,
                     inputItem.assetId(),
@@ -541,7 +545,8 @@ class TransferService {
                                 days);
                 db.update(
                         "UPDATE fams_transfer_item SET"
-                            + " item_status='DELIVERED',destination=?,delivery_evidence=?,delivered_at=?,receipt_deadline_at=?,version=version+1"
+                            + " item_status='DELIVERED',destination=?,delivery_evidence=?,delivered_at=?,"
+                            + "receipt_deadline_at=?,version=version+1"
                             + " WHERE id=?",
                         input.destination(),
                         input.evidence(),
@@ -613,7 +618,8 @@ class TransferService {
         var rows =
                 db.queryForList(
                         "SELECT"
-                            + " i.id,i.request_id,i.item_status,i.version,i.destination,i.delivered_at,i.receipt_deadline_at,a.asset_code,a.name,t.version"
+                            + " i.id,i.request_id,i.item_status,i.version,i.destination,i.delivered_at,"
+                            + "i.receipt_deadline_at,a.asset_code,a.name,t.version"
                             + " AS request_version FROM fams_transfer_item i JOIN fams_transfer t"
                             + " ON t.id=i.request_id JOIN fams_asset a ON a.id=i.asset_id" + scope
                             + " ORDER BY i.id LIMIT ? OFFSET ?",
@@ -651,7 +657,8 @@ class TransferService {
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         db.update(
                 "INSERT INTO fams_transfer_receipt_grant"
-                    + " (item_id,item_version,account_id,auth_epoch,authorization_version,token_sha256,issued_at,expires_at)"
+                    + " (item_id,item_version,account_id,auth_epoch,"
+                    + "authorization_version,token_sha256,issued_at,expires_at)"
                     + " VALUES (?,?,?,?,?,?,?,?)",
                 itemId,
                 item.get("version"),
@@ -807,10 +814,12 @@ class TransferService {
                 + "item_status=?,version=version+1 WHERE id=?", json.writeValueAsString(targetChangeTarget(target)),
                 receipt ? target.employeeId() : null, receipt,
                 "REFUSED".equals(item.get("item_status")) ? "DELIVERED" : item.get("item_status"), itemId);
-        db.update("UPDATE fams_transfer_receipt_grant SET consumed_at=? WHERE item_id=? AND consumed_at IS NULL", now(), itemId);
+        db.update("UPDATE fams_transfer_receipt_grant SET consumed_at=? WHERE item_id=? AND consumed_at IS NULL",
+                now(), itemId);
         event(actor, current, id, itemId, "TRANSFER_TARGET_CHANGED", Map.of("proposalId", Long.toString(proposal),
                 "beforeTarget", json.readTree(item.get("target_snapshot_json").toString()),
-                "target", targetChangeTarget(target), "physicalDestination", Objects.toString(item.get("destination"), "")));
+                "target", targetChangeTarget(target), "physicalDestination",
+                Objects.toString(item.get("destination"), "")));
         aggregate(id);
         LOG.info("Transfer item {} target changed by actor {}.", itemId, actor.id());
     }
@@ -1405,7 +1414,8 @@ class TransferService {
                 json.writeValueAsString(detail));
         db.update(
                 "INSERT INTO fams_audit_event"
-                    + " (request_id,actor_account_id,actor_role,action,resource_type,resource_id,occurred_at,detail_json)"
+                    + " (request_id,actor_account_id,actor_role,action,resource_type,"
+                    + "resource_id,occurred_at,detail_json)"
                     + " VALUES (?,?,?,?,'TRANSFER',?,?,?)",
                 actor.requestId().toString(),
                 current.id(),
@@ -1443,7 +1453,9 @@ class TransferService {
             Current current, String action, String key, String hash, T result) {
         db.update(
                 "INSERT INTO fams_idempotency_record"
-                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,http_status,response_body_json,resource_type,resource_id,resource_version,created_at,completed_at,expires_at)"
+                    + " (actor_account_id,operation_id,idempotency_key,payload_sha256,result_status,"
+                    + "http_status,response_body_json,resource_type,resource_id,"
+                    + "resource_version,created_at,completed_at,expires_at)"
                     + " VALUES (?,?,?,?,'SUCCEEDED',200,?,?,?,?,?,?,?)",
                 current.id(),
                 "transfer:" + action,

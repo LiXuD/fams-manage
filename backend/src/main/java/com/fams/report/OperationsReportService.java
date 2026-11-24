@@ -88,7 +88,8 @@ class OperationsReportService {
                 SELECT s.task_id, s.created_at, s.expected_count, s.accepted_count, s.not_observed_count
                 """ + INVENTORY + " ORDER BY s.created_at, s.task_id LIMIT 10001",
                 (row, index) -> String.join(",", csv(row.getString("task_id")),
-                        csv(row.getTimestamp("created_at").toInstant().toString()), csv(row.getString("expected_count")),
+                        csv(row.getTimestamp("created_at").toInstant().toString()),
+                        csv(row.getString("expected_count")),
                         csv(row.getString("accepted_count")), csv(row.getString("not_observed_count"))),
                 start(start), start(end));
         if (rows.size() > 10000) {

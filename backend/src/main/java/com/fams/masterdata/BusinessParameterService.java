@@ -221,7 +221,8 @@ class BusinessParameterService {
 
     private Optional<BusinessParameterVersion> replay(long actorId, String operation,
             String key, String digest) {
-        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(
+                actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }

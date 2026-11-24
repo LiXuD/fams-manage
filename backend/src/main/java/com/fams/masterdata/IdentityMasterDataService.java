@@ -147,7 +147,8 @@ class IdentityMasterDataService {
             OrganizationRow parent = Objects.requireNonNull(
                     validateActiveOrganization(request.getParentOrganization()));
             if (parent.id() == id || identityMasterDataRepository.countOrganizationCycle(id, parent.id()) != 0) {
-                throw MasterDataOperationException.dependencyConflict("The organization hierarchy would contain a cycle.");
+                throw MasterDataOperationException.dependencyConflict(
+                        "The organization hierarchy would contain a cycle.");
             }
             parentId = parent.id();
         }
@@ -392,7 +393,8 @@ class IdentityMasterDataService {
             }
         }
         Instant now = clock.instant();
-        requireVersionUpdate(identityMasterDataRepository.changeEmployeeStatus(id, expectedVersion, status, actorId, now));
+        requireVersionUpdate(identityMasterDataRepository.changeEmployeeStatus(
+                id, expectedVersion, status, actorId, now));
         if (!enabled) {
             identityMasterDataRepository.disableEmployeeAccount(id, actorId, now);
         }
@@ -541,7 +543,8 @@ class IdentityMasterDataService {
             String key,
             String digest,
             Class<T> type) {
-        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(actorId, operation, key, clock.instant());
+        IdempotencyRow existing = identityMasterDataRepository.findIdempotency(
+                actorId, operation, key, clock.instant());
         if (existing == null) {
             return Optional.empty();
         }

@@ -47,7 +47,8 @@ class InventoryLateReportService {
                     JSON_OBJECT('taskId',?,'result',?,'rows',?))
                 """, actor.requestId(), actor.id(), actor.role(), Timestamp.from(clock.instant()),
                 filter.taskId(), filter.resultName(), rows.size());
-        return "\uFEFFobservationId,taskId,taskName,assetCode,receivedAt,comparison,result,linkedTaskId,linkedTaskStatus\r\n"
+        return "\uFEFFobservationId,taskId,taskName,assetCode,receivedAt,comparison,result,"
+                + "linkedTaskId,linkedTaskStatus\r\n"
                 + rows.stream().map(row -> String.join(",", row.observationId(), row.taskId(), csv(row.taskName()),
                         csv(row.assetCode()), row.receivedAt().toString(), row.comparison(), row.result().name(),
                         csv(row.linkedTaskId()), csv(row.linkedTaskStatus()))).collect(Collectors.joining("\r\n"));
@@ -70,7 +71,8 @@ class InventoryLateReportService {
                     AND (? IS NULL OR c.observation_id<?)
                 ORDER BY c.observation_id DESC LIMIT ?
                 """, (row, index) -> new Row(row.getString("observation_id"), row.getString("task_id"),
-                        row.getString("task_name"), row.getString("asset_code"), row.getTimestamp("received_at").toInstant(),
+                        row.getString("task_name"), row.getString("asset_code"),
+                        row.getTimestamp("received_at").toInstant(),
                         row.getString("comparison_kind"), Result.valueOf(row.getString("result")),
                         row.getString("linked_task_id"), row.getString("linked_task_status")),
                 filter.taskId(), filter.taskId(), filter.resultName(), filter.resultName(), before, before, limit);
