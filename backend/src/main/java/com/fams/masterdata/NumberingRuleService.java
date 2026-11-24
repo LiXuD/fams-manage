@@ -58,7 +58,7 @@ class NumberingRuleService {
     }
 
     @Transactional
-    NumberingRule create(long actorId, NumberingRuleCreateRequest request,
+    public NumberingRule create(long actorId, NumberingRuleCreateRequest request,
             String key, UUID requestId) {
         String operation = "createNumberingRule";
         String digest = fingerprint.of(operation, objectMapper.writeValueAsString(request));
@@ -90,7 +90,7 @@ class NumberingRuleService {
     }
 
     @Transactional
-    NumberingRule update(long actorId, long id, long expectedVersion,
+    public NumberingRule update(long actorId, long id, long expectedVersion,
             NumberingRuleUpdateRequest request, String key, UUID requestId) {
         String operation = "updateNumberingRule";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion),
@@ -131,7 +131,7 @@ class NumberingRuleService {
     }
 
     @Transactional
-    NumberingRule changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
+    public NumberingRule changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
             String reason, String key, UUID requestId) {
         String operation = enabled ? "enableNumberingRule" : "disableNumberingRule";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion), reason);

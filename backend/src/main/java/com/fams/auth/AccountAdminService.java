@@ -94,7 +94,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccount createAccount(
+    public SystemAccount createAccount(
             long actorAccountId,
             String username,
             long employeeId,
@@ -164,7 +164,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccount changeStatus(
+    public SystemAccount changeStatus(
             long actorAccountId,
             long accountId,
             long expectedVersion,
@@ -220,7 +220,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccount resetInitialPassword(
+    public SystemAccount resetInitialPassword(
             long actorAccountId,
             long accountId,
             long expectedVersion,
@@ -269,7 +269,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccount changeRole(
+    public SystemAccount changeRole(
             long actorAccountId,
             long accountId,
             long expectedVersion,
@@ -339,7 +339,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccountAuthorization replaceAuthorization(
+    public SystemAccountAuthorization replaceAuthorization(
             long actorAccountId,
             long accountId,
             Role role,
@@ -406,7 +406,7 @@ class AccountAdminService {
     }
 
     @Transactional
-    SystemAccountAuthorization revokeAuthorization(
+    public SystemAccountAuthorization revokeAuthorization(
             long actorAccountId,
             long accountId,
             Role role,

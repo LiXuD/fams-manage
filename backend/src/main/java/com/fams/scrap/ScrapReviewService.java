@@ -18,6 +18,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,6 +46,8 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class ScrapReviewService {
+    private static final Logger LOG = LoggerFactory.getLogger(ScrapReviewService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -149,6 +153,7 @@ public class ScrapReviewService {
                 .orElseThrow(() -> new AssetHandoverPort.Failure("SCRAP_CANCEL_FORBIDDEN", 403));
         audit(actor, current, role, id, version, restored ? "SCRAP_CANCELLED" : "SCRAP_CANCEL_RESTORE_REQUIRED",
                 Map.of("reason", input.reason().strip()), time);
+        LOG.info("Cancelled scrap actor={} requestId={} asset={} restored={}", current.id(), id, asset, restored);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, number(request, "ownership_version"), status,
                 Objects.toString(request.get("processor_account_id"), null)), time);
@@ -209,6 +214,7 @@ public class ScrapReviewService {
         todo(id, "CORRECTION_DECIDE", "ASSET_ADMIN", null, time);
         audit(actor, current, Role.ASSET_ADMIN, id, number(request, "version"), "SCRAP_CORRECTION_REQUESTED",
                 Map.of("correctionId", Long.toString(correction), "input", input), time);
+        LOG.info("Requested scrap correction actor={} requestId={} correctionId={}", current.id(), id, correction);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
                 "PENDING_ADMIN_DECISION", null), time);
@@ -271,6 +277,7 @@ public class ScrapReviewService {
         audit(actor, current, Role.ASSET_ADMIN, request, version,
                 approve ? "SCRAP_CORRECTION_APPROVED" : "SCRAP_CORRECTION_REJECTED",
                 Map.of("correctionId", Long.toString(id), "input", input), time);
+        LOG.info("Decided scrap correction actor={} correctionId={} approved={}", current.id(), id, approve);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), number(correction, "ownership_version"),
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
@@ -297,6 +304,7 @@ public class ScrapReviewService {
         closeTodo(request, "CORRECTION_CLAIM", time);
         todo(request, "CORRECTION_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_CORRECTION_CLAIMED", input, time);
+        LOG.info("Claimed scrap correction actor={} correctionId={} requestId={}", current.id(), id, request);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
@@ -349,6 +357,7 @@ public class ScrapReviewService {
                 json.writeValueAsString(input), assetVersion, time, id);
         closeTodo(request, "CORRECTION_EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_CORRECTION_EXECUTED", input, time);
+        LOG.info("Executed scrap correction actor={} correctionId={} asset={}", current.id(), id, asset);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
@@ -420,6 +429,7 @@ public class ScrapReviewService {
         todo(id, "REVERSAL_DECIDE", "ASSET_ADMIN", null, time);
         audit(actor, current, initiator, id, number(request, "version"), "SCRAP_REVERSAL_REQUESTED",
                 Map.of("reversalId", Long.toString(reversal), "input", input), time);
+        LOG.info("Requested scrap reversal actor={} requestId={} reversalId={}", current.id(), id, reversal);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
                 "PENDING_ADMIN_DECISION", null), time);
@@ -492,6 +502,7 @@ public class ScrapReviewService {
         audit(actor, current, Role.ASSET_ADMIN, request, version,
                 approve ? "SCRAP_REVERSAL_APPROVED" : "SCRAP_REVERSAL_REJECTED",
                 Map.of("reversalId", Long.toString(id), "input", input), time);
+        LOG.info("Decided scrap reversal actor={} reversalId={} approved={}", current.id(), id, approve);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), number(reversal, "ownership_version"),
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
@@ -518,6 +529,7 @@ public class ScrapReviewService {
         closeTodo(request, "REVERSAL_CLAIM", time);
         todo(request, "REVERSAL_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_REVERSAL_CLAIMED", input, time);
+        LOG.info("Claimed scrap reversal actor={} reversalId={} requestId={}", current.id(), id, request);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
@@ -564,6 +576,7 @@ public class ScrapReviewService {
         closeTodo(request, "REVERSAL_EXECUTE", time);
         closeTodo(request, "DISPOSITION", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_REVERSAL_EXECUTED", input, time);
+        LOG.info("Executed scrap reversal actor={} reversalId={} asset={}", current.id(), id, asset);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
@@ -651,6 +664,7 @@ public class ScrapReviewService {
         todo(id, "RECOVERY_DECIDE", "ASSET_ADMIN", null, time);
         audit(actor, current, initiator, id, number(request, "version"), "SCRAP_RECOVERY_REQUESTED",
                 Map.of("recoveryId", Long.toString(recovery), "input", input), time);
+        LOG.info("Requested scrap recovery actor={} requestId={} recoveryId={}", current.id(), id, recovery);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 number(request, "version"), input.assetVersion(), number(request, "ownership_version"),
                 "PENDING_ADMIN_DECISION", null), time);
@@ -718,6 +732,7 @@ public class ScrapReviewService {
         audit(actor, current, Role.ASSET_ADMIN, request, version,
                 approve ? "SCRAP_RECOVERY_APPROVED" : "SCRAP_RECOVERY_REJECTED",
                 Map.of("recoveryId", Long.toString(id), "input", input), time);
+        LOG.info("Decided scrap recovery actor={} recoveryId={} approved={}", current.id(), id, approve);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), number(recovery, "ownership_version"),
                 approve ? "WAITING_WAREHOUSE_CLAIM" : "REJECTED", null), time);
@@ -744,6 +759,7 @@ public class ScrapReviewService {
         closeTodo(request, "RECOVERY_CLAIM", time);
         todo(request, "RECOVERY_EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_RECOVERY_CLAIMED", input, time);
+        LOG.info("Claimed scrap recovery actor={} recoveryId={} requestId={}", current.id(), id, request);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, input.assetVersion(), ownership, "PROCESSING", Long.toString(current.id())), time);
     }
@@ -784,6 +800,7 @@ public class ScrapReviewService {
                 json.writeValueAsString(input), assetVersion, time, id);
         closeTodo(request, "RECOVERY_EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, request, version, "SCRAP_RECOVERY_EXECUTED", input, time);
+        LOG.info("Executed scrap recovery actor={} recoveryId={} asset={}", current.id(), id, asset);
         return remember(current, operation, key, hash, new Receipt(Long.toString(request), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "COMPLETED", Long.toString(current.id())), time);
     }
@@ -874,6 +891,8 @@ public class ScrapReviewService {
         }
         String action = approve ? "SCRAP_APPROVED" : "SCRAP_REJECTED";
         audit(actor, current, Role.ASSET_ADMIN, id, version, action, input, time);
+        LOG.info("Decided scrap request actor={} requestId={} asset={} approved={} status={}",
+                current.id(), id, asset, approve, status);
         return remember(current, operation, key, hash,
                 new Receipt(Long.toString(id), Long.toString(asset), version + 1, assetVersion,
                         number(request, "ownership_version"), status,
@@ -988,6 +1007,7 @@ public class ScrapReviewService {
         closeTodo(id, "CLAIM", time);
         todo(id, "EXECUTE", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_CLAIMED", input, time);
+        LOG.info("Claimed scrap request actor={} requestId={}", current.id(), id);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id),
                 Long.toString(number(request, "asset_id")), version + 1, input.assetVersion(),
                 ownership, "PROCESSING", Long.toString(current.id())), time);
@@ -1085,6 +1105,7 @@ public class ScrapReviewService {
         closeTodo(id, "EXECUTE", time);
         todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_EXECUTED", input, time);
+        LOG.info("Executed scrap request actor={} requestId={} asset={}", current.id(), id, asset);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }
@@ -1162,6 +1183,7 @@ public class ScrapReviewService {
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_FACTORY_EXECUTED",
                 Map.of("method", factory.method(), initial ? "initialDispositionId" : "replacementId",
                         Long.toString(factory.replacementId())), time);
+        LOG.info("Executed factory scrap disposition actor={} requestId={} asset={}", current.id(), id, asset);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }
@@ -1247,6 +1269,7 @@ public class ScrapReviewService {
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_LOSS_WRITTEN_OFF", facts, time);
+        LOG.info("Wrote off scrap loss actor={} requestId={} asset={} reportId={}", current.id(), id, asset, reportId);
         return remember(current, operation, key, hash, new Receipt(Long.toString(id), Long.toString(asset),
                 version + 1, assetVersion, input.ownershipVersion(), "EXECUTED", Long.toString(current.id())), time);
     }
@@ -1367,6 +1390,7 @@ public class ScrapReviewService {
         db.update("INSERT INTO fams_scrap_receipt(actor_account_id,operation,request_id,scrap_request_id,"
                 + "payload_sha256,response_json,created_at) VALUES (?,?,?,?,?,?,?)",
                 current.id(), operation, key.toString(), id, hash, json.writeValueAsString(receipt), time);
+        LOG.info("Completed scrap disposition actor={} requestId={} newVersion={}", current.id(), id, version + 1);
         return receipt;
     }
 

@@ -6,6 +6,8 @@ import com.fams.attachment.AttachmentWriter;
 import com.fams.auth.InventoryIdentityPort;
 import com.fams.auth.RequisitionActorContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,6 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class InventoryPhotoService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryPhotoService.class);
     private final AttachmentWriter writer;
     private final AttachmentRegistry registry;
     private final AttachmentStorage storage;
@@ -222,6 +225,7 @@ public class InventoryPhotoService {
         if (!newlyReceived.get().toString().equals(result.objectId())) {
             storage.delete(newlyReceived.get());
         }
+        LOG.info("Inventory event photo uploaded for task {} event {} by actor {}.", taskId, eventId, actor.id());
         return result;
     }
 }

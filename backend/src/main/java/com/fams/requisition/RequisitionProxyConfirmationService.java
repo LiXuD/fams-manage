@@ -8,6 +8,8 @@ import com.fams.auth.Role;
 import com.fams.proxy.ProxyReceiptPort;
 import com.fams.proxy.ProxyViews;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -38,6 +40,8 @@ import java.util.UUID;
 @Profile("fams-product")
 class RequisitionProxyConfirmationService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionProxyConfirmationService.class);
+
     private final JdbcTemplate db;
 
     private final RequisitionActorContext actors;
@@ -67,12 +71,15 @@ class RequisitionProxyConfirmationService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    ProxyViews.ProxySnapshot context(Actor actor, String businessType, long request, long item) {
+    public ProxyViews.ProxySnapshot context(Actor actor, String businessType, long request, long item) {
+        LOG.debug("Reading proxy confirmation context actor={} businessType={} request={} item={}",
+                actor.id(), businessType, request, item);
         return business(businessType).snapshot(actor, request, item, true);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    ProxyViews.ConfirmationPage list(Actor actor, int page, int size) {
+    public ProxyViews.ConfirmationPage list(Actor actor, int page, int size) {
+        LOG.debug("Listing proxy confirmations actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN) && !current.has(Role.WAREHOUSE_OPERATOR)) {
             throw RequisitionFailure.forbidden();
@@ -114,7 +121,8 @@ class RequisitionProxyConfirmationService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    ProxyViews.Confirmation get(Actor actor, long id) {
+    public ProxyViews.Confirmation get(Actor actor, long id) {
+        LOG.debug("Reading proxy confirmation actor={} confirmationId={}", actor.id(), id);
         var current = actors.revalidateLocked(actor);
         var row = row(id, false);
         reader(current, row);
@@ -122,7 +130,7 @@ class RequisitionProxyConfirmationService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    ProxyViews.Confirmation create(
+    public ProxyViews.Confirmation create(
             Actor actor, String key, RequisitionProxyConfirmationController.Draft input) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         String businessType = String.valueOf(input.snapshot().getOrDefault("businessType", "REQUISITION"));
@@ -200,11 +208,13 @@ class RequisitionProxyConfirmationService {
                 0,
                 0,
                 Map.of("snapshot", snapshot, "evidenceMetadata", input));
+        LOG.info("Drafted proxy confirmation actor={} confirmationId={} businessType={} businessId={} itemId={}",
+                current.id(), id, businessType, input.businessId(), input.itemId());
         return finish(current, "createProxyConfirmation", key, input, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    ProxyViews.Confirmation submit(Actor actor, long id, long version, String key) {
+    public ProxyViews.Confirmation submit(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);
         processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
@@ -235,11 +245,12 @@ class RequisitionProxyConfirmationService {
                 version,
                 version + 1,
                 Map.of("evidence", evidence));
+        LOG.info("Submitted proxy confirmation actor={} confirmationId={} version={}", current.id(), id, version);
         return finish(current, "submitProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    ProxyViews.Confirmation decision(
+    public ProxyViews.Confirmation decision(
             Actor actor,
             long id,
             long version,
@@ -277,11 +288,13 @@ class RequisitionProxyConfirmationService {
                 version,
                 version + 1,
                 Map.of("decision", input));
+        LOG.info("Decided proxy confirmation actor={} confirmationId={} approved={} version={}",
+                current.id(), id, input.approved(), version);
         return finish(current, "decideProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    ProxyViews.Confirmation execute(Actor actor, long id, long version, String key) {
+    public ProxyViews.Confirmation execute(Actor actor, long id, long version, String key) {
         var current = role(actor, Role.WAREHOUSE_OPERATOR);
         var hint = row(id, false);
         processor(current, hint.get("business_type").toString(), number(hint, "business_id"));
@@ -340,6 +353,8 @@ class RequisitionProxyConfirmationService {
                 number(row, "item_id"),
                 json.writeValueAsString(detail),
                 now());
+        LOG.info("Executed proxy confirmation actor={} confirmationId={} businessType={} businessId={} itemId={}",
+                current.id(), id, row.get("business_type"), number(row, "business_id"), number(row, "item_id"));
         return finish(current, "executeProxyConfirmation", key, payload, id, ProxyViews.confirmation(json, row(id, false)));
     }
 

@@ -14,6 +14,8 @@ import com.fams.auth.InboundActorContext;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.Role;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class InboundReassignmentService {
+    private static final Logger LOG = LoggerFactory.getLogger(InboundReassignmentService.class);
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
     private final InboundService inbound;
@@ -40,7 +43,7 @@ class InboundReassignmentService {
     }
 
     @Transactional
-    InboundViews.ReassignmentSnapshot inspect(Actor actor, long id) {
+    public InboundViews.ReassignmentSnapshot inspect(Actor actor, long id) {
         admin(actor);
         var row = processing(id);
         var owner = owner(id);
@@ -53,6 +56,7 @@ class InboundReassignmentService {
         // Evaluation order frozen: checks() takes the item/asset/lock FOR UPDATE sequence after
         // the operators read, exactly as the pre-JAVA-15 Map.of argument position did.
         var items = checks(id).stream().map(InboundViews::reassignmentItem).toList();
+        LOG.debug("Inbound reassignment snapshot requested id {}.", id);
         return new InboundViews.ReassignmentSnapshot(
                 Long.toString(id),
                 number(row, "version"),
@@ -64,7 +68,7 @@ class InboundReassignmentService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    InboundViews.Receipt reassign(Actor actor, long id, long version, String key,
+    public InboundViews.Receipt reassign(Actor actor, long id, long version, String key,
             InboundReassignmentController.Reassignment input) {
         var current = admin(actor);
         String digest = digest(id, version, input);
@@ -137,11 +141,12 @@ class InboundReassignmentService {
                 + "VALUES (?,'reassignInboundReceipt',?,?,'SUCCEEDED',200,?,'INBOUND',?,?,?,?,?)",
                 actor.id(), key, digest, json.writeValueAsString(result), id, version + 1,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Inbound receipt {} reassigned by actor {}.", id, actor.id());
         return result;
     }
 
     @Transactional(rollbackFor = Exception.class)
-    InboundViews.UnavailabilityResult declareUnavailable(Actor actor, long id, long version, String key,
+    public InboundViews.UnavailabilityResult declareUnavailable(Actor actor, long id, long version, String key,
             InboundReassignmentController.Unavailability input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) {
@@ -203,6 +208,7 @@ class InboundReassignmentService {
                 VALUES (?,'declareInboundProcessorUnavailable',?,?,'SUCCEEDED',200,?,'INBOUND',?,?,?,?,?)
                 """, actor.id(), key, digest, json.writeValueAsString(result), id, version,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Inbound receipt {} processing marked unavailable by actor {}.", id, actor.id());
         return result;
     }
 

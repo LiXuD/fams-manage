@@ -13,6 +13,8 @@ import java.util.Map;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.Role;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class RequisitionReassignmentService {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionReassignmentService.class);
+
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
     private final RequisitionService requisitions;
@@ -39,7 +43,8 @@ class RequisitionReassignmentService {
     }
 
     @Transactional
-    RequisitionViews.ReassignmentSnapshot inspect(Actor actor, long id) {
+    public RequisitionViews.ReassignmentSnapshot inspect(Actor actor, long id) {
+        LOG.debug("Inspecting requisition reassignment candidate actor={} requestId={}", actor.id(), id);
         admin(actor);
         var row = processing(id);
         var owner = owner(id);
@@ -65,7 +70,7 @@ class RequisitionReassignmentService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    RequisitionViews.Detail declareUnavailable(Actor actor, long id, long version, String key,
+    public RequisitionViews.Detail declareUnavailable(Actor actor, long id, long version, String key,
             RequisitionUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw RequisitionFailure.forbidden(); }
@@ -118,6 +123,8 @@ class RequisitionReassignmentService {
                 VALUES (?,'declareRequisitionProcessorUnavailable',?,?,'SUCCEEDED',200,?,'REQUISITION',?,?,?,?,?)
                 """, current.id(), key, digest, json.writeValueAsString(result), id, version,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Declared requisition processor unavailable actor={} requestId={} version={}",
+                current.id(), id, version);
         return result;
     }
 
@@ -131,7 +138,7 @@ class RequisitionReassignmentService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    RequisitionViews.Detail reassign(Actor actor, long id, long version, String key,
+    public RequisitionViews.Detail reassign(Actor actor, long id, long version, String key,
             RequisitionReassignmentController.Reassignment input) {
         admin(actor);
         String digest = digest(id, version, input);
@@ -207,6 +214,8 @@ class RequisitionReassignmentService {
                 + "VALUES (?,'reassignRequisition',?,?,'SUCCEEDED',200,?,'REQUISITION',?,?,?,?,?)",
                 actor.id(), key, digest, json.writeValueAsString(result), id, version + 1,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Controlled reassignment of requisition id={} to processor={} actor={}",
+                id, input.processorAccountId(), actor.id());
         return result;
     }
 

@@ -65,7 +65,7 @@ class LocationService {
     }
 
     @Transactional
-    Location create(long actorId, LocationCreateRequest request, String key, UUID requestId) {
+    public Location create(long actorId, LocationCreateRequest request, String key, UUID requestId) {
         String operation = "createLocation";
         String digest = fingerprint.of(operation, objectMapper.writeValueAsString(request));
         Optional<Location> replay = replay(actorId, operation, key, digest);
@@ -89,7 +89,7 @@ class LocationService {
     }
 
     @Transactional
-    Location update(long actorId, long id, long expectedVersion,
+    public Location update(long actorId, long id, long expectedVersion,
             LocationUpdateRequest request, String key, UUID requestId) {
         String operation = "updateLocation";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion),
@@ -130,7 +130,7 @@ class LocationService {
     }
 
     @Transactional
-    Location changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
+    public Location changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
             String reason, String key, UUID requestId) {
         String operation = enabled ? "enableLocation" : "disableLocation";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion), reason);

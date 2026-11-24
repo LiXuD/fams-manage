@@ -2,6 +2,8 @@ package com.fams.loss;
 
 import com.fams.auth.RequisitionActorContext.Actor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -19,6 +21,7 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryLossPort {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryLossPort.class);
     public record Source(long taskId, long itemId, long reasonId, long recheckGeneration) {}
 
     public record Progress(String reportId, String status, String processorAccountId, LocalDate nextReviewDate) {
@@ -44,10 +47,12 @@ public class InventoryLossPort {
         String report = reports.submitInventory(actor, source, input);
         db.update("INSERT INTO fams_loss_inventory_source(report_id,reason_id) VALUES (?,?)",
                 Long.parseLong(report), source.reasonId());
+        LOG.debug("INSERT fams_loss_inventory_source reason {} task {}.", source.reasonId(), source.taskId());
         return report;
     }
 
     public Map<Long, Progress> progress(List<Long> reasons) {
+        LOG.debug("Loss progress queried for submitted reasons.");
         var result = new HashMap<Long, Progress>();
         var query = new NamedParameterJdbcTemplate(db);
         for (int offset = 0; offset < reasons.size(); offset += 200) {

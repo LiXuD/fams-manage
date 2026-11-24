@@ -61,7 +61,7 @@ class NotificationChannelConfigService implements NotificationChannelConfigPort 
     }
 
     @Transactional
-    NotificationChannelConfig replace(long actorId, long expectedVersion,
+    public NotificationChannelConfig replace(long actorId, long expectedVersion,
             NotificationChannelConfigReplaceRequest request, String key, UUID requestId) {
         String operation = "replaceNotificationChannels";
         String digest = fingerprint.of(operation, Long.toString(expectedVersion),

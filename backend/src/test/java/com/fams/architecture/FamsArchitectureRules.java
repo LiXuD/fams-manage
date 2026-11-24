@@ -67,6 +67,14 @@ final class FamsArchitectureRules {
             .areAnnotatedWith(Mapper.class)
             .because("persistence is owned by the Repository and Port boundary, not the service");
 
+    static final ArchRule TRANSACTIONAL_METHODS_ARE_PUBLIC = methods()
+            .that()
+            .areAnnotatedWith(Transactional.class)
+            .should()
+            .bePublic()
+            .because("Spring returns a null transaction attribute for non-public methods before it "
+                    + "falls back to the class-level annotation, so a non-public @Transactional never applies");
+
     private FamsArchitectureRules() {
     }
 

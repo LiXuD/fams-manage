@@ -1,5 +1,7 @@
 package com.fams.requisition;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -16,12 +18,16 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class RequisitionBorrowDatePort implements com.fams.business.BorrowRequestDatePort {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionBorrowDatePort.class);
+
     private final JdbcTemplate db;
 
     RequisitionBorrowDatePort(JdbcTemplate db) { this.db = db; }
 
     public com.fams.business.BorrowRequestDatePort.BorrowRequestChoicePage eligible(
             long account, boolean administrator, boolean warehouse, int page, int size) {
+        LOG.debug("Listing eligible BORROW requests account={} admin={} warehouse={} page={} size={}",
+                account, administrator, warehouse, page, size);
         String scope = administrator ? "1=1" : "r.creator_account_id=?"
                 + (warehouse ? " OR EXISTS (SELECT 1 FROM fams_requisition_ownership o WHERE o.request_id=r.id"
                         + " AND o.processor_account_id=? AND o.archived_at IS NULL)" : "");
@@ -66,6 +72,7 @@ public class RequisitionBorrowDatePort implements com.fams.business.BorrowReques
     }
 
     public Map<String, Object> snapshot(long id) {
+        LOG.debug("Locking fams_requisition FOR UPDATE id={}", id);
         var rows = db.queryForList("SELECT * FROM fams_requisition WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) { throw new IllegalStateException("LOAN_TARGET_NOT_FOUND"); }
         var row = rows.getFirst();
@@ -82,5 +89,6 @@ public class RequisitionBorrowDatePort implements com.fams.business.BorrowReques
         }
         db.update("UPDATE fams_requisition SET expected_return_date=?,updated_at=?,version=version+1"
                 + " WHERE id=? AND version=?", due, Timestamp.from(time), id, version);
+        LOG.debug("Extended fams_requisition id={} expected_return_date={} at version={}", id, due, version);
     }
 }

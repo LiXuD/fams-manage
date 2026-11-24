@@ -38,13 +38,13 @@ class WechatSubscriptionService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    MiniSubscriptionVisibility visibility(RequisitionActorContext.Actor actor) {
+    public MiniSubscriptionVisibility visibility(RequisitionActorContext.Actor actor) {
         actors.revalidateLocked(actor);
         return new MiniSubscriptionVisibility().wechatTemplate(channels.currentTemplates().wechatTemplate());
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    WechatSubscriptionGrant register(RequisitionActorContext.Actor actor, UUID key,
+    public WechatSubscriptionGrant register(RequisitionActorContext.Actor actor, UUID key,
             WechatSubscriptionGrantRequest request) {
         var current = actors.revalidateLocked(actor);
         var existing = db.query("""

@@ -7,6 +7,8 @@ import java.util.stream.Collectors;
 
 import jakarta.validation.ConstraintViolationException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -19,9 +21,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 final class RuntimeCompatibilityErrorHandler {
 
+    private static final Logger LOG = LoggerFactory.getLogger(RuntimeCompatibilityErrorHandler.class);
+
     @ExceptionHandler(RuntimeCompatibilityRejectedException.class)
     ResponseEntity<RuntimeCompatibilityController.RollbackResponse> handleRollback(
             RuntimeCompatibilityRejectedException exception) {
+        LOG.warn("Runtime compatibility transaction rejected and rolled back: probeKey={}",
+                exception.getProbeKey());
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(new RuntimeCompatibilityController.RollbackResponse(
                         "RUNTIME_COMPATIBILITY_TRANSACTION_REJECTED",
@@ -32,6 +38,7 @@ final class RuntimeCompatibilityErrorHandler {
 
     @ExceptionHandler(RuntimeSessionUnavailableException.class)
     ResponseEntity<RuntimeErrorResponse> handleSessionUnavailable(RuntimeSessionUnavailableException exception) {
+        LOG.warn("Runtime compatibility session proof unavailable, rejected with 401");
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(error("RUNTIME_COMPATIBILITY_SESSION_UNAVAILABLE", exception.getMessage(), Map.of()));
     }
@@ -44,6 +51,7 @@ final class RuntimeCompatibilityErrorHandler {
                         error -> error.getDefaultMessage(),
                         (first, ignored) -> first,
                         LinkedHashMap::new));
+        LOG.warn("Runtime compatibility request validation failed: fields={}", fieldErrors.keySet());
         return ResponseEntity.badRequest().body(error(
                 "RUNTIME_COMPATIBILITY_INVALID_REQUEST", "Request validation failed.", fieldErrors));
     }
@@ -56,12 +64,14 @@ final class RuntimeCompatibilityErrorHandler {
                         violation -> violation.getMessage(),
                         (first, ignored) -> first,
                         LinkedHashMap::new));
+        LOG.warn("Runtime compatibility constraint violated: fields={}", fieldErrors.keySet());
         return ResponseEntity.badRequest().body(error(
                 "RUNTIME_COMPATIBILITY_INVALID_REQUEST", "Request validation failed.", fieldErrors));
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<RuntimeErrorResponse> handleDataIntegrity(DataIntegrityViolationException exception) {
+        LOG.warn("Runtime compatibility probe key duplicated, write rejected with 409");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(
                 "RUNTIME_COMPATIBILITY_DUPLICATE_PROBE", "The probe key already exists.", Map.of()));
     }

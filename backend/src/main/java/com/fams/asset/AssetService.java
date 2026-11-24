@@ -75,7 +75,7 @@ class AssetService {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    PageAsset list(Actor actor, int page, int pageSize, Map<String, String> query) {
+    public PageAsset list(Actor actor, int page, int pageSize, Map<String, String> query) {
         if (page < 1 || pageSize < 1 || pageSize > 200) {
             throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Invalid page range.");
         }
@@ -181,7 +181,7 @@ class AssetService {
     }
 
     @Transactional
-    Asset update(Actor actor, long id, long expectedVersion,
+    public Asset update(Actor actor, long id, long expectedVersion,
             AssetUpdateRequest request, String key) {
         String operation = "updateAsset";
         String digest = digest(operation, id + ":" + expectedVersion + ":"
@@ -301,7 +301,7 @@ class AssetService {
     }
 
     @Transactional
-    Asset create(Actor actor, AssetCreateRequest request, String key) {
+    public Asset create(Actor actor, AssetCreateRequest request, String key) {
         String operation = "createAsset";
         String digest = digest(operation, json.writeValueAsString(request));
         Asset replay = replay(actor.id(), operation, key, digest, Asset.class);
@@ -321,7 +321,7 @@ class AssetService {
     }
 
     @Transactional
-    AssetCopyResult copy(Actor actor, long sourceId, long expectedVersion, int quantity,
+    public AssetCopyResult copy(Actor actor, long sourceId, long expectedVersion, int quantity,
             String reason, String key) {
         String operation = "copyAsset";
         String digest = digest(operation, sourceId + ":" + expectedVersion + ":" + quantity + ":" + reason);
@@ -365,7 +365,7 @@ class AssetService {
     }
 
     @Transactional
-    Asset cancel(Actor actor, long id, long expectedVersion, String reason, String key) {
+    public Asset cancel(Actor actor, long id, long expectedVersion, String reason, String key) {
         String operation = "cancelAsset";
         String digest = digest(operation, id + ":" + expectedVersion + ":" + reason);
         Asset replay = replay(actor.id(), operation, key, digest, Asset.class);
@@ -423,7 +423,7 @@ class AssetService {
     }
 
     @Transactional
-    TagPlacement confirmTagPlacement(Actor actor, long id, long expectedVersion, String token, String key) {
+    public TagPlacement confirmTagPlacement(Actor actor, long id, long expectedVersion, String token, String key) {
         String operation = "confirmAssetTagPlacement";
         String hash = codec.hash(token);
         String digest = digest(operation, id + ":" + expectedVersion + ":" + hash);
@@ -459,7 +459,7 @@ class AssetService {
     record TagPlacement(String assetId, long tagVersion, Instant confirmedAt) {}
 
     @Transactional
-    AssetTagReplacementResult replaceTag(Actor actor, long id, long expectedVersion,
+    public AssetTagReplacementResult replaceTag(Actor actor, long id, long expectedVersion,
             String reason, String key) {
         String operation = "replaceAssetTag";
         String digest = digest(operation, id + ":" + expectedVersion + ":" + reason);
@@ -491,7 +491,7 @@ class AssetService {
     }
 
     @Transactional
-    AssetTagPrintJob reprint(Actor actor, long id, long expectedVersion,
+    public AssetTagPrintJob reprint(Actor actor, long id, long expectedVersion,
             String reason, String key) {
         String operation = "reprintAssetTag";
         String digest = digest(operation, id + ":" + expectedVersion + ":" + reason);
@@ -508,7 +508,7 @@ class AssetService {
     }
 
     @Transactional
-    AssetTagBatchPrintJob batchPrint(Actor actor, AssetTagBatchPrintRequest request, String key) {
+    public AssetTagBatchPrintJob batchPrint(Actor actor, AssetTagBatchPrintRequest request, String key) {
         String operation = "batchPrintAssetTags";
         String digest = digest(operation, json.writeValueAsString(request));
         AssetTagBatchPrintJob replay = replay(actor.id(), operation, key, digest,

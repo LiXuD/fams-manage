@@ -102,7 +102,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Organization createOrganization(
+    public Organization createOrganization(
             long actorId,
             OrganizationCreateRequest request,
             String idempotencyKey,
@@ -123,7 +123,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Organization updateOrganization(
+    public Organization updateOrganization(
             long actorId,
             long id,
             long expectedVersion,
@@ -161,7 +161,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Organization disableOrganization(
+    public Organization disableOrganization(
             long actorId,
             long id,
             long expectedVersion,
@@ -180,7 +180,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Employee createEmployee(
+    public Employee createEmployee(
             long actorId,
             EmployeeCreateRequest request,
             String idempotencyKey,
@@ -204,7 +204,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Employee updateEmployee(
+    public Employee updateEmployee(
             long actorId,
             long id,
             long expectedVersion,
@@ -236,7 +236,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    Employee changeEmployeeStatus(
+    public Employee changeEmployeeStatus(
             long actorId,
             long id,
             long expectedVersion,
@@ -256,7 +256,7 @@ class IdentityMasterDataService {
     }
 
     @Transactional
-    IdentityImportResult importIdentity(
+    public IdentityImportResult importIdentity(
             long actorId,
             String csv,
             String idempotencyKey,

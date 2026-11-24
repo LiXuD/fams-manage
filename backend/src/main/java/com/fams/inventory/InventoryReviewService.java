@@ -6,6 +6,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryReviewService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryReviewService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -73,6 +76,7 @@ public class InventoryReviewService {
                             && List.of("IN_PROGRESS", "WAITING_REVIEW").contains(task.get("task_status")),
                     problem));
         }
+        LOG.debug("Review task detail requested for task {} page {} size {}.", taskId, page, size);
         return new FindingViews.ReviewTaskDetail(FindingViews.task(json, task), items,
                 countItems(taskId), page, size, reviewedCount(taskId));
     }
@@ -98,6 +102,7 @@ public class InventoryReviewService {
         args.add((page - 1) * size);
         var rows = db.queryForList("SELECT * FROM fams_inventory_observation WHERE " + where
                 + " ORDER BY id LIMIT ? OFFSET ? FOR SHARE", args.toArray());
+        LOG.debug("Review observations requested for task {} item {} page {} size {}.", taskId, itemId, page, size);
         return new FindingViews.ObservationPage(
                 rows.stream().map(row -> FindingViews.reviewObservation(json, row)).toList(),
                 Objects.requireNonNull(total), page, size);
@@ -196,6 +201,7 @@ public class InventoryReviewService {
         db.update("INSERT INTO fams_inventory_review_receipt(task_id,actor_account_id,operation,request_id,"
                 + "payload_sha256,response_json,created_at) VALUES (?,?,'ACCEPT_NORMAL',?,?,?,?)",
                 taskId, current.id(), key.toString(), fingerprint, json.writeValueAsString(response), now());
+        LOG.info("Normal review batch accepted for task {} by actor {}.", taskId, actor.id());
         return response;
     }
 

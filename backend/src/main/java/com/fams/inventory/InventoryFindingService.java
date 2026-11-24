@@ -8,6 +8,8 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.inbound.InventoryInboundPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryFindingService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryFindingService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -89,6 +92,7 @@ public class InventoryFindingService {
             return new FindingViews.FindingTargets(List.of());
         }
         var row = json.readTree(snapshot);
+        LOG.debug("Finding targets searched for task {} code {} receipt {}.", taskId, assetCode, receiptNumber);
         return new FindingViews.FindingTargets(
                 List.of(
                         FindingViews.duplicateAssetTarget(
@@ -142,6 +146,7 @@ public class InventoryFindingService {
                                         + " observation_id=? AND dimension='FINDING'",
                                 Long.class,
                                 observationId));
+        LOG.debug("Finding detail requested for task {} observation {}.", taskId, observationId);
         return new FindingViews.FindingDetail(
                 timeSubject.stream().map(row -> FindingViews.subject(json, row)).toList(),
                 recollections.stream()
@@ -346,6 +351,7 @@ public class InventoryFindingService {
                 hash,
                 json.writeValueAsString(result),
                 now);
+        LOG.info("Finding decision committed for observation {} by actor {}.", observationId, actor.id());
         return result;
     }
 
@@ -362,6 +368,7 @@ public class InventoryFindingService {
                 " FROM fams_inventory_observation WHERE task_id=? AND item_id IS NULL AND id>? AND"
                     + " outcome='FINDING_REVIEW' AND calibrated_observed_at IS NOT NULL AND"
                     + " calibrated_persisted_at IS NOT NULL AND calibrated_observed_at>=?";
+        LOG.debug("Recollection targets requested for observation {} page {} size {}.", observationId, page, size);
         return new FindingViews.ObservationPage(
                 db
                         .queryForList(
@@ -530,6 +537,7 @@ public class InventoryFindingService {
                 fingerprint,
                 json.writeValueAsString(result),
                 now);
+        LOG.info("Observation recollection committed for observation {} actor {}.", observationId, actor.id());
         return result;
     }
 

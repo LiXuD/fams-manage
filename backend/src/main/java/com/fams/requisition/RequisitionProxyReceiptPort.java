@@ -4,6 +4,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.proxy.ProxyReceiptPort;
 import com.fams.proxy.ProxyViews;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -11,6 +13,8 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("fams-product")
 class RequisitionProxyReceiptPort implements ProxyReceiptPort {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionProxyReceiptPort.class);
+
     private final JdbcTemplate db;
     private final RequisitionHandoverService handovers;
 
@@ -22,12 +26,14 @@ class RequisitionProxyReceiptPort implements ProxyReceiptPort {
     @Override public String businessType() { return "REQUISITION"; }
 
     @Override public void lockHeader(long request) {
+        LOG.debug("Locking fams_requisition header FOR UPDATE request={}", request);
         if (db.queryForList("SELECT id FROM fams_requisition WHERE id=? FOR UPDATE", request).isEmpty()) {
             throw RequisitionFailure.unavailable();
         }
     }
 
     @Override public void requireProcessor(long account, long request) {
+        LOG.debug("Checking latest fams_requisition_ownership processor account={} request={}", account, request);
         lockHeader(request);
         var owners = db.queryForList("SELECT processor_account_id FROM fams_requisition_ownership"
                 + " WHERE request_id=? ORDER BY id DESC LIMIT 1 FOR UPDATE", request);

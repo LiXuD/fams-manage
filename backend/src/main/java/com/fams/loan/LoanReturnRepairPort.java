@@ -1,5 +1,7 @@
 package com.fams.loan;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,8 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LoanReturnRepairPort {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanReturnRepairPort.class);
+
     public record Context(
             long id,
             long version,
@@ -43,6 +47,7 @@ public class LoanReturnRepairPort {
      * the frozen pre-refactor wire projection (JAVA-08); see LoanViews.RepairFollowupSource.
      */
     public LoanViews.Page<LoanViews.RepairFollowupSource> list(int page, int size) {
+        LOG.debug("Listing RETURN_REPAIR followup pages page={} size={}", page, size);
         String from = " FROM fams_return_followup WHERE business_type='REPAIR'";
         var rows =
                 db.queryForList(
@@ -60,6 +65,7 @@ public class LoanReturnRepairPort {
     }
 
     public Context pending(long id) {
+        LOG.debug("Locking pending RETURN_REPAIR followup FOR UPDATE id={}", id);
         var rows =
                 db.queryForList(
                         "SELECT"
@@ -151,9 +157,11 @@ public class LoanReturnRepairPort {
             throw changed();
         }
         closeTodos(source.id());
+        LOG.debug("Adopted followup id={} into repair={} and moved the business lock", source.id(), repair);
     }
 
     public void progress(long followup, long repair, String status, Long processor) {
+        LOG.debug("Progressing RETURN_REPAIR followup={} repair={} status={}", followup, repair, status);
         var source = linked(followup, repair);
         if (processor != null) {
             db.update(

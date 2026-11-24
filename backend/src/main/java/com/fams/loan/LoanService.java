@@ -5,6 +5,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.business.BorrowRequestDatePort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import java.util.HexFormat;
 @Service
 @Profile("fams-product")
 class LoanService {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -39,7 +43,8 @@ class LoanService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.Page<LoanViews.Loan> list(Actor actor, int page, int size) {
+    public LoanViews.Page<LoanViews.Loan> list(Actor actor, int page, int size) {
+        LOG.debug("Listing loans actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         String scope = scope(current);
         long total = java.util.Objects.requireNonNull(
@@ -52,14 +57,16 @@ class LoanService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    BorrowRequestDatePort.BorrowRequestChoicePage eligibleRequests(Actor actor, int page, int size) {
+    public BorrowRequestDatePort.BorrowRequestChoicePage eligibleRequests(Actor actor, int page, int size) {
+        LOG.debug("Listing eligible borrow requests actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         return requests.eligible(current.id(), current.has(Role.ASSET_ADMIN),
                 current.has(Role.WAREHOUSE_OPERATOR), page, size);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.LoanDetail get(Actor actor, long id) {
+    public LoanViews.LoanDetail get(Actor actor, long id) {
+        LOG.debug("Reading loan detail actor={} loanId={}", actor.id(), id);
         var current = actors.revalidateLocked(actor);
         var loan = loan(id);
         visible(current, loan);
@@ -73,7 +80,8 @@ class LoanService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.Page<LoanViews.Extension> extensions(Actor actor, int page, int size) {
+    public LoanViews.Page<LoanViews.Extension> extensions(Actor actor, int page, int size) {
+        LOG.debug("Listing loan extensions actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         String predicate = current.has(Role.ASSET_ADMIN) ? "1=1" : "proposed_by=" + current.id();
         var rows = db.queryForList("SELECT * FROM fams_loan_extension WHERE " + predicate
@@ -84,7 +92,7 @@ class LoanService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.Extension propose(Actor actor, long id, boolean beforeReceipt, long version,
+    public LoanViews.Extension propose(Actor actor, long id, boolean beforeReceipt, long version,
             String key, LoanController.Extension input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("extend:" + id + ":" + beforeReceipt + ":" + version, input);
@@ -122,12 +130,14 @@ class LoanService {
         audit(actor, current, "LOAN_EXTENSION_PROPOSED", extension, null, 0L,
                 Map.of("reason", input.reason(), "originalReturnDate", old.toString(),
                         "requestedReturnDate", input.expectedReturnDate().toString()));
+        LOG.info("Proposed loan extension actor={} extensionId={} targetId={} beforeReceipt={}",
+                current.id(), extension, id, beforeReceipt);
         return finish(current, "propose", key, hash,
                 LoanViews.extension(one("SELECT * FROM fams_loan_extension WHERE id=?", extension)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.Extension decide(Actor actor, long id, long version, String key, LoanController.Decision input) {
+    public LoanViews.Extension decide(Actor actor, long id, long version, String key, LoanController.Decision input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) { throw new LoanFailure("LOAN_FORBIDDEN", 403); }
         String hash = digest("decision:" + id + ":" + version, input);
@@ -162,6 +172,8 @@ class LoanService {
                 + " AND business_id=? AND closed_at IS NULL", now(), id);
         audit(actor, current, input.approved() ? "LOAN_EXTENSION_APPROVED" : "LOAN_EXTENSION_REJECTED",
                 id, version, version + 1, Map.of("reason", input.reason(), "targetId", Long.toString(targetId)));
+        LOG.info("Decided loan extension actor={} extensionId={} approved={} targetId={}",
+                current.id(), id, input.approved(), targetId);
         return finish(current, "decision", key, hash,
                 LoanViews.extension(one("SELECT * FROM fams_loan_extension WHERE id=?", id)));
     }

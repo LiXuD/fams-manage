@@ -3,6 +3,8 @@ package com.fams.inbound;
 import com.fams.auth.InboundActorContext;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.Role;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -20,6 +22,7 @@ import java.util.UUID;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class FactoryReplacementInboundPort {
+    private static final Logger LOG = LoggerFactory.getLogger(FactoryReplacementInboundPort.class);
     /**
      * Narrow identity of the created receipt (JAVA-10c): the whole InboundService.get document
      * had exactly one consumer read, the stringified "id" bound into
@@ -80,6 +83,7 @@ public class FactoryReplacementInboundPort {
     private Map<String, Object> createOwned(RequisitionActorContext.Actor actor, UUID source,
             long oldAsset, long asset, long assetVersion, long repair, long round, LocalDate date,
             long warehouse, long warehouseVersion, long location, long locationVersion) {
+        LOG.debug("INSERT fams_inbound_factory_replacement_origin for asset {} source {}.", asset, source);
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) {
             throw InboundFailure.conflict("INBOUND_REPLACEMENT_WAREHOUSE_REQUIRED");

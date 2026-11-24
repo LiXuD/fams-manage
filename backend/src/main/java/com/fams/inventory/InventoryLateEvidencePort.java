@@ -1,5 +1,7 @@
 package com.fams.inventory;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,7 @@ import java.util.Map;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryLateEvidencePort {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryLateEvidencePort.class);
     /**
      * Narrow task identity the evidence chain reads (JAVA-10c): id and version are BIGINT columns
      * bound into FOR SHARE/INSERT statements verbatim as before and projected into the stored
@@ -161,6 +164,7 @@ public class InventoryLateEvidencePort {
         packet.put("supplementOnly", true);
         packet.put("provesOriginalSealCondition", false);
         String snapshot = json.writeValueAsString(packet);
+        LOG.debug("Recording late supplemental evidence rows for task {} observation {}.", task.id(), observationId);
         boolean needsReview =
                 !"FACTS_MATCH".equals(kind)
                         || InventoryLatePolicy.requiresRecheck(

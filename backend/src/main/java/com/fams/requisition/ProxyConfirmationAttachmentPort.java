@@ -5,6 +5,8 @@ import com.fams.auth.Role;
 import com.fams.proxy.ProxyReceiptPort;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,8 @@ import java.util.Set;
 @Component
 @Profile("fams-product")
 public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ProxyConfirmationAttachmentPort.class);
 
     private final JdbcTemplate db;
 
@@ -62,6 +66,7 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
 
     @Override
     public void requireReaderLocked(long actor, Set<Role> roles, long id) {
+        LOG.debug("Locking proxy confirmation id={} for reader actor={}", id, actor);
         var row = row(id, true);
         if (roles.contains(Role.ASSET_ADMIN) && !"DRAFT".equals(row.get("confirmation_status"))) {
             return;
@@ -81,6 +86,7 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
 
     @Override
     public void requireWritable(long actor, long id, long version, boolean lock) {
+        LOG.debug("Checking write access on fams_proxy_confirmation id={} actor={}", id, actor);
         var row = row(id, lock);
         if (!"DRAFT".equals(row.get("confirmation_status"))
                 || ((Number) row.get("creator_account_id")).longValue() != actor
@@ -105,5 +111,6 @@ public class ProxyConfirmationAttachmentPort implements AttachmentBusinessPort {
         if (updated != 1) {
             throw RequisitionFailure.conflict("PROXY_RECEIPT_VERSION_CONFLICT");
         }
+        LOG.debug("Bumped fams_proxy_confirmation id={} version={} after attachment registration", id, version);
     }
 }

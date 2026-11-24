@@ -12,6 +12,8 @@ import java.util.Map;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.Role;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class AssetReturnReassignmentService {
+    private static final Logger LOG = LoggerFactory.getLogger(AssetReturnReassignmentService.class);
+
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
     private final AssetReturnService returns;
@@ -39,7 +43,8 @@ class AssetReturnReassignmentService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.ReassignmentSnapshot inspect(Actor actor, long id) {
+    public LoanViews.ReassignmentSnapshot inspect(Actor actor, long id) {
+        LOG.debug("Inspecting asset return reassignment candidate actor={} returnId={}", actor.id(), id);
         admin(actor);
         var row = processing(id);
         var owner = row;
@@ -56,7 +61,7 @@ class AssetReturnReassignmentService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturnDetail declareUnavailable(Actor actor, long id, long version, String key,
+    public LoanViews.AssetReturnDetail declareUnavailable(Actor actor, long id, long version, String key,
             AssetReturnUnavailabilityController.Input input) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.WAREHOUSE_OPERATOR)) { throw new LoanFailure("RETURN_FORBIDDEN", 403); }
@@ -112,6 +117,8 @@ class AssetReturnReassignmentService {
                 VALUES (?,'declareAssetReturnProcessorUnavailable',?,?,'SUCCEEDED',200,?,'ASSET_RETURN',?,?,?,?,?)
                 """, current.id(), key, digest, json.writeValueAsString(result), id, version,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Declared asset return processor unavailable actor={} returnId={} version={}",
+                current.id(), id, version);
         return result;
     }
 
@@ -125,7 +132,7 @@ class AssetReturnReassignmentService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturnDetail reassign(Actor actor, long id, long version, String key,
+    public LoanViews.AssetReturnDetail reassign(Actor actor, long id, long version, String key,
             AssetReturnReassignmentController.Reassignment input) {
         admin(actor);
         String digest = digest(id, version, input);
@@ -197,6 +204,8 @@ class AssetReturnReassignmentService {
                 + "VALUES (?,'reassignAssetReturn',?,?,'SUCCEEDED',200,?,'ASSET_RETURN',?,?,?,?,?)",
                 actor.id(), key, digest, json.writeValueAsString(result), id, version + 1,
                 now, now, now.plus(24, ChronoUnit.HOURS));
+        LOG.info("Controlled reassignment of asset return id={} to processor={} actor={}",
+                id, input.processorAccountId(), actor.id());
         return result;
     }
 

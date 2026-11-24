@@ -5,6 +5,8 @@ import com.fams.attachment.AttachmentGrantSigner;
 import com.fams.attachment.AttachmentReadService;
 import com.fams.auth.RequisitionActorContext;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +24,7 @@ import java.util.UUID;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class InventoryPhotoReadService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryPhotoReadService.class);
     private final RequisitionActorContext actors;
     private final InventoryAttachmentPort business;
     private final AttachmentEvidencePort attachments;
@@ -57,6 +60,7 @@ public class InventoryPhotoReadService {
     @Transactional
     public List<AttachmentEvidencePort.Metadata> list(
             RequisitionActorContext.Actor source, long task, UUID event) {
+        LOG.debug("Inventory event photo list requested for task {} event {} by actor {}.", task, event, source.id());
         return attachments.list("INVENTORY_EVENT", authorize(source, task, event));
     }
 
@@ -95,6 +99,7 @@ public class InventoryPhotoReadService {
     @Transactional
     public AttachmentGrantSigner.Grant grant(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object) {
+        LOG.debug("Inventory event photo grant requested for task {} event {} by actor {}.", task, event, source.id());
         long scope = authorize(source, task, event);
         return attachments.grant("INVENTORY_EVENT", scope, identity(source, object));
     }
@@ -103,6 +108,7 @@ public class InventoryPhotoReadService {
     public AttachmentReadService.Content read(
             RequisitionActorContext.Actor source, long task, UUID event, UUID object, String token)
             throws IOException {
+        LOG.debug("Inventory event photo read requested for task {} event {} by actor {}.", task, event, source.id());
         long scope = authorize(source, task, event);
         return attachments.read("INVENTORY_EVENT", scope, identity(source, object), token);
     }

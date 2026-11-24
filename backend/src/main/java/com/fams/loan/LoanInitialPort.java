@@ -1,5 +1,7 @@
 package com.fams.loan;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,8 @@ import java.util.UUID;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LoanInitialPort implements com.fams.business.InitialBorrowingPort {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanInitialPort.class);
+
     private final JdbcTemplate db;
 
     LoanInitialPort(JdbcTemplate db) {
@@ -35,15 +39,18 @@ public class LoanInitialPort implements com.fams.business.InitialBorrowingPort {
                 + " VALUES (?,?,?,'INITIAL_IMPORT',?,?,?,?,?,?,?,?)",
                 asset, employee, organization, batch.toString(), row, borrowed, due, due,
                 snapshot, Timestamp.from(time), Timestamp.from(time));
+        LOG.debug("Inserted fams_loan INITIAL_IMPORT row for asset={} batch={} row={}", asset, batch, row);
     }
 
     public void cancel(long asset, UUID batch, Instant time) {
         assertReversible(asset, batch);
         db.update("UPDATE fams_loan SET relation_status='VOID',closed_at=?,updated_at=?,version=version+1"
                 + " WHERE asset_id=?", Timestamp.from(time), Timestamp.from(time), asset);
+        LOG.debug("Voided fams_loan rows for asset={} batch={}", asset, batch);
     }
 
     public void assertReversible(long asset, UUID batch) {
+        LOG.debug("Locking fams_loan rows FOR UPDATE for asset={} batch={}", asset, batch);
         var rows = db.queryForList("SELECT * FROM fams_loan WHERE asset_id=? FOR UPDATE", asset);
         if (rows.isEmpty()) {
             return;

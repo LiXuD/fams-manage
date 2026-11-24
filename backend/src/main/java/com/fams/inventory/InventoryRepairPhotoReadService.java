@@ -6,6 +6,8 @@ import com.fams.attachment.AttachmentReadService;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.repair.InventoryRepairPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,6 +24,7 @@ import java.util.UUID;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class InventoryRepairPhotoReadService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryRepairPhotoReadService.class);
     private final InventoryRepairPort repairs;
     private final AttachmentEvidencePort attachments;
     private final JdbcTemplate db;
@@ -77,6 +80,7 @@ public class InventoryRepairPhotoReadService {
     @Transactional
     public AttachmentGrantSigner.Grant grant(
             Actor actor, long repair, long observation, UUID object) {
+        LOG.debug("Repair photo grant requested for observation {} by actor {}.", observation, actor.id());
         return attachments.grant(
                 "INVENTORY_EVENT",
                 authorize(actor, repair, observation, object),
@@ -86,6 +90,7 @@ public class InventoryRepairPhotoReadService {
     @Transactional
     public java.util.List<AttachmentEvidencePort.Metadata> list(
             Actor actor, long repair, long observation) {
+        LOG.debug("Repair photo list requested for repair {} observation {}.", repair, observation);
         InventoryRepairPort.Evidence evidence;
         try {
             evidence = repairs.evidence(actor, repair, observation);
@@ -108,6 +113,7 @@ public class InventoryRepairPhotoReadService {
     public AttachmentReadService.Content read(
             Actor actor, long repair, long observation, UUID object, String token)
             throws IOException {
+        LOG.debug("Repair photo read requested for repair {} observation {}.", repair, observation);
         return attachments.read(
                 "INVENTORY_EVENT",
                 authorize(actor, repair, observation, object),

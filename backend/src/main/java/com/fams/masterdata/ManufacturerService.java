@@ -66,7 +66,7 @@ class ManufacturerService {
     }
 
     @Transactional
-    Manufacturer create(
+    public Manufacturer create(
             long actorId,
             ManufacturerCreateRequest request,
             String key,
@@ -91,7 +91,7 @@ class ManufacturerService {
     }
 
     @Transactional
-    Manufacturer update(
+    public Manufacturer update(
             long actorId,
             long id,
             long expectedVersion,
@@ -123,7 +123,7 @@ class ManufacturerService {
     }
 
     @Transactional
-    Manufacturer changeStatus(
+    public Manufacturer changeStatus(
             long actorId,
             long id,
             long expectedVersion,

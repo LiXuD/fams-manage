@@ -5,6 +5,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.targetchange.TargetChangeFailure;
 import com.fams.targetchange.TargetChangePort;
 import jakarta.validation.Validator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -15,6 +17,8 @@ import java.util.function.Supplier;
 @Component
 @Profile("fams-product")
 class RequisitionTargetChangePort implements TargetChangePort {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionTargetChangePort.class);
+
     private final RequisitionHandoverService handovers;
     private final RequisitionProxyReceiptPort ownership;
     private final ObjectMapper json;
@@ -28,6 +32,7 @@ class RequisitionTargetChangePort implements TargetChangePort {
     }
     @Override public String businessType() { return "REQUISITION"; }
     @Override public void lockHeader(long business) { translate(() -> { ownership.lockHeader(business);
+            LOG.debug("Target-change header routed to requisition lock business={}", business);
             return null;
         }); }
     @Override public void requireProcessor(long account, long business) {
@@ -44,6 +49,7 @@ class RequisitionTargetChangePort implements TargetChangePort {
         });
     }
     @Override public void apply(Actor actor, long business, long item, JsonNode target, String observedCode, long proposal) {
+        LOG.debug("Applying target change to requisition business={} item={} proposal={}", business, item, proposal);
         translate(() -> { handovers.applyChangedTarget(actor, business, item, decode(target), observedCode, proposal);
             return null;
         });

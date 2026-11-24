@@ -41,7 +41,7 @@ class AuthApplicationService {
     }
 
     @Transactional(noRollbackFor = AuthOperationException.class)
-    AuthAccount authenticate(String username, String password, UUID requestId) {
+    public AuthAccount authenticate(String username, String password, UUID requestId) {
         Instant now = clock.instant();
         String normalizedUsername = normalizeUsername(username);
         Optional<AuthAccount> foundAccount = accountStore.findByNormalizedUsername(normalizedUsername);
@@ -82,7 +82,7 @@ class AuthApplicationService {
     }
 
     @Transactional(noRollbackFor = AuthOperationException.class)
-    AuthAccount changeInitialPassword(
+    public AuthAccount changeInitialPassword(
             long accountId,
             String currentPassword,
             String newPassword,
@@ -170,7 +170,7 @@ class AuthApplicationService {
     }
 
     @Transactional
-    void audit(
+    public void audit(
             Long accountId,
             SecurityEventType eventType,
             UUID requestId,

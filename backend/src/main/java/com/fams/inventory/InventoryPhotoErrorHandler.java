@@ -6,6 +6,8 @@ import com.fams.product.contract.model.ErrorResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
@@ -22,11 +24,14 @@ import java.util.UUID;
 @RestControllerAdvice(
         assignableTypes = {InventoryPhotoController.class, InventoryRepairPhotoController.class})
 final class InventoryPhotoErrorHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryPhotoErrorHandler.class);
+
     @ExceptionHandler({
         org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
         org.springframework.web.bind.MissingServletRequestParameterException.class
     })
     ResponseEntity<ErrorResponse> badParameters(Exception error, HttpServletRequest request) {
+        log(400, "INVALID_ATTACHMENT_REQUEST", request, error);
         return response(
                 400,
                 "INVALID_ATTACHMENT_REQUEST",
@@ -37,18 +42,21 @@ final class InventoryPhotoErrorHandler {
     @ExceptionHandler(AttachmentAccessFailure.class)
     ResponseEntity<ErrorResponse> access(
             AttachmentAccessFailure error, HttpServletRequest request) {
+        log(error.status(), error.code(), request, error);
         return response(error.status(), error.code(), error.getMessage(), request);
     }
 
     @ExceptionHandler(AttachmentUploadConflict.class)
     ResponseEntity<ErrorResponse> conflict(
             AttachmentUploadConflict error, HttpServletRequest request) {
+        log(409, "ATTACHMENT_IDEMPOTENCY_CONFLICT", request, error);
         return response(409, "ATTACHMENT_IDEMPOTENCY_CONFLICT", error.getMessage(), request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<ErrorResponse> invalid(
             IllegalArgumentException error, HttpServletRequest request) {
+        log(400, "INVALID_ATTACHMENT", request, error);
         return response(
                 400,
                 "INVALID_ATTACHMENT",
@@ -59,14 +67,24 @@ final class InventoryPhotoErrorHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ErrorResponse> tooLarge(
             MaxUploadSizeExceededException error, HttpServletRequest request) {
+        log(413, "ATTACHMENT_TOO_LARGE", request, error);
         return response(
                 413, "ATTACHMENT_TOO_LARGE", "Attachment request exceeds the size limit", request);
     }
 
     @ExceptionHandler(IOException.class)
     ResponseEntity<ErrorResponse> unavailable(IOException error, HttpServletRequest request) {
+        log(503, "ATTACHMENT_STORAGE_UNAVAILABLE", request, error);
         return response(
                 503, "ATTACHMENT_STORAGE_UNAVAILABLE", "Attachment could not be stored", request);
+    }
+
+    private void log(int status, String code, HttpServletRequest request, Throwable error) {
+        if (status >= 500) {
+            LOG.error("Attachment request failed: path={}, code={}", request.getRequestURI(), code, error);
+        } else {
+            LOG.warn("Attachment request rejected: path={}, code={}", request.getRequestURI(), code);
+        }
     }
 
     private ResponseEntity<ErrorResponse> response(

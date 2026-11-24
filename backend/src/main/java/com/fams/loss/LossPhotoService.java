@@ -7,6 +7,8 @@ import com.fams.attachment.AttachmentStorage;
 import com.fams.attachment.AttachmentWriter;
 import com.fams.auth.RequisitionActorContext.Actor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class LossPhotoService {
+    private static final Logger LOG = LoggerFactory.getLogger(LossPhotoService.class);
     private final LossService reports;
     private final AttachmentWriter writer;
     private final AttachmentStorage storage;
@@ -62,11 +65,13 @@ public class LossPhotoService {
         if (!received.get().toString().equals(result.objectId())) {
             storage.delete(received.get());
         }
+        LOG.info("Loss photo uploaded for report {} by actor {}.", id, actor.id());
         return result;
     }
 
     @Transactional
     public AttachmentGrantSigner.Grant grant(Actor actor, long id, UUID object) {
+        LOG.debug("Loss photo grant requested for report {}.", id);
         reports.photoAccess(actor, id);
         return evidence.grant("LOST_REPORT", id, identity(actor, object));
     }
@@ -74,6 +79,7 @@ public class LossPhotoService {
     @Transactional
     public AttachmentReadService.Content read(Actor actor, long id, UUID object, String token)
             throws IOException {
+        LOG.debug("Loss photo read requested for report {}.", id);
         reports.photoAccess(actor, id);
         return evidence.read("LOST_REPORT", id, identity(actor, object), token);
     }

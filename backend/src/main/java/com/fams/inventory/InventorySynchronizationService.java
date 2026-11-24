@@ -6,6 +6,8 @@ import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventorySynchronizationService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventorySynchronizationService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -63,6 +66,7 @@ public class InventorySynchronizationService {
         var task = task(taskId);
         participant(taskId, current.id());
         var state = states.states(List.of(current.id())).get(current.id());
+        LOG.debug("Own device synchronization state requested for task {}.", taskId);
         return new SealViews.OwnDeviceState(
                 Long.toString(taskId),
                 number(task, "version"),
@@ -166,6 +170,7 @@ public class InventorySynchronizationService {
                 payload,
                 json.writeValueAsString(response),
                 Timestamp.from(now));
+        LOG.info("Device synchronization declaration committed for task {} by actor {}.", taskId, actor.id());
         return response;
     }
 
@@ -239,6 +244,7 @@ public class InventorySynchronizationService {
                                 "SELECT COUNT(*) FROM fams_inventory_participant WHERE task_id=?",
                                 Long.class,
                                 taskId));
+        LOG.debug("Synchronization status requested for task {} page {} size {}.", taskId, page, size);
         return new SealViews.SynchronizationStatus(
                 rows, total, page, size, number(task, "version"), true);
     }

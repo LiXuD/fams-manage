@@ -42,6 +42,11 @@ class FamsArchitectureTest {
     }
 
     @Test
+    void transactionalMethodsArePublic() {
+        FamsArchitectureRules.TRANSACTIONAL_METHODS_ARE_PUBLIC.check(productionClasses);
+    }
+
+    @Test
     void applicationEntryPointIsInTheRootPackage() {
         FamsArchitectureRules.APPLICATION_ENTRY_POINT_IS_IN_THE_ROOT_PACKAGE.check(
                 productionClasses

@@ -1,5 +1,7 @@
 package com.fams.loan;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -17,6 +19,8 @@ import java.time.temporal.ChronoUnit;
 @Service
 @Profile("fams-product")
 public class LoanReminderService {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanReminderService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -29,6 +33,7 @@ public class LoanReminderService {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void refresh(long id) {
+        LOG.debug("Refreshing LOAN reminder state for loan id={}", id);
         var rows = db.queryForList("SELECT * FROM fams_loan WHERE id=? FOR UPDATE", id);
         if (rows.isEmpty()) { return; }
         var loan = rows.getFirst();
@@ -52,6 +57,7 @@ public class LoanReminderService {
         db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOAN' AND business_id=?"
                 + " AND closed_at IS NULL AND (? IS NULL OR todo_type<>?)", now, id, type, type);
         if (type == null) { return; }
+        LOG.info("Raised LOAN reminder loanId={} type={} due={} businessDate={}", id, type, due, today);
         db.update("INSERT INTO fams_loan_reminder (loan_id,expected_return_date,reminder_business_date,reminder_type,overdue_from,created_at)"
                 + " VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=id", id, due, today, type, due.isBefore(today) ? due.plusDays(1) : null, now);
         var accounts = db.queryForList("SELECT id FROM fams_system_account WHERE employee_id=? AND status='ENABLED'", Long.class,

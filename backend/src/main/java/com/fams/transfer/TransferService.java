@@ -8,6 +8,8 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.proxy.ProxyViews;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.Objects;
 @Service
 @Profile("fams-product")
 class TransferService {
+    private static final Logger LOG = LoggerFactory.getLogger(TransferService.class);
     private static final SecureRandom RANDOM = new SecureRandom();
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -59,7 +62,7 @@ class TransferService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TransferViews.Page<TransferViews.EligibleAsset> eligible(Actor actor, int page, int size) {
+    public TransferViews.Page<TransferViews.EligibleAsset> eligible(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = sourceScope(current, "a");
         String from =
@@ -80,12 +83,13 @@ class TransferService {
                         (page - 1) * size);
         long count =
                 Objects.requireNonNull(db.queryForObject("SELECT COUNT(*)" + from, Long.class));
+        LOG.debug("Transfer eligible assets requested page {} size {}.", page, size);
         return new TransferViews.Page<>(
                 rows.stream().map(TransferViews::eligibleAsset).toList(), count, page, size);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TransferViews.CatalogPage catalog(Actor actor, String kind, Long organization, int page, int size) {
+    public TransferViews.CatalogPage catalog(Actor actor, String kind, Long organization, int page, int size) {
         var current = actors.revalidateLocked(actor);
         if ("personnel".equals(kind)) {
             role(current, Role.ASSET_ADMIN);
@@ -112,6 +116,7 @@ class TransferService {
                                     + requireOrganization(organization);
                     default -> throw new TransferFailure("TRANSFER_CATALOG_NOT_FOUND", 404);
                 };
+        LOG.debug("Transfer catalog kind {} page {} size {} requested.", kind, page, size);
         return new TransferViews.CatalogPage(
                 db
                         .queryForList(
@@ -131,7 +136,7 @@ class TransferService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TransferViews.PersonnelHandover personnel(Actor actor, long employee) {
+    public TransferViews.PersonnelHandover personnel(Actor actor, long employee) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         var person =
@@ -191,6 +196,7 @@ class TransferService {
                         employee,
                         employee,
                         employee);
+        LOG.debug("Personnel handover snapshot requested employee {}.", employee);
         return new TransferViews.PersonnelHandover(
                 TransferViews.employeeRef(person),
                 rows.stream().map(TransferViews::handoverAsset).toList(),
@@ -202,7 +208,7 @@ class TransferService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TransferViews.Page<TransferViews.Summary> list(Actor actor, int page, int size) {
+    public TransferViews.Page<TransferViews.Summary> list(Actor actor, int page, int size) {
         var current = actors.revalidateLocked(actor);
         String predicate = current.globalApplicant() ? "1=1" : "creator_account_id=" + current.id();
         long total =
@@ -210,6 +216,7 @@ class TransferService {
                         db.queryForObject(
                                 "SELECT COUNT(*) FROM fams_transfer WHERE " + predicate,
                                 Long.class));
+        LOG.debug("Transfer requests listed by actor {} page {} size {}.", actor.id(), page, size);
         return new TransferViews.Page<>(
                 db
                         .queryForList(
@@ -227,15 +234,16 @@ class TransferService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TransferViews.Detail get(Actor actor, long id) {
+    public TransferViews.Detail get(Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var request = request(id);
         visible(current, request);
+        LOG.debug("Transfer request detail requested id {}.", id);
         return detail(request);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    TransferViews.Detail create(Actor actor, String key, TransferController.Draft input) {
+    public TransferViews.Detail create(Actor actor, String key, TransferController.Draft input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
         var replay = replay(current, "create", key, hash, TransferViews.Detail.class);
@@ -243,11 +251,12 @@ class TransferService {
             return replay;
         }
         long id = createDraft(actor, current, input, null);
+        LOG.info("Transfer request {} created by actor {}.", id, actor.id());
         return finish(current, "create", key, hash, detail(request(id)));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    TransferViews.Detail createFromLoss(Actor actor, long asset, long version,
+    public TransferViews.Detail createFromLoss(Actor actor, long asset, long version,
             AssetTransferPort.Target target, String reason, LossTransferPort.Source loss) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -264,6 +273,7 @@ class TransferService {
         submit(id);
         event(actor, current, id, number(item, "id"), "TRANSFER_FROM_LOSS_RECOVERY",
                 Map.of("reportId", Long.toString(loss.reportId()), "lossItemId", Long.toString(loss.lossItemId())));
+        LOG.info("Transfer request {} created from loss asset {}.", id, asset);
         return detail(request(id));
     }
 
@@ -396,6 +406,7 @@ class TransferService {
                 null,
                 "TRANSFER_" + action.toUpperCase(java.util.Locale.ROOT),
                 Map.of());
+        LOG.info("Transfer request {} action {} executed by actor {}.", id, action, actor.id());
         return finish(current, action, key, hash, detail(request(id)));
     }
 
@@ -471,6 +482,7 @@ class TransferService {
                 null,
                 input.approved() ? "TRANSFER_APPROVED" : "TRANSFER_REJECTED",
                 input);
+        LOG.info("Transfer request {} decision recorded by actor {}.", id, actor.id());
         return finish(current, "decision", key, hash, detail(request(id)));
     }
 
@@ -577,6 +589,7 @@ class TransferService {
                 "TRANSFER_" + action.toUpperCase(java.util.Locale.ROOT),
                 input);
         aggregate(id);
+        LOG.info("Transfer item {} physical action {} executed.", itemId, action);
         return finish(current, action, key, hash, detail(request(id)));
     }
 
@@ -601,6 +614,7 @@ class TransferService {
                                 "SELECT COUNT(*) FROM fams_transfer_item i" + scope,
                                 Long.class,
                                 current.employeeId(), itemId, itemId));
+        LOG.debug("Pending transfer receipts requested page {} size {}.", page, size);
         return new TransferViews.Page<>(
                 rows.stream().map(TransferViews::pendingReceipt).toList(), total, page, size);
     }
@@ -629,6 +643,7 @@ class TransferService {
                 sha(token),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(300)));
+        LOG.debug("Transfer receipt grant requested item {}.", itemId);
         return new TransferViews.Grant(
                 token,
                 Long.toString(itemId),
@@ -706,6 +721,7 @@ class TransferService {
                         "reason",
                         input.reason() == null ? "" : input.reason()));
         aggregate(id);
+        LOG.info("Transfer item {} receipt action {} confirmed.", itemId, action);
         return finish(current, action, key, hash, TransferViews.item(json, item(itemId)));
     }
 
@@ -725,6 +741,7 @@ class TransferService {
         var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
                 + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
+        LOG.debug("Target change context requested request {} item {}.", id, itemId);
         return new TransferViews.TargetChangeContext(
                 "TRANSFER",
                 Long.toString(id),
@@ -773,6 +790,7 @@ class TransferService {
                 "beforeTarget", json.readTree(item.get("target_snapshot_json").toString()),
                 "target", targetChangeTarget(target), "physicalDestination", Objects.toString(item.get("destination"), "")));
         aggregate(id);
+        LOG.info("Transfer item {} target changed by actor {}.", itemId, actor.id());
     }
 
     private void targetChangeStage(long id, Map<String, Object> item) {
@@ -810,6 +828,7 @@ class TransferService {
         var lock = one("SELECT lock_version FROM fams_asset_business_lock WHERE asset_id=?"
                 + " AND business_type='TRANSFER' AND business_id=? AND business_item_id=?"
                 + " AND released_at IS NULL FOR UPDATE", item.get("asset_id"), id, itemId);
+        LOG.debug("Proxy transfer snapshot requested request {} item {}.", id, itemId);
         return new ProxyViews.TransferSnapshot(
                 "TRANSFER",
                 Long.toString(id),
@@ -850,6 +869,7 @@ class TransferService {
         event(actor, current, id, itemId, "TRANSFER_PROXY_RECEIVED",
                 Map.of("confirmationId", Long.toString(confirmation), "observedCode", observed));
         aggregate(id);
+        LOG.info("Proxy receipt recorded for transfer item {} by actor {}.", itemId, actor.id());
         return new ProxyViews.TransferReceiptResult(
                 Long.toString(confirmation), Long.toString(id), Long.toString(itemId),
                 "RECEIVED", observed, item.get("receiver_employee_id").toString());
@@ -961,6 +981,7 @@ class TransferService {
                     + " r.role_code='WAREHOUSE_OPERATOR' AND a.id<>? ORDER BY a.id",
                 row.get("processor_account_id"));
         var declared = unavailabilityReason(id, number(row, "ownership_version"), number(row, "processor_account_id"));
+        LOG.debug("Transfer reassignment snapshot requested id {}.", id);
         return new TransferViews.ReassignmentSnapshot(
                 Long.toString(id),
                 number(row, "version"),
@@ -1040,6 +1061,7 @@ class TransferService {
         detail.put("unsynchronizedResultsChecked", true);
         detail.put("items", checks.stream().map(check -> TransferViews.item(json, check)).toList());
         event(actor, current, id, null, "CONTROLLED_REASSIGNMENT", detail);
+        LOG.info("Transfer request {} reassigned by actor {}.", id, actor.id());
         return finish(current, "reassign", key, hash, detail(request(id)));
     }
 
@@ -1084,6 +1106,7 @@ class TransferService {
                 VALUES ('ASSET_ADMIN','TRANSFER',?,'REASSIGNMENT_REQUIRED','OPEN',?)
                 ON DUPLICATE KEY UPDATE id=fams_todo.id
                 """, id, now());
+        LOG.info("Transfer request {} marked unavailable by actor {}.", id, actor.id());
         return finish(current, operation, key, hash,
                 new TransferViews.UnavailableReceipt(Long.toString(id), version, true));
     }

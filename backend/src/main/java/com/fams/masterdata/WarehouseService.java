@@ -66,7 +66,7 @@ class WarehouseService {
     }
 
     @Transactional
-    Warehouse create(
+    public Warehouse create(
             long actorId,
             WarehouseCreateRequest request,
             String key,
@@ -91,7 +91,7 @@ class WarehouseService {
     }
 
     @Transactional
-    Warehouse update(
+    public Warehouse update(
             long actorId,
             long id,
             long expectedVersion,
@@ -123,7 +123,7 @@ class WarehouseService {
     }
 
     @Transactional
-    Warehouse changeStatus(
+    public Warehouse changeStatus(
             long actorId,
             long id,
             long expectedVersion,

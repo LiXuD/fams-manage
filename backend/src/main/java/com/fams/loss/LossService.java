@@ -12,6 +12,8 @@ import com.fams.auth.Role;
 import com.fams.repair.RepairFactoryService;
 import com.fams.transfer.LossTransferPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -36,6 +38,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class LossService {
+    private static final Logger LOG = LoggerFactory.getLogger(LossService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -81,6 +84,7 @@ public class LossService {
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.EligiblePage eligible(Actor actor, int page, int size) {
+        LOG.debug("Eligible loss assets requested page {} size {}.", page, size);
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
@@ -103,6 +107,7 @@ public class LossService {
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
         args.add(((long) page - 1) * size);
+        LOG.debug("Loss report page requested by actor {} page {} size {}.", actor.id(), page, size);
         return new LossViews.Page<>(
                 db
                         .queryForList(
@@ -238,6 +243,7 @@ public class LossService {
                                 && !recoveryAsset.locked()
                                 && LossScrapSourcePort.canSubmit(current, row)
                                 && LossScrapSourcePort.confirmedScrapSource(row, original));
+        LOG.debug("Loss detail requested for report {}.", id);
         return LossViews.lossDetail(
                 base,
                 lockVersion,
@@ -263,11 +269,12 @@ public class LossService {
         validTime(input.lastSeenAt());
         String source = assets.submission(current, input.assetId(), input.assetVersion());
         var row = openReport(actor, current, input, source, "LOSS_REPORTED");
+        LOG.info("Loss report submitted by actor {}.", actor.id());
         return remember(current, "SUBMIT", key, hash, row);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    String submitInventory(Actor actor, InventoryLossPort.Source inventory,
+    public String submitInventory(Actor actor, InventoryLossPort.Source inventory,
             LossInput.Submission input) {
         var current = actors.revalidateLocked(actor);
         require(current, Role.ASSET_ADMIN);
@@ -332,6 +339,7 @@ public class LossService {
         factoryRepairs.handoffToLoss(actor, source, id, input.lockVersion());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, header(id), "LOSS_REPORTED_FROM_FACTORY", 0, input);
+        LOG.info("Loss reported from factory repair {} by actor {}.", repairId, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -367,6 +375,7 @@ public class LossService {
         internalRepairs.handoffToLoss(actor, current, source, id, input.lockVersion());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, header(id), "LOSS_REPORTED_FROM_INTERNAL_REPAIR", 0, input);
+        LOG.info("Loss reported from internal repair {} by actor {}.", repairId, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -509,6 +518,7 @@ public class LossService {
             releaseInitialReport(actor, row, "LOSS_REJECTED");
         }
         audit(actor, current, row, "LOSS_DECIDED", version + 1, input);
+        LOG.info("Loss report {} decision recorded by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -536,6 +546,7 @@ public class LossService {
                 now(),
                 id);
         audit(actor, current, row, "LOSS_CANCELLED", version + 1, input);
+        LOG.info("Loss report {} cancelled by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -581,6 +592,7 @@ public class LossService {
                 "LOSS_CLAIMED",
                 version + 1,
                 Map.of("processorAccountId", Long.toString(current.id())));
+        LOG.info("Loss report {} claimed by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -624,6 +636,7 @@ public class LossService {
         todo(id, "SEARCH", "WAREHOUSE_OPERATOR", current.id());
         audit(actor, current, row, "LOSS_SEARCH_STARTED", version + 1,
                 reviewAudit(input, input.nextReviewDate(), reviewZone));
+        LOG.info("Loss search started for report {} by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -648,6 +661,7 @@ public class LossService {
         var args = new java.util.ArrayList<Object>(java.util.Arrays.asList(scope));
         args.add(size);
         args.add(((long) page - 1) * size);
+        LOG.debug("Loss follow-up page requested by actor {} page {} size {}.", actor.id(), page, size);
         return new LossViews.Page<>(
                 db
                         .queryForList(
@@ -718,6 +732,7 @@ public class LossService {
         todo(id, "LOST_FOLLOW_UP", "WAREHOUSE_OPERATOR", current.id());
         loans.refreshLiability(number(row, "asset_id"));
         audit(actor, current, row, "LOSS_CONFIRMED", version + 1, reviewAudit(input, reviewDate, reviewZone));
+        LOG.info("Loss confirmed for report {} by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -757,6 +772,7 @@ public class LossService {
                 now(),
                 id);
         audit(actor, current, row, "LOSS_FOLLOWED_UP", version + 1, reviewAudit(input, next, reviewZone));
+        LOG.info("Loss follow-up recorded for report {} by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -799,6 +815,7 @@ public class LossService {
         release(row, "LOSS_RECOVERED");
         closeTodos(id);
         audit(actor, current, row, "LOSS_RECOVERED", version + 1, input);
+        LOG.info("Lost asset recovered for report {} by actor {}.", id, actor.id());
         return remember(current, operation, key, hash, header(id));
     }
 
@@ -861,6 +878,7 @@ public class LossService {
         audit(actor, current, row, "LOSS_RECOVERED_TO_REPAIR", version + 1, snapshot);
         var result = LossViews.withRepairId(LossViews.lossReport(json, header(id)), repair.id());
         saveReceipt(current, operation, key, hash, id, result);
+        LOG.info("Lost asset recovered to repair for report {} by actor {}.", id, actor.id());
         return result;
     }
 
@@ -1030,6 +1048,7 @@ public class LossService {
                 row,
                 "LOSS_RECOVERY_DECIDED",
                 Map.of("recoveryId", Long.toString(recovery), "decision", input));
+        LOG.info("Loss recovery {} decision recorded by actor {}.", recovery, actor.id());
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
@@ -1065,6 +1084,7 @@ public class LossService {
                 row,
                 "LOSS_RECOVERY_CANCELLED",
                 Map.of("recoveryId", Long.toString(recovery), "reason", input.reason()));
+        LOG.info("Loss recovery {} cancelled by actor {}.", recovery, actor.id());
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
@@ -1110,6 +1130,7 @@ public class LossService {
                         Long.toString(recovery),
                         "processorAccountId",
                         Long.toString(current.id())));
+        LOG.info("Loss recovery {} claimed by actor {}.", recovery, actor.id());
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
@@ -1157,6 +1178,7 @@ public class LossService {
                 row,
                 "LOSS_RECOVERED_AFTER_CONFIRMATION",
                 Map.of("recoveryId", Long.toString(recovery), "execution", input));
+        LOG.info("Loss recovery {} executed by actor {}.", recovery, actor.id());
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
@@ -1199,12 +1221,14 @@ public class LossService {
         closeTodos(number(row, "id"));
         advanceRecoveryReport(actor, current, row, "LOSS_RECOVERED_AFTER_CONFIRMATION_TO_REPAIR",
                 snapshot);
+        LOG.info("Loss recovery {} executed to repair by actor {}.", recovery, actor.id());
         return rememberRecovery(current, operation, key, hash, number(row, "id"), recovery);
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public AssetLossPort.RecoveryLocationPage recoveryLocations(Actor actor, int page, int size) {
         if (!applicant(actors.revalidateLocked(actor))) { throw new LossFailure(403, "LOSS_ROLE_REQUIRED"); }
+        LOG.debug("Loss recovery locations requested page {} size {}.", page, size);
         return assets.recoveryLocations(page, size);
     }
 
@@ -1784,6 +1808,7 @@ public class LossService {
                         "sha256",
                         attachment.file().sha256()));
         saveReceipt(current, operation, key, hash, id, result);
+        LOG.info("Loss photo registered for report {} by actor {}.", id, actor.id());
         return result;
     }
 

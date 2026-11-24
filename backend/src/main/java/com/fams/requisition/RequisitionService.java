@@ -10,6 +10,8 @@ import com.fams.requisition.RequisitionInput.Demand;
 import com.fams.requisition.RequisitionInput.Draft;
 import com.fams.requisition.RequisitionInput.Reference;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,8 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 class RequisitionService {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionService.class);
+
     private static final List<String> STATUSES =
             List.of(
                     "DRAFT",
@@ -64,7 +68,8 @@ class RequisitionService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.CatalogPage catalog(Actor actor, String kind, int page, int size) {
+    public RequisitionViews.CatalogPage catalog(Actor actor, String kind, int page, int size) {
+        LOG.debug("Reading requisition catalog actor={} kind={} page={} size={}", actor.id(), kind, page, size);
         Current current = actors.revalidateLocked(actor);
         if (!List.of("category", "organization", "employee", "location").contains(kind)) {
             throw RequisitionFailure.invalid("REQUISITION_CATALOG_INVALID");
@@ -85,7 +90,8 @@ class RequisitionService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.Page<RequisitionViews.Summary> list(Actor actor, int page, int size, String status) {
+    public RequisitionViews.Page<RequisitionViews.Summary> list(Actor actor, int page, int size, String status) {
+        LOG.debug("Listing requisitions actor={} page={} size={} status={}", actor.id(), page, size, status);
         Current current = actors.revalidateLocked(actor);
         if (status != null && !STATUSES.contains(status)) {
             throw RequisitionFailure.invalid("REQUISITION_FILTER_INVALID");
@@ -125,14 +131,15 @@ class RequisitionService {
      * removed in JAVA-14c once RequisitionReassignmentService moved to this typed exit.
      */
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.Detail getDetail(Actor actor, long id) {
+    public RequisitionViews.Detail getDetail(Actor actor, long id) {
+        LOG.debug("Reading requisition detail actor={} requestId={}", actor.id(), id);
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         return detailView(id);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail create(Actor actor, String key, Draft input) {
+    public RequisitionViews.Detail create(Actor actor, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         String hash = digest("create", input);
         var replay = replay(current, "create", key, hash);
@@ -141,11 +148,12 @@ class RequisitionService {
         }
         long id = createDraft(current, input, null, null, null);
         audit(actor, current, "REQUISITION_CREATED", id, null, 0L, Map.of());
+        LOG.info("Created requisition draft actor={} requestId={}", current.id(), id);
         return finish(current, "create", key, hash, id, 201);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail revise(Actor actor, long id, long version, String key, Draft input) {
+    public RequisitionViews.Detail revise(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("revise:" + id + ":" + version, input);
@@ -175,11 +183,12 @@ class RequisitionService {
                 now(),
                 id);
         audit(actor, current, "REQUISITION_REVISED", id, version, version + 1, Map.of());
+        LOG.info("Revised requisition draft actor={} requestId={} version={}", current.id(), id, version);
         return finish(current, "revise", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail submit(Actor actor, long id, long version, String key) {
+    public RequisitionViews.Detail submit(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("submit:" + id + ":" + version, Map.of());
@@ -201,11 +210,12 @@ class RequisitionService {
         db.update("UPDATE fams_requisition SET submitted_at=? WHERE id=?", now(), id);
         todo(id, "ADMIN_DECISION", "ASSET_ADMIN", null);
         audit(actor, current, "REQUISITION_SUBMITTED", id, version, version + 1, Map.of());
+        LOG.info("Submitted requisition actor={} requestId={} version={}", current.id(), id, version);
         return finish(current, "submit", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail decide(
+    public RequisitionViews.Detail decide(
             Actor actor, long id, long version, String key, RequisitionInput.Decision input) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -265,11 +275,13 @@ class RequisitionService {
         if ("APPROVED".equals(input.result())) {
             todo(id, "WAREHOUSE_CLAIM", "WAREHOUSE_OPERATOR", null);
         }
+        LOG.info("Decided requisition actor={} requestId={} result={} version={}",
+                current.id(), id, input.result(), version);
         return finish(current, "decide", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail proposeChange(Actor actor, long id, long version, String key, Draft input) {
+    public RequisitionViews.Detail proposeChange(Actor actor, long id, long version, String key, Draft input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("change:" + id + ":" + version, input);
@@ -320,6 +332,7 @@ class RequisitionService {
         db.update("UPDATE fams_requisition SET request_version=? WHERE id=?", revision, id);
         changeStatus(id, "PENDING_ADMIN_DECISION");
         todo(id, "ADMIN_DECISION", "ASSET_ADMIN", null);
+        LOG.info("Proposed requisition change actor={} requestId={} revision={}", current.id(), id, revision);
         return finish(current, "change", key, hash, id, 200);
     }
 
@@ -460,11 +473,13 @@ class RequisitionService {
         if (!claimed) {
             todo(id, "WAREHOUSE_CLAIM", "WAREHOUSE_OPERATOR", null);
         }
+        LOG.info("Decided requisition change proposal actor={} requestId={} result={} version={}",
+                current.id(), id, input.result(), version);
         return finish(current, "decide", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail cancel(
+    public RequisitionViews.Detail cancel(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -501,11 +516,12 @@ class RequisitionService {
                 version,
                 version + 1,
                 Map.of("reason", input.reason()));
+        LOG.info("Cancelled requisition actor={} requestId={} version={}", current.id(), id, version);
         return finish(current, "cancel", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail claim(Actor actor, long id, long version, String key) {
+    public RequisitionViews.Detail claim(Actor actor, long id, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         requireVisible(current, id);
@@ -520,11 +536,15 @@ class RequisitionService {
         changeStatus(id, state(id));
         closeTodo(id, "WAREHOUSE_CLAIM");
         audit(actor, current, "REQUISITION_CLAIMED", id, version, version + 1, Map.of());
+        LOG.info("Claimed requisition for warehouse processing actor={} requestId={} version={}",
+                current.id(), id, version);
         return finish(current, "claim", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId, int page, int size) {
+    public RequisitionViews.Page<RequisitionViews.InventoryAsset> inventory(Actor actor, long id, long demandId, int page, int size) {
+        LOG.debug("Listing inventory for requisition demand actor={} requestId={} demandId={} page={} size={}",
+                actor.id(), id, demandId, page, size);
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         requireVisible(current, id);
@@ -550,7 +570,7 @@ class RequisitionService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail allocate(
+    public RequisitionViews.Detail allocate(
             Actor actor, long id, long demandId, long version, String key, Allocation input) {
         Current current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -681,11 +701,13 @@ class RequisitionService {
         changeStatus(id, state(id));
         closeTodo(id, "WAREHOUSE_CLAIM");
         todo(id, "WAREHOUSE_HANDOVER", "WAREHOUSE_OPERATOR", current.id());
+        LOG.info("Allocated asset to requisition actor={} requestId={} demandId={} assetId={}",
+                current.id(), id, demandId, input.asset().id());
         return finish(current, "allocate", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail unfulfillable(
+    public RequisitionViews.Detail unfulfillable(
             Actor actor,
             long id,
             long demandId,
@@ -757,11 +779,13 @@ class RequisitionService {
                 demandId);
         changeStatus(id, state(id));
         closeTodo(id, "WAREHOUSE_CLAIM");
+        LOG.info("Recorded unfulfillable demand actor={} requestId={} demandId={} quantity={}",
+                current.id(), id, demandId, input.quantity());
         return finish(current, "unfulfillable", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail dispute(
+    public RequisitionViews.Detail dispute(
             Actor actor, long id, long version, String key, RequisitionInput.Reason input) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
@@ -785,11 +809,12 @@ class RequisitionService {
                 version,
                 version,
                 Map.of("reason", input.reason()));
+        LOG.info("Disputed unfulfillable requisition actor={} requestId={} version={}", current.id(), id, version);
         return finish(current, "dispute", key, hash, id, 200);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail followup(Actor actor, long id, long demandId, long version, String key) {
+    public RequisitionViews.Detail followup(Actor actor, long id, long demandId, long version, String key) {
         Current current = actors.revalidateLocked(actor);
         requireVisible(current, id);
         String hash = digest("followup:" + id + ":" + demandId + ":" + version, Map.of());
@@ -887,6 +912,8 @@ class RequisitionService {
                         Long.toString(id),
                         "sourceDemandId",
                         Long.toString(demandId)));
+        LOG.info("Created follow-up requisition actor={} sourceRequestId={} nextRequestId={}",
+                current.id(), id, next);
         return finish(current, "followup", key, hash, next, 200);
     }
 

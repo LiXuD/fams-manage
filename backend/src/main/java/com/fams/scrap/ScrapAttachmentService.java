@@ -7,6 +7,8 @@ import com.fams.attachment.AttachmentStorage;
 import com.fams.attachment.AttachmentWriter;
 import com.fams.auth.RequisitionActorContext.Actor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import java.util.concurrent.atomic.AtomicReference;
 @Profile("fams-product")
 @ConditionalOnProperty(name = "fams.attachments.quarantine-root")
 public class ScrapAttachmentService {
+    private static final Logger LOG = LoggerFactory.getLogger(ScrapAttachmentService.class);
+
     private final ScrapAttachmentTransactions transactions;
     private final AttachmentWriter writer;
     private final AttachmentStorage storage;
@@ -46,22 +50,26 @@ public class ScrapAttachmentService {
         if (!received.get().toString().equals(result.objectId())) {
             storage.delete(received.get());
         }
+        LOG.info("Uploaded scrap attachment actor={} scrapId={} kind={} version={}", actor.id(), id, kind, version);
         return result;
     }
 
     @Transactional
     public ScrapViews.AttachmentCapabilities capabilities(Actor actor, long id) {
+        LOG.debug("Reading scrap attachment capabilities actor={} scrapId={}", actor.id(), id);
         return transactions.capabilities(actor, id);
     }
 
     @Transactional
     public List<AttachmentEvidencePort.Metadata> list(Actor actor, long id, String kind) {
+        LOG.debug("Listing scrap attachments actor={} scrapId={} kind={}", actor.id(), id, kind);
         transactions.reader(actor, id);
         return evidence.list(ScrapAttachmentTransactions.type(kind), id);
     }
 
     @Transactional
     public AttachmentGrantSigner.Grant grant(Actor actor, long id, String kind, UUID object) {
+        LOG.debug("Granting scrap attachment actor={} scrapId={} kind={} object={}", actor.id(), id, kind, object);
         transactions.reader(actor, id);
         return evidence.grant(ScrapAttachmentTransactions.type(kind), id, identity(actor, object));
     }
@@ -69,6 +77,7 @@ public class ScrapAttachmentService {
     @Transactional
     public AttachmentReadService.Content read(Actor actor, long id, String kind, UUID object, String token)
             throws IOException {
+        LOG.debug("Reading scrap attachment actor={} scrapId={} kind={} object={}", actor.id(), id, kind, object);
         transactions.reader(actor, id);
         return evidence.read(ScrapAttachmentTransactions.type(kind), id, identity(actor, object), token);
     }

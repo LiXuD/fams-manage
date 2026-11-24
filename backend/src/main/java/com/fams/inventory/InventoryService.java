@@ -7,6 +7,8 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.masterdata.AssetMasterDataPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ import java.util.Objects;
 @Service
 @Profile("fams-product")
 public class InventoryService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryService.class);
     private static final tools.jackson.core.type.TypeReference<Map<String, Object>> WIRE_MAP =
             new tools.jackson.core.type.TypeReference<>() {};
 
@@ -64,6 +67,7 @@ public class InventoryService {
     public InventoryViews.InventoryReferenceChoicePage referenceChoices(
             Actor actor, String kind, int page, int size) {
         admin(actor);
+        LOG.debug("Inventory reference choices requested kind {} page {} size {}.", kind, page, size);
         return new InventoryViews.InventoryReferenceChoicePage(
                 references.choices(kind, page, size), page, size);
     }
@@ -73,6 +77,7 @@ public class InventoryService {
             Actor actor, InventoryInput.Range range) {
         admin(actor);
         var predicate = InventoryRange.predicate(range);
+        LOG.debug("Inventory preview digest requested by actor {}.", actor.id());
         return digest(
                 "SELECT asset_id,asset_version,SHA2(CAST(snapshot_json AS CHAR),256) AS row_hash"
                         + " FROM "
@@ -104,6 +109,7 @@ public class InventoryService {
                 now());
         long id = Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         event(actor, current.id(), id, "INVENTORY_CREATED", Map.of(), 0, 0);
+        LOG.info("Inventory task {} created by actor {}.", id, actor.id());
         return finish(current, "create", key, 0, input, taskRow(id));
     }
 
@@ -145,6 +151,7 @@ public class InventoryService {
                 Map.of("sourceTaskId", Long.toString(sourceId)),
                 0,
                 0);
+        LOG.info("Inventory task copied from source task {} by actor {}.", sourceId, actor.id());
         return finish(current, "copy:" + sourceId, key, version, input, taskRow(id));
     }
 
@@ -169,6 +176,7 @@ public class InventoryService {
                 now(),
                 id);
         event(actor, current.id(), id, "INVENTORY_REVISED", Map.of(), version, version + 1);
+        LOG.info("Inventory task {} draft revised by actor {}.", id, actor.id());
         return finish(current, "revise:" + id, key, version, input, taskRow(id));
     }
 
@@ -226,6 +234,7 @@ public class InventoryService {
                 Map.of("count", captured.count(), "digest", captured.digest()),
                 version,
                 version + 1);
+        LOG.info("Inventory task {} published by actor {}.", id, actor.id());
         return finish(current, "publish:" + id, key, version, input, taskRow(id));
     }
 
@@ -247,6 +256,7 @@ public class InventoryService {
                 Map.of("source", "MANUAL"),
                 version,
                 version + 1);
+        LOG.info("Inventory task {} started by actor {}.", id, actor.id());
         return finish(current, "start:" + id, key, version, Map.of(), taskRow(id));
     }
 
@@ -311,6 +321,7 @@ public class InventoryService {
                 Map.of("reason", input.reason()),
                 version,
                 version + 1);
+        LOG.info("Inventory task {} ended by action {} actor {}.", id, action, actor.id());
         return finish(current, action + ":" + id, key, version, input, taskRow(id));
     }
 
@@ -417,6 +428,7 @@ public class InventoryService {
                         input.recheck()),
                 version,
                 version + 1);
+        LOG.info("Inventory task {} executors assigned by actor {}.", id, actor.id());
         return finish(current, "assign:" + id, key, version, input, taskRow(id));
     }
 
@@ -448,6 +460,7 @@ public class InventoryService {
                                 + where
                                 + " ORDER BY id DESC LIMIT ? OFFSET ?",
                         args.toArray());
+        LOG.debug("Inventory task page requested by actor {} page {} size {}.", actor.id(), page, size);
         return new InventoryViews.InventoryTaskPage(
                 rows.stream().map(row -> taskView(row, current.has(Role.ASSET_ADMIN))).toList(),
                 Objects.requireNonNull(total),
@@ -495,6 +508,7 @@ public class InventoryService {
                                 + where
                                 + " ORDER BY id LIMIT ? OFFSET ?",
                         args.toArray());
+        LOG.debug("Inventory task detail requested for task {} page {} size {}.", id, page, size);
         return new InventoryViews.InventoryTaskDetail(
                 taskView(task, admin),
                 items.stream().map(row -> InventoryViews.inventoryItemRow(json, row)).toList(),
@@ -507,6 +521,7 @@ public class InventoryService {
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public List<InventoryExecutorPort.ExecutorChoice> executorChoices(Actor actor, int page, int size) {
         admin(actor);
+        LOG.debug("Inventory executor choices requested page {} size {}.", page, size);
         return executors.choices(page, size);
     }
 
@@ -550,6 +565,7 @@ public class InventoryService {
                 now(),
                 json.writeValueAsString(
                         Map.of("source", "SCHEDULED", "publisherAttributionOnly", true)));
+        LOG.info("Scheduled start switched inventory task {} to RUNNING.", id);
         return true;
     }
 

@@ -7,6 +7,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.business.ReturnLossOpeningPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -24,6 +26,8 @@ import java.util.Map;
 @Service
 @Profile("fams-product")
 class AssetReturnService {
+    private static final Logger LOG = LoggerFactory.getLogger(AssetReturnService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -47,7 +51,8 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.Page<LoanViews.AssetReturn> list(Actor actor, int page, int size) {
+    public LoanViews.Page<LoanViews.AssetReturn> list(Actor actor, int page, int size) {
+        LOG.debug("Listing asset returns actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         String scope = current.globalApplicant() ? "1=1" : "responsible_employee_id=" + current.employeeId()
                 + (current.has(Role.DEPARTMENT_ASSET_MANAGER) ? " OR using_organization_id=" + current.organizationId() : "");
@@ -73,7 +78,8 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.ReturnCatalogPage catalog(Actor actor, String kind, int page, int size) {
+    public LoanViews.ReturnCatalogPage catalog(Actor actor, String kind, int page, int size) {
+        LOG.debug("Reading asset return catalog actor={} kind={} page={} size={}", actor.id(), kind, page, size);
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         String sql;
@@ -89,7 +95,8 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.Page<LoanViews.ReturnAssetChoice> eligible(Actor actor, int page, int size) {
+    public LoanViews.Page<LoanViews.ReturnAssetChoice> eligible(Actor actor, int page, int size) {
+        LOG.debug("Listing eligible return assets actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         String scope = current.has(Role.ASSET_ADMIN) ? "1=1" :
                 "COALESCE(a.responsible_employee_id,a.department_responsible_employee_id)=" + current.employeeId()
@@ -104,7 +111,8 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    LoanViews.AssetReturnDetail get(Actor actor, long id) {
+    public LoanViews.AssetReturnDetail get(Actor actor, long id) {
+        LOG.debug("Reading asset return detail actor={} returnId={}", actor.id(), id);
         var current = actors.revalidateLocked(actor);
         var row = request(id);
         visible(current, row);
@@ -152,7 +160,7 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn propose(Actor actor, String key, AssetReturnController.Proposal input) {
+    public LoanViews.AssetReturn propose(Actor actor, String key, AssetReturnController.Proposal input) {
         var current = actors.revalidateLocked(actor);
         String hash = digest("propose", input);
         var replay = replay(current, "propose", key, hash, LoanViews.AssetReturn.class);
@@ -187,11 +195,12 @@ class AssetReturnService {
                 + " VALUES (?,'ASSET_RETURN',?,?,?)", input.assetId(), id, id, now());
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, id, "RETURN_PROPOSED", null, 0L, input);
+        LOG.info("Proposed asset return actor={} returnId={} assetId={}", current.id(), id, input.assetId());
         return finish(current, "propose", key, hash, id);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn proposeLossRecovery(Actor actor, String key, long assetId, long version,
+    public LoanViews.AssetReturn proposeLossRecovery(Actor actor, String key, long assetId, long version,
             String reason, LossReturnPort.Source source) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -217,11 +226,12 @@ class AssetReturnService {
         assets.adoptLossRecovery(assetId, version, Long.parseLong(source.reportId()), Long.parseLong(source.lossItemId()), source.lockVersion(), id);
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, id, "RETURN_FROM_LOSS_RECOVERY", null, 0L, source);
+        LOG.info("Proposed loss-recovery asset return actor={} returnId={} assetId={}", current.id(), id, assetId);
         return LoanViews.assetReturn(json, request(id));
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn resubmitLossRecovery(Actor actor, long id, long version, String key,
+    public LoanViews.AssetReturn resubmitLossRecovery(Actor actor, long id, long version, String key,
             String reason) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
@@ -236,6 +246,7 @@ class AssetReturnService {
         db.update("UPDATE fams_asset_return SET return_status='PENDING_APPROVAL',version=version+1 WHERE id=?", id);
         todo(id, "APPROVAL", "ASSET_ADMIN", null);
         audit(actor, current, id, "RETURN_LOSS_RESUBMITTED", version, version + 1, Map.of("reason", reason));
+        LOG.info("Resubmitted loss-recovery asset return actor={} returnId={} version={}", current.id(), id, version);
         return finish(current, "resubmit-loss", key, hash, id);
     }
 
@@ -252,7 +263,7 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn decide(Actor actor, long id, long version, String key, AssetReturnController.Decision input) {
+    public LoanViews.AssetReturn decide(Actor actor, long id, long version, String key, AssetReturnController.Decision input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.ASSET_ADMIN);
         String hash = digest("decision:" + id + ":" + version, input);
@@ -270,11 +281,13 @@ class AssetReturnService {
         else if (!linkedLoss(row)) { release(id, "RETURN_REJECTED"); }
         else { requireRetainedLock(row); }
         audit(actor, current, id, input.approved() ? "RETURN_APPROVED" : "RETURN_REJECTED", version, version + 1, input);
+        LOG.info("Decided asset return actor={} returnId={} approved={} version={}",
+                current.id(), id, input.approved(), version);
         return finish(current, "decision", key, hash, id);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn claim(Actor actor, long id, long version, String key) {
+    public LoanViews.AssetReturn claim(Actor actor, long id, long version, String key) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         String hash = digest("claim:" + id + ":" + version, Map.of());
@@ -288,11 +301,12 @@ class AssetReturnService {
         closeTodos(id);
         todo(id, "INSPECTION", "WAREHOUSE_OPERATOR", current.id());
         audit(actor, current, id, "RETURN_CLAIMED", version, version + 1, Map.of());
+        LOG.info("Claimed asset return for warehouse inspection actor={} returnId={}", current.id(), id);
         return finish(current, "claim", key, hash, id);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn inspect(Actor actor, long id, long version, String key, AssetReturnController.Inspection input) {
+    public LoanViews.AssetReturn inspect(Actor actor, long id, long version, String key, AssetReturnController.Inspection input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
         var row = request(id);
@@ -358,11 +372,12 @@ class AssetReturnService {
             reminders.refresh(number(row, "loan_id"));
         }
         audit(actor, current, id, "RETURN_INSPECTED", version, version + 1, input);
+        LOG.info("Completed asset return inspection actor={} returnId={} result={}", current.id(), id, input.result());
         return finish(current, "inspect", key, hash, id);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    LoanViews.AssetReturn retryMissingLoss(Actor actor, long id, long version, String key,
+    public LoanViews.AssetReturn retryMissingLoss(Actor actor, long id, long version, String key,
             AssetReturnController.MissingRetry input) {
         var current = actors.revalidateLocked(actor);
         role(current, Role.WAREHOUSE_OPERATOR);
@@ -400,6 +415,8 @@ class AssetReturnService {
                 "RETURN_LOST_REPORT", followupId, input.lockVersion(), input.facts());
         audit(actor, current, id, "RETURN_MISSING_REPORTED", number(row, "version"), number(row, "version"),
                 Map.of("followupId", Long.toString(followupId), "reportId", Long.toString(report)));
+        LOG.info("Retried missing-loss report actor={} returnId={} followupId={} reportId={}",
+                current.id(), id, followupId, report);
         return finish(current, "missing-loss", key, hash, id);
     }
 
@@ -429,7 +446,7 @@ class AssetReturnService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    void restoreMissing(long followupId, long assetId, long reportId) {
+    public void restoreMissing(long followupId, long assetId, long reportId) {
         var followup = one("SELECT * FROM fams_return_followup WHERE id=? AND business_type='LOST_REPORT'"
                 + " AND followup_status='ACCEPTED' AND asset_id=? FOR UPDATE", followupId, assetId);
         if (db.update("UPDATE fams_asset_business_lock SET business_type='RETURN_LOST_REPORT',business_id=?,business_item_id=?,"
@@ -441,6 +458,8 @@ class AssetReturnService {
         db.update("INSERT INTO fams_todo (pool_type,assignee_account_id,business_type,business_id,todo_type,todo_status,opened_at)"
                 + " VALUES ('WAREHOUSE_OPERATOR',?,'RETURN_LOST_REPORT',?,'FOLLOWUP','OPEN',?)",
                 number(followup, "processor_account_id"), followupId, now());
+        LOG.info("Restored missing return followup to RETURN_LOST_REPORT lock followupId={} assetId={} reportId={}",
+                followupId, assetId, reportId);
     }
 
     private void target(AssetReturnController.Inspection input) {

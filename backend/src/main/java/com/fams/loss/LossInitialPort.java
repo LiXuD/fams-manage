@@ -9,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,7 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LossInitialPort {
+    private static final Logger LOG = LoggerFactory.getLogger(LossInitialPort.class);
     public record Confirmed(long id, String custodyJson, String confirmationJson) { }
 
     private final JdbcTemplate db;
@@ -72,6 +75,7 @@ public class LossInitialPort {
         schedule.put("reviewDate", businessDate.plusDays(30).toString());
         schedule.put("reviewTimezone", timezone);
         event(id, opening.actorId(), "LOSS_INITIAL_OPENED", 0, schedule, opening.time());
+        LOG.debug("Initial loss rows written for actor {} repair {}.", opening.actorId(), repair);
         return new Confirmed(id, custodyJson, confirmationJson);
     }
 
@@ -85,6 +89,7 @@ public class LossInitialPort {
         db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOST_REPORT'"
                 + " AND business_id=? AND closed_at IS NULL", time, report);
         event(report, actor, "LOSS_INITIAL_ROLLED_BACK", 1, Map.of("assetId", Long.toString(asset)), time);
+        LOG.debug("UPDATE fams_todo closed for loss report {} asset {}.", report, asset);
     }
 
     private void event(long report, long actor, String action, long version, Map<String, ?> detail, Instant time) {

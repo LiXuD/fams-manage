@@ -2,6 +2,8 @@ package com.fams.transfer;
 
 import com.fams.product.contract.model.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,8 +16,12 @@ import java.util.UUID;
 @RestControllerAdvice(basePackages = "com.fams.requisition")
 @Order(-2)
 class TransferProxyErrorHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(TransferProxyErrorHandler.class);
+
     @ExceptionHandler(TransferFailure.class)
     ResponseEntity<ErrorResponse> failure(TransferFailure failure, HttpServletRequest request) {
+        LOG.warn("Proxied transfer rejected: path={} code={} status={}", request.getRequestURI(),
+                failure.getMessage(), failure.status());
         Object value = request.getAttribute("fams.request.id");
         UUID id = value instanceof UUID existing ? existing : UUID.randomUUID();
         return ResponseEntity.status(failure.status()).body(

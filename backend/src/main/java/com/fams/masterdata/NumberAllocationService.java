@@ -30,7 +30,7 @@ class NumberAllocationService {
     }
 
     @Transactional
-    List<NumberReservation> reserve(NumberingTarget target, Long categoryId, int count) {
+    public List<NumberReservation> reserve(NumberingTarget target, Long categoryId, int count) {
         if (target == null || count < 1 || count > 1000) {
             throw MasterDataOperationException.invalid("The numbering request is invalid.");
         }
@@ -92,12 +92,12 @@ class NumberAllocationService {
     }
 
     @Transactional
-    void markUsed(long reservationId) {
+    public void markUsed(long reservationId) {
         finish(reservationId, "USED");
     }
 
     @Transactional
-    void voidReservation(long reservationId) {
+    public void voidReservation(long reservationId) {
         finish(reservationId, "VOID");
     }
 

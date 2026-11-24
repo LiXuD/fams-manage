@@ -4,6 +4,8 @@ import com.fams.product.contract.model.ErrorResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
@@ -16,6 +18,8 @@ import java.util.UUID;
 @Order(-3)
 @RestControllerAdvice(assignableTypes = InventorySealController.class)
 class InventorySealConflictHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(InventorySealConflictHandler.class);
+
     @ExceptionHandler(InventoryReviewConflict.class)
     ResponseEntity<ErrorResponse> conflict(
             InventoryReviewConflict failure, HttpServletRequest request) {
@@ -23,6 +27,8 @@ class InventorySealConflictHandler {
                 request.getAttribute("fams.request.id") instanceof UUID value
                         ? value
                         : UUID.randomUUID();
+        LOG.warn("Inventory seal conflict: path={}, code={}, requestId={}", request.getRequestURI(),
+                failure.getMessage(), id);
         return ResponseEntity.status(409)
                 .body(
                         new ErrorResponse(

@@ -21,6 +21,8 @@ import java.util.Set;
 import com.fams.auth.InboundActorContext.Actor;
 import com.fams.masterdata.BusinessCalendar;
 import com.fams.masterdata.InboundNumberPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Service
 class InboundService {
+    private static final Logger LOG = LoggerFactory.getLogger(InboundService.class);
     private static final TypeReference<Map<String, Object>> WIRE_MAP = new TypeReference<>() { };
 
     private final JdbcTemplate db;
@@ -69,6 +72,7 @@ class InboundService {
         paged.add((page - 1) * size);
         List<Map<String, Object>> rows = db.queryForList("SELECT id" + sql
                 + " ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?", paged.toArray());
+        LOG.debug("Inbound receipts queried status {} page {} size {}.", status, page, size);
         return new InboundViews.Page<>(rows.stream().map(row -> receipt(id(row))).toList(),
                 total, page, size);
     }
@@ -80,12 +84,12 @@ class InboundService {
      * convertValue mirror frozen equivalent by InboundWireShapeTest.
      */
     @Transactional
-    Map<String, Object> create(Actor actor, String key, Map<String, Object> body) {
+    public Map<String, Object> create(Actor actor, String key, Map<String, Object> body) {
         return json.convertValue(createDetail(actor, key, body), WIRE_MAP);
     }
 
     @Transactional
-    InboundViews.Receipt createDetail(Actor actor, String key, Map<String, Object> body) {
+    public InboundViews.Receipt createDetail(Actor actor, String key, Map<String, Object> body) {
         String digest = digest("create", body);
         InboundViews.Receipt prior = replay(actor, "createInboundReceipt", key, digest,
                 InboundViews.Receipt.class);
@@ -130,11 +134,12 @@ class InboundService {
         audit(actor, "INBOUND_DRAFT_CREATED", receiptId, null, 0L, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "createInboundReceipt", key, digest, 201, result, receiptId);
+        LOG.info("Inbound receipt draft created by actor {}.", actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.Receipt update(Actor actor, long receiptId, long version, String key,
+    public InboundViews.Receipt update(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("update:" + receiptId + ":" + version, body);
         InboundViews.Receipt prior = replay(actor, "updateInboundReceipt", key, digest,
@@ -169,11 +174,12 @@ class InboundService {
         audit(actor, "INBOUND_DRAFT_UPDATED", receiptId, version, version + 1, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "updateInboundReceipt", key, digest, 200, result, receiptId);
+        LOG.info("Inbound receipt {} draft updated by actor {}.", receiptId, actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.Receipt submit(Actor actor, long receiptId, long version, String key) {
+    public InboundViews.Receipt submit(Actor actor, long receiptId, long version, String key) {
         String digest = digest("submit:" + receiptId + ":" + version, Map.of());
         InboundViews.Receipt prior = replay(actor, "submitInboundReceipt", key, digest,
                 InboundViews.Receipt.class);
@@ -212,11 +218,12 @@ class InboundService {
         audit(actor, "INBOUND_SUBMITTED", receiptId, version, version + 1, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "submitInboundReceipt", key, digest, 200, result, receiptId);
+        LOG.info("Inbound receipt {} submitted by actor {}.", receiptId, actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.Receipt cancel(Actor actor, long receiptId, long version, String key,
+    public InboundViews.Receipt cancel(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("cancel:" + receiptId + ":" + version, body);
         InboundViews.Receipt prior = replay(actor, "cancelInboundReceipt", key, digest,
@@ -240,11 +247,12 @@ class InboundService {
         audit(actor, "INBOUND_CANCELLED_BEFORE_DECISION", receiptId, version, version + 1, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "cancelInboundReceipt", key, digest, 200, result, receiptId);
+        LOG.info("Inbound receipt {} cancelled by actor {}.", receiptId, actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.Receipt decide(Actor actor, long receiptId, long version, String key,
+    public InboundViews.Receipt decide(Actor actor, long receiptId, long version, String key,
             Map<String, Object> body) {
         String digest = digest("decision:" + receiptId + ":" + version, body);
         InboundViews.Receipt prior = replay(actor, "decideInboundReceipt", key, digest,
@@ -289,11 +297,12 @@ class InboundService {
         audit(actor, "INBOUND_ADMIN_DECIDED", receiptId, version, version + 1, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "decideInboundReceipt", key, digest, 200, result, receiptId);
+        LOG.info("Inbound receipt {} warehouse decision recorded by actor {}.", receiptId, actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.Receipt claim(Actor actor, long receiptId, long version, String key) {
+    public InboundViews.Receipt claim(Actor actor, long receiptId, long version, String key) {
         String digest = digest("claim:" + receiptId + ":" + version, Map.of());
         InboundViews.Receipt prior = replay(actor, "claimInboundReceipt", key, digest,
                 InboundViews.Receipt.class);
@@ -315,11 +324,12 @@ class InboundService {
         audit(actor, "INBOUND_WAREHOUSE_CLAIMED", receiptId, version, version + 1, now);
         InboundViews.Receipt result = receipt(receiptId);
         record(actor, "claimInboundReceipt", key, digest, 200, result, receiptId);
+        LOG.info("Inbound receipt {} claimed by actor {}.", receiptId, actor.id());
         return result;
     }
 
     @Transactional
-    InboundViews.AcceptResult accept(Actor actor, long receiptId, long itemId, long version,
+    public InboundViews.AcceptResult accept(Actor actor, long receiptId, long itemId, long version,
             String key, Map<String, Object> body) {
         String digest = digest("accept:" + receiptId + ":" + itemId + ":" + version, body);
         InboundViews.AcceptResult prior = replay(actor, "acceptInboundReceiptItem", key, digest,
@@ -405,6 +415,7 @@ class InboundService {
         InboundViews.AcceptResult result = new InboundViews.AcceptResult(
                 receipt(receiptId), item(itemId), acceptedAsset(number(line, "asset_id")));
         record(actor, "acceptInboundReceiptItem", key, digest, 200, result, receiptId);
+        LOG.info("Inbound item {} accepted by actor {}.", itemId, actor.id());
         return result;
     }
 
@@ -427,6 +438,7 @@ class InboundService {
                     && !List.of("WAITING_WAREHOUSE_CLAIM", "WAREHOUSE_PROCESSING", "COMPLETED")
                             .contains(status)) { throw InboundFailure.missing(); }
         } else if (header.get("submitted_at") == null) { throw InboundFailure.missing(); }
+        LOG.debug("Inbound receipt detail requested id {}.", receiptId);
         return receipt(receiptId);
     }
 

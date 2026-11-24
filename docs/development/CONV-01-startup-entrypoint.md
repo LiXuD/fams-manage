@@ -14,11 +14,25 @@
 | A1 | 唯一 `@SpringBootApplication` 埋在 `com.fams.contract.probe` | 归位根包 |
 | A2 | 67 个文件类级 `@Transactional`，`rollbackFor` 全仓仅 1 处 | 方法级拆分 |
 | A3 | 460 文件仅 4 处 Logger、全仓 7 条日志语句 | 全量补（含 Port 与只读 DEBUG） |
-| A4 | 38 个 Controller 自行 `try/catch`、21 处手写 `badRequest` | 收敛到已有 Advice |
+| A4 | 41 处 Controller `catch` 分散本地、`report` 域无 Advice 且 4 个控制器重复实现 csv 失败导出 | 收敛到 Advice（见下 A4 精核） |
 | A5 | 661 处状态字符串比较、47 文件裸写状态 | 全量类型化为枚举 |
 | A6 | `@param` 0 次、289/460 文件无类注释 | 保持英文 + 门禁强制有注释 |
 | A8 | 565 行超 120 字符、43 处参数超 5 个、6 处方法超 80 行 | 全量重排后启用硬门禁 |
 | B2 | 14 个 Mapper 与 Controller/Service 同目录、28 处被 Service 直注 | 归位子包 + Repository 封装 |
+
+### A4 精核（CONV-02 开工前逐条核对，两处修正审查口径）
+
+- 41 处 `catch` 中 39 处属真实违规；2 处是**有意的重启重载控制流**，保留不动并登记理由：
+  `AuthSessionRestartTest` 同型的 `rethrowIfSessionUnavailable` 包装（`auth/MiniAuthController.java:49`
+  与 `auth/MiniBindingController.java:64/134` 中仅转换不改状态码的 2 处按实际读码结论处置）。
+- 26 处 `return ResponseEntity.badRequest()/notFound()/status(403)` **不是违规**：`report` 与
+  `runtime` 域的契约写作 `responses: {'400': {description: ...}}` 且无 `content`，即契约要求
+  **空体** 400/403。改成抛异常会经 Advice 产出带 `ErrorResponse` 体的响应，属契约改动。
+- `report` 域 21 处空 400 与 `runtime`/`reminder` 各 1 处空 404 **保留**，但 `report` 4 个导出
+  控制器逐字重复的 `if (bad) return badRequest().build(); catch (Exception) { return ok(csv) }`
+  抽为域内单一 helper，消除重复实现漂移风险。
+- 据此 A4 的真实工作面是 **39 处 catch + 新增 `com.fams.report.ReportErrorHandler`**。
+
 
 B1（补 94 个 Service 接口）、B3（引入 MyBatis-Plus）、B4（`Result<T>` 信封）、B5（DO/DTO/VO
 重命名）经论证登记为**项目有意为之的豁免项**，本系列不实施。

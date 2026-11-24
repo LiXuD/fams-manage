@@ -8,6 +8,8 @@ import com.fams.auth.Role;
 
 import com.fams.loss.InventoryLossPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -39,6 +41,7 @@ import jakarta.validation.constraints.Size;
 @Service
 @Profile("fams-product")
 public class InventoryReadinessService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryReadinessService.class);
     public record MissingLossInput(
             @NotNull @PositiveOrZero Long assetVersion,
             @NotNull Instant lastSeenAt,
@@ -157,6 +160,7 @@ public class InventoryReadinessService {
                                                     .toList());
                                 })
                         .toList();
+        LOG.debug("Readiness view requested for task {} page {} size {}.", taskId, page, size);
         return new SelectionViews.ReadinessView(
                 SelectionViews.taskRow(json, task),
                 rows,
@@ -189,6 +193,7 @@ public class InventoryReadinessService {
                                 Long.class,
                                 taskId,
                                 itemId));
+        LOG.debug("Unobserved history requested for task {} item {} page {} size {}.", taskId, itemId, page, size);
         return new SelectionViews.UnobservedHistoryPage(
                 SelectionViews.unobservedReasons(rows), total, page, size);
     }
@@ -308,6 +313,7 @@ public class InventoryReadinessService {
                         "ASSET_NOT_FOUND".equals(input.kind()));
         audit(actor, current, task, "INVENTORY_NOT_OBSERVED", version + 1, response);
         save(current, taskId, operation, key, digest, response);
+        LOG.info("Unobserved readiness recorded for task {} item {} by actor {}.", taskId, itemId, actor.id());
         return response;
     }
 
@@ -379,6 +385,7 @@ public class InventoryReadinessService {
                         version + 1);
         audit(actor, current, task, "INVENTORY_MISSING_REPORTED", version + 1, response);
         save(current, taskId, operation, key, digest, response);
+        LOG.info("Missing loss reported for item {} of task {} reason {}.", itemId, taskId, reasonId);
         return response;
     }
 
@@ -434,6 +441,7 @@ public class InventoryReadinessService {
                 version + 1,
                 Map.of("reason", input.reason().strip(), "result", response));
         save(current, taskId, operation, key, digest, response);
+        LOG.info("Waiting readiness recorded for task {} by actor {}.", taskId, actor.id());
         return response;
     }
 

@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,8 @@ import tools.jackson.databind.ObjectMapper;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class ScrapInitialPort implements InitialScrapPort {
+    private static final Logger LOG = LoggerFactory.getLogger(ScrapInitialPort.class);
+
     private static final List<String> BEFORE_LIFECYCLES = List.of("IN_STOCK", "IN_USE");
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -88,6 +92,8 @@ public class ScrapInitialPort implements InitialScrapPort {
                 "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
                 "beforeLifecycle", opening.beforeLifecycle(), "repairId", Long.toString(repairId),
                 "reason", opening.reason()));
+        LOG.debug("Opened initial REPAIR scrap fams_scrap_request id={} asset={} repairId={}",
+                id, opening.asset(), repairId);
     }
 
     @Override
@@ -125,6 +131,7 @@ public class ScrapInitialPort implements InitialScrapPort {
         event(id, "SCRAP_INITIAL_OPENED", opening.actorId(), opening.time(), Map.of(
                 "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
                 "beforeLifecycle", opening.beforeLifecycle(), "reason", opening.reason()));
+        LOG.debug("Opened initial STANDALONE scrap fams_scrap_request id={} asset={}", id, opening.asset());
     }
 
     @Override
@@ -182,6 +189,7 @@ public class ScrapInitialPort implements InitialScrapPort {
                 "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
                 "beforeLifecycle", opening.beforeLifecycle(), "reportId", Long.toString(loss.id()),
                 "reason", opening.reason()));
+        LOG.debug("Opened initial LOSS scrap request id={} asset={} reportId={}", id, opening.asset(), loss.id());
     }
 
     private RepairService.FactoryLossScrap initialFactoryLoss(Opening opening, LossFacts facts) {
@@ -263,10 +271,13 @@ public class ScrapInitialPort implements InitialScrapPort {
         event(id, "SCRAP_INITIAL_OPENED", opening.actorId(), opening.time(), Map.of(
                 "batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row()),
                 "beforeLifecycle", opening.beforeLifecycle(), "factoryDispositionId", Long.toString(factId)));
+        LOG.debug("Opened initial FACTORY_REPLACEMENT scrap fams_scrap_request id={} asset={} factId={}",
+                id, opening.asset(), factId);
     }
 
     @Override
     public void assertReversible(long asset, UUID batch) {
+        LOG.debug("Checking initial scrap reversibility for asset={} batch={}", asset, batch);
         guarded(asset, batch);
     }
 
@@ -292,6 +303,7 @@ public class ScrapInitialPort implements InitialScrapPort {
                 + " AND business_id=? AND todo_type='APPROVAL' AND closed_at IS NULL", time, id);
         event(id, "SCRAP_INITIAL_ROLLED_BACK", ((Number) request.get("creator_account_id")).longValue(), time,
                 Map.of("batchId", batch.toString()));
+        LOG.debug("Cancelled initial scrap fams_scrap_request id={} asset={} batch={}", id, asset, batch);
     }
 
     private Map<String, Object> guarded(long asset, UUID batch) {

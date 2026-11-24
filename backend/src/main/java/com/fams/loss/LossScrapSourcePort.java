@@ -3,6 +3,8 @@ package com.fams.loss;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,7 @@ import java.util.Objects;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LossScrapSourcePort {
+    private static final Logger LOG = LoggerFactory.getLogger(LossScrapSourcePort.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
@@ -37,6 +40,7 @@ public class LossScrapSourcePort {
             Instant confirmedAt, String confirmationJson, FactorySource factory) {}
 
     public ConfirmedLoss requireSubmissionEvidence(Current current, long id, long version) {
+        LOG.debug("Locked fams_loss_report row {} for scrap submission evidence.", id);
         var row = lockedReport(id);
         if (!canSubmit(current, row)) {
             throw new LossFailure(403, "SCRAP_LOSS_SOURCE_FORBIDDEN");
@@ -78,6 +82,7 @@ public class LossScrapSourcePort {
     }
 
     public void closeFollowUp(long reportId, Instant time) {
+        LOG.debug("UPDATE fams_todo closed follow-up of loss report {}.", reportId);
         db.update("UPDATE fams_todo SET todo_status='CLOSED',closed_at=? WHERE business_type='LOST_REPORT'"
                 + " AND business_id=? AND todo_type='LOST_FOLLOW_UP' AND closed_at IS NULL", time, reportId);
     }

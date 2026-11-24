@@ -1,5 +1,7 @@
 package com.fams.loan;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,8 @@ import java.time.LocalDate;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LoanReceiptPort {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanReceiptPort.class);
+
     private final JdbcTemplate db;
 
     LoanReceiptPort(JdbcTemplate db) {
@@ -28,6 +32,7 @@ public class LoanReceiptPort {
             throw new IllegalArgumentException("LOAN_RETURN_DATE_INVALID");
         }
         // Read the approved business again inside the transaction rather than trust client dates.
+        LOG.debug("Locking fams_requisition_allocation FOR UPDATE allocation={}", allocation);
         var source = db.queryForMap(
                 "SELECT r.request_type,r.expected_return_date,a.asset_id,a.request_id"
                         + " FROM fams_requisition_allocation a JOIN fams_requisition r ON r.id=a.request_id"
@@ -45,5 +50,6 @@ public class LoanReceiptPort {
                         + " VALUES (?,?,?,'RECEIPT',?,?,?,?,?,?,?,?)",
                 asset, employee, organization, request, allocation, borrowedDate,
                 dueDate, dueDate, parameters, Timestamp.from(time), Timestamp.from(time));
+        LOG.debug("Inserted fams_loan RECEIPT row asset={} request={} allocation={}", asset, request, allocation);
     }
 }

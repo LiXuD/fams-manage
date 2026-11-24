@@ -1,5 +1,7 @@
 package com.fams.loan;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,8 @@ import java.time.LocalDate;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class LoanRepairPort {
+    private static final Logger LOG = LoggerFactory.getLogger(LoanRepairPort.class);
+
     public record Context(
             long id,
             long version,
@@ -33,6 +37,7 @@ public class LoanRepairPort {
     }
 
     public Context open(long assetId) {
+        LOG.debug("Locking open fams_loan FOR UPDATE for repair asset={}", assetId);
         var rows =
                 db.queryForList(
                         "SELECT"
@@ -128,5 +133,7 @@ public class LoanRepairPort {
                 current.version() + 1,
                 actualReturn,
                 actor);
+        LOG.debug("Closed fams_loan id={} as RETURNED for repair={} and inserted fams_loan_repair_return",
+                current.id(), repair);
     }
 }

@@ -3,6 +3,8 @@ package com.fams.requisition;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,8 @@ import java.util.HexFormat;
 @Service
 @Profile("fams-product")
 class BusinessResultNoticeService {
+    private static final Logger LOG = LoggerFactory.getLogger(BusinessResultNoticeService.class);
+
     private final JdbcTemplate db;
     private final RequisitionActorContext actors;
     private final ObjectMapper json;
@@ -35,8 +39,9 @@ class BusinessResultNoticeService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    NoticeViews.NoticePage list(
+    public NoticeViews.NoticePage list(
             RequisitionActorContext.Actor actor, int page, int pageSize) {
+        LOG.debug("Listing business result notices actor={} page={} pageSize={}", actor.id(), page, pageSize);
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT id,business_type,business_id,item_id,content_json,"
                 + "created_at,read_at,EXISTS (SELECT 1 FROM fams_audit_event e WHERE"
@@ -56,7 +61,8 @@ class BusinessResultNoticeService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    NoticeViews.ReviewRequestPage reviewRequests(RequisitionActorContext.Actor actor, int page, int pageSize) {
+    public NoticeViews.ReviewRequestPage reviewRequests(RequisitionActorContext.Actor actor, int page, int pageSize) {
+        LOG.debug("Listing notice review requests actor={} page={} pageSize={}", actor.id(), page, pageSize);
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) {
             throw RequisitionFailure.forbidden();
@@ -80,7 +86,7 @@ class BusinessResultNoticeService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    NoticeViews.ReadReceipt read(RequisitionActorContext.Actor actor, long id) {
+    public NoticeViews.ReadReceipt read(RequisitionActorContext.Actor actor, long id) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT id FROM fams_business_result_notice"
                 + " WHERE id=? AND recipient_employee_id=? FOR UPDATE", id, current.employeeId());
@@ -90,11 +96,12 @@ class BusinessResultNoticeService {
         db.update("UPDATE fams_business_result_notice SET read_at=COALESCE(read_at,"
                 + "CURRENT_TIMESTAMP(3)) WHERE id=? AND recipient_employee_id=?", id,
                 current.employeeId());
+        LOG.info("Marked business result notice read actor={} noticeId={}", current.id(), id);
         return new NoticeViews.ReadReceipt(Long.toString(id), true);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
+    public NoticeViews.ObjectionReceipt objection(RequisitionActorContext.Actor actor, long id, String key, String reason) {
         var current = actors.revalidateLocked(actor);
         var rows = db.queryForList("SELECT * FROM fams_business_result_notice"
                 + " WHERE id=? AND recipient_employee_id=? FOR UPDATE", id, current.employeeId());
@@ -142,6 +149,8 @@ class BusinessResultNoticeService {
                 + " VALUES (?,'requestBusinessResultReview',?,?,'SUCCEEDED',200,?,'BUSINESS_RESULT_NOTICE',?,0,?,?,?)",
                 current.id(), key, hash, json.writeValueAsString(result), id, clock.instant(), clock.instant(),
                 clock.instant().plus(24, ChronoUnit.HOURS));
+        LOG.info("Raised admin review objection on business result notice actor={} noticeId={} businessType={}",
+                current.id(), id, notice.get("business_type"));
         return result;
     }
 

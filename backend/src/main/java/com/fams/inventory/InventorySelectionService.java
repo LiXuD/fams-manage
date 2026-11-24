@@ -6,6 +6,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventorySelectionService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventorySelectionService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -79,6 +82,7 @@ public class InventorySelectionService {
                                 taskId,
                                 itemId),
                         TOTAL_REQUIRED);
+        LOG.debug("Selection detail requested for task {} item {} page {} size {}.", taskId, itemId, page, size);
         return new SelectionViews.SelectionDetailView(
                 Long.toString(taskId),
                 number(task, "version"),
@@ -284,6 +288,7 @@ public class InventorySelectionService {
                 hash,
                 json.writeValueAsString(response),
                 now());
+        LOG.info("Inventory selection committed for task {} item {} by actor {}.", taskId, itemId, actor.id());
         return response;
     }
 
@@ -323,6 +328,7 @@ public class InventorySelectionService {
             result.add(
                     SelectionViews.evidenceSubject(row, decisionRows, linkRows, repairRows));
         }
+        LOG.debug("Evidence subjects requested for task {} item {} observation {}.", taskId, itemId, observationId);
         return new SelectionViews.EvidenceSubjectView(
                 result,
                 differences.requiredDimensions(task, raw).stream().sorted().toList());
@@ -352,6 +358,7 @@ public class InventorySelectionService {
                                 taskId,
                                 itemId),
                         TOTAL_REQUIRED);
+        LOG.debug("Dispositions requested for task {} item {} page {} size {}.", taskId, itemId, page, size);
         return new SelectionViews.DispositionPage(
                 SelectionViews.evidenceDispositions(rows), total, page, size);
     }
@@ -579,6 +586,7 @@ public class InventorySelectionService {
                     current.username(),
                     now());
         }
+        LOG.info("Evidence decision committed for task {} item {} by actor {}.", taskId, itemId, actor.id());
         return finishEvidence(
                 actor,
                 current,
@@ -724,6 +732,7 @@ public class InventorySelectionService {
         // The legacy payload argument re-read the review row here, before finishEvidence bumped
         // the task version; the read keeps that exact position.
         var accepted = SelectionViews.reviewState(review(item));
+        LOG.info("Selected evidence accepted for task {} item {} by actor {}.", taskId, itemId, actor.id());
         return finishEvidence(
                 actor,
                 current,

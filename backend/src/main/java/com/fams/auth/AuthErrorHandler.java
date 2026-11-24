@@ -36,6 +36,9 @@ final class AuthErrorHandler {
     ResponseEntity<ErrorResponse> handleAuthOperation(
             AuthOperationException exception,
             HttpServletRequest request) {
+        LOG.warn("Auth request rejected: path={} code={} status={} requestId={}",
+                request.getRequestURI(), exception.code(), exception.status(),
+                AuthRequestContext.requestId(request));
         if ("AUTH_FORBIDDEN".equals(exception.code())) {
             Object currentAccount = request.getAttribute(AuthRequestContext.ACCOUNT_ATTRIBUTE);
             Long accountId = currentAccount instanceof AuthAccount account ? account.id() : null;
@@ -44,6 +47,8 @@ final class AuthErrorHandler {
                     SecurityEventType.AUTHORIZATION_REJECTED,
                     AuthRequestContext.requestId(request),
                     exception.code());
+            LOG.warn("Auth authorization rejected for account {}: path={} requestId={}",
+                    accountId, request.getRequestURI(), AuthRequestContext.requestId(request));
         }
         return ResponseEntity.status(exception.status()).body(error(
                 exception.code(),
@@ -62,6 +67,8 @@ final class AuthErrorHandler {
                         fieldError -> fieldError.getDefaultMessage(),
                         (first, ignored) -> first,
                         LinkedHashMap::new));
+        LOG.warn("Auth request validation failed: path={} requestId={} fields={}",
+                request.getRequestURI(), AuthRequestContext.requestId(request), fieldErrors.keySet());
         return ResponseEntity.badRequest().body(error(
                 "INVALID_REQUEST",
                 "Request validation failed.",
@@ -79,6 +86,8 @@ final class AuthErrorHandler {
                         violation -> violation.getMessage(),
                         (first, ignored) -> first,
                         LinkedHashMap::new));
+        LOG.warn("Auth constraint violated: path={} requestId={} fields={}",
+                request.getRequestURI(), AuthRequestContext.requestId(request), fieldErrors.keySet());
         return ResponseEntity.badRequest().body(error(
                 "INVALID_REQUEST",
                 "Request validation failed.",
@@ -90,6 +99,8 @@ final class AuthErrorHandler {
     ResponseEntity<ErrorResponse> handleWriteConflict(
             RuntimeException exception,
             HttpServletRequest request) {
+        LOG.warn("Auth write conflict: path={} requestId={}",
+                request.getRequestURI(), AuthRequestContext.requestId(request));
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error(
                 "AUTH_WRITE_CONFLICT",
                 "The account or authorization write conflicted with current state.",
@@ -113,6 +124,8 @@ final class AuthErrorHandler {
     ResponseEntity<ErrorResponse> handleMissingHeader(
             ServletRequestBindingException exception,
             HttpServletRequest request) {
+        LOG.warn("Auth required request headers missing or invalid: path={} requestId={}",
+                request.getRequestURI(), AuthRequestContext.requestId(request));
         return ResponseEntity.badRequest().body(error(
                 "INVALID_REQUEST", "Required request headers are missing or invalid.",
                 AuthRequestContext.requestId(request), Map.of()));

@@ -8,6 +8,8 @@ import com.fams.auth.Role;
 import com.fams.repair.InventoryRepairPort;
 import com.fams.transfer.InventoryTransferPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryDifferenceService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryDifferenceService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -94,6 +97,7 @@ public class InventoryDifferenceService {
                             row.get("dimension"));
             values.add(SelectionViews.differenceSubject(row, decisionRows, linkRows, repairRows));
         }
+        LOG.debug("Difference page requested for inventory task {} page {} size {}.", taskId, page, size);
         return new SelectionViews.DifferencePage(
                 values,
                 page,
@@ -175,6 +179,7 @@ public class InventoryDifferenceService {
             }
         }
         boolean changed = created > 0;
+        LOG.info("Difference preparation committed for inventory task {} by actor {}.", taskId, actor.id());
         return finish(
                 actor,
                 current,
@@ -288,6 +293,7 @@ public class InventoryDifferenceService {
                 }
             }
         }
+        LOG.debug("Required difference dimensions resolved for a locked observation.");
         return java.util.Set.copyOf(dimensions);
     }
 
@@ -493,6 +499,7 @@ public class InventoryDifferenceService {
                             null));
             index++;
         }
+        LOG.info("Difference decision committed for inventory task {} by actor {}.", taskId, actor.id());
         return finish(
                 actor,
                 current,
@@ -529,6 +536,7 @@ public class InventoryDifferenceService {
                                 + " AND dimension='CONDITION' ORDER BY decision_version FOR"
                                 + " SHARE",
                         observationId);
+        LOG.debug("Difference repair context requested for task {} observation {}.", taskId, observationId);
         return new SelectionViews.DifferenceRepairContext(
                 Long.toString(taskId),
                 number(task, "version"),

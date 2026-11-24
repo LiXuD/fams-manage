@@ -2,6 +2,8 @@ package com.fams.inbound;
 
 import com.fams.attachment.AttachmentBusinessPort;
 import com.fams.auth.Role;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -10,6 +12,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("fams-product")
 public final class InboundAttachmentPort implements AttachmentBusinessPort {
+    private static final Logger LOG = LoggerFactory.getLogger(InboundAttachmentPort.class);
     private final JdbcTemplate db;
     public InboundAttachmentPort(JdbcTemplate db) { this.db = db; }
     @Override public String businessType() { return "INBOUND"; }
@@ -57,6 +60,7 @@ public final class InboundAttachmentPort implements AttachmentBusinessPort {
     public void registered(long actorId, long businessId, long expectedVersion) {
         int updated = db.update("UPDATE fams_inbound_receipt SET version=version+1,updated_by=?,updated_at=NOW(3) "
                 + "WHERE id=? AND version=?", actorId, businessId, expectedVersion);
+        LOG.debug("UPDATE fams_inbound_receipt version bumped for receipt {}.", businessId);
         if (updated != 1) { throw InboundFailure.conflict("INBOUND_VERSION_CONFLICT"); }
     }
 }

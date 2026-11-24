@@ -44,7 +44,7 @@ class AssetPreferenceService {
     }
 
     @Transactional
-    AssetSavedFilter create(Actor actor, AssetSavedFilterCreateRequest request,
+    public AssetSavedFilter create(Actor actor, AssetSavedFilterCreateRequest request,
             String key, UUID requestId) {
         String operation = "createAssetSavedFilter";
         String digest = codec.hash(operation + json.writeValueAsString(request));
@@ -64,7 +64,7 @@ class AssetPreferenceService {
     }
 
     @Transactional
-    AssetSavedFilter update(Actor actor, long id, long version,
+    public AssetSavedFilter update(Actor actor, long id, long version,
             AssetSavedFilterUpdateRequest request, String key, UUID requestId) {
         String operation = "updateAssetSavedFilter";
         String digest = codec.hash(operation + id + ":" + version + json.writeValueAsString(request));
@@ -87,7 +87,7 @@ class AssetPreferenceService {
     }
 
     @Transactional
-    void delete(Actor actor, long id, long version, String key, UUID requestId) {
+    public void delete(Actor actor, long id, long version, String key, UUID requestId) {
         String operation = "deleteAssetSavedFilter";
         String digest = codec.hash(operation + id + ":" + version);
         Map<String, Object> prior = assetRepository.replay(actor.id(), operation, key, now());

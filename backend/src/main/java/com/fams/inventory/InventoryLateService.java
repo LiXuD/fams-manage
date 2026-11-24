@@ -5,6 +5,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryLateService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryLateService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -64,6 +67,7 @@ public class InventoryLateService {
         // The legacy Map.of evaluated the case items (each running its own three FOR SHARE reads)
         // before the COUNT query, so items materialize first and the lock read order is unchanged.
         var items = rows.stream().map(this::view).toList();
+        LOG.debug("Late case page requested for task {} page {} size {}.", taskId, page, size);
         return new InventoryViews.InventoryLateCasePage(
                 InventoryViews.inventoryLateTaskHeader(json, task),
                 items,
@@ -106,6 +110,7 @@ public class InventoryLateService {
                                         observationId)));
         var previous = latest(observationId);
         var damage = damageRow(observationId);
+        LOG.debug("Late case detail requested for observation {} page {} size {}.", observationId, page, size);
         return new InventoryViews.InventoryLateCaseDetail(
                 InventoryViews.inventoryLateTaskHeader(json, task),
                 InventoryViews.inventoryLateCaseView(
@@ -155,6 +160,7 @@ public class InventoryLateService {
                         Long.toString(taskId), rows.size(), rows.size() == 100, version, true);
         audit(actor, current, task, "INVENTORY_LATE_PREPARED", response);
         receipt(current, taskId, "PREPARE_LATE", key, payload, response);
+        LOG.info("Late case preparation committed for task {} by actor {}.", taskId, actor.id());
         return response;
     }
 
@@ -303,6 +309,7 @@ public class InventoryLateService {
                         false);
         audit(actor, current, task, "INVENTORY_LATE_DECIDED", response);
         receipt(current, taskId, "LATE_DECISION", key, payload, response);
+        LOG.info("Late case decision committed for observation {} by actor {}.", observationId, actor.id());
         return response;
     }
 

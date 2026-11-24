@@ -4,6 +4,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.proxy.ProxyReceiptPort;
 import com.fams.proxy.ProxyViews;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Component;
 @Component
 @Profile("fams-product")
 class TransferProxyReceiptPort implements ProxyReceiptPort {
+    private static final Logger LOG = LoggerFactory.getLogger(TransferProxyReceiptPort.class);
     private final JdbcTemplate db;
     private final TransferService transfers;
 
@@ -22,6 +25,7 @@ class TransferProxyReceiptPort implements ProxyReceiptPort {
     @Override public String businessType() { return "TRANSFER"; }
 
     @Override public void lockHeader(long request) {
+        LOG.debug("FOR UPDATE fams_transfer header row {}.", request);
         if (db.queryForList("SELECT id FROM fams_transfer WHERE id=? FOR UPDATE", request).isEmpty()) {
             throw new TransferFailure("TRANSFER_NOT_FOUND", 404);
         }

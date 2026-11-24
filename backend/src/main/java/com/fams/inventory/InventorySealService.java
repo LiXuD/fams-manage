@@ -9,6 +9,8 @@ import com.fams.auth.Role;
 
 import com.fams.loss.InventoryLossPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventorySealService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventorySealService.class);
     private record Evaluation(
             List<Map<String, Object>> items,
             List<Map<String, Object>> reviews,
@@ -95,6 +98,7 @@ public class InventorySealService {
         var evaluation = evaluate(actor, task);
         long missing =
                 evaluation.synchronization().stream().filter(row -> !row.current()).count();
+        LOG.debug("Seal preflight requested for task {} by actor {}.", taskId, actor.id());
         return new SealViews.Preflight(
                 SealViews.taskRow(json, task),
                 false,
@@ -317,6 +321,7 @@ public class InventorySealService {
                 payload,
                 json.writeValueAsString(response),
                 now);
+        LOG.info("Inventory task sealed for task {} by actor {}.", taskId, actor.id());
         return response;
     }
 
@@ -361,6 +366,7 @@ public class InventorySealService {
         if (rows.isEmpty()) {
             throw new InventoryFailure(404, "INVENTORY_SEALED_REPORT_NOT_FOUND");
         }
+        LOG.debug("Sealed report row requested for task {}.", taskId);
         return SealViews.sealedReportRow(json, rows.getFirst());
     }
 
@@ -391,6 +397,7 @@ public class InventorySealService {
                         taskId,
                         size,
                         (page - 1) * size);
+        LOG.debug("Sealed report rows requested for task {} section {} page {} size {}.", taskId, section, page, size);
         return new SealViews.Page<>(
                 rows.stream().map(row -> SealViews.snapshotRow(json, row)).toList(),
                 Objects.requireNonNull(

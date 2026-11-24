@@ -65,7 +65,7 @@ class AssetCategoryService {
     }
 
     @Transactional
-    AssetCategory create(long actorId, AssetCategoryCreateRequest request, String key, UUID requestId) {
+    public AssetCategory create(long actorId, AssetCategoryCreateRequest request, String key, UUID requestId) {
         String operation = "createAssetCategory";
         String digest = fingerprint.of(operation, objectMapper.writeValueAsString(request));
         Optional<AssetCategory> replay = replay(actorId, operation, key, digest);
@@ -93,7 +93,7 @@ class AssetCategoryService {
     }
 
     @Transactional
-    AssetCategory update(long actorId, long id, long expectedVersion,
+    public AssetCategory update(long actorId, long id, long expectedVersion,
             AssetCategoryUpdateRequest request, boolean templatePresent, String key, UUID requestId) {
         String operation = "updateAssetCategory";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion),
@@ -133,7 +133,7 @@ class AssetCategoryService {
     }
 
     @Transactional
-    AssetCategory changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
+    public AssetCategory changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
             String reason, String key, UUID requestId) {
         String operation = enabled ? "enableAssetCategory" : "disableAssetCategory";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion), reason);

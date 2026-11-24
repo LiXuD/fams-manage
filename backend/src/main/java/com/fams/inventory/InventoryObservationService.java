@@ -5,6 +5,8 @@ import com.fams.auth.InventoryIdentityPort;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryObservationService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryObservationService.class);
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final RequisitionActorContext actors;
@@ -80,18 +83,21 @@ public class InventoryObservationService {
                 input.deviceId().toString(),
                 Timestamp.from(input.clientTime()),
                 Timestamp.from(now));
+        LOG.info("Inventory clock calibration recorded by actor {}.", actor.id());
         return new SealViews.CalibrationResult(id, now.toString(), input.clientTime().toString());
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ)
     public SealViews.Identification identify(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
+        LOG.debug("Asset identification lookup requested for task {} source {}.", taskId, source);
         return identify(actor, taskId, source, value, false);
     }
 
     @Transactional(isolation = Isolation.REPEATABLE_READ, rollbackFor = Exception.class)
     public SealViews.Identification identifyAndRecord(
             RequisitionActorContext.Actor actor, long taskId, String source, String value) {
+        LOG.info("Observation identification recorded for task {} by actor {}.", taskId, actor.id());
         return identify(actor, taskId, source, value, true);
     }
 
@@ -370,6 +376,7 @@ public class InventoryObservationService {
                 number(task, "version") + (!terminal && !"EXPIRED".equals(outcome) ? 1 : 0),
                 timestamp(received),
                 json.writeValueAsString(receipt));
+        LOG.info("Inventory observation submitted for task {} by actor {}.", taskId, actor.id());
         return receipt;
     }
 

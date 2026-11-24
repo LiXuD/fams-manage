@@ -15,6 +15,8 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,8 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class ScrapService {
+    private static final Logger LOG = LoggerFactory.getLogger(ScrapService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -249,6 +253,8 @@ public class ScrapService {
                 actor.requestId().toString(), current.id(), role, id, time, detail);
         var result = new Receipt(Long.toString(id), Long.toString(input.assetId()), assetVersion,
                 0, "PENDING_ADMIN_DECISION");
+        LOG.info("Scrap request submitted actor={} scrapId={} assetId={} sourceType={} sourceId={}",
+                current.id(), id, input.assetId(), sourceType, sourceId);
         db.update(
                 "INSERT INTO fams_scrap_receipt(actor_account_id,operation,request_id,scrap_request_id,"
                         + "payload_sha256,response_json,created_at) VALUES (?,?,?,?,?,?,?)",

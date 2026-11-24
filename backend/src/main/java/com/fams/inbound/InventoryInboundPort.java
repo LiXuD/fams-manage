@@ -3,6 +3,8 @@ package com.fams.inbound;
 import com.fams.auth.RequisitionActorContext;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Profile("fams-product")
 @Transactional(propagation = Propagation.MANDATORY)
 public class InventoryInboundPort {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryInboundPort.class);
     public record Context(
             String receiptId,
             long version,
@@ -35,6 +38,7 @@ public class InventoryInboundPort {
 
     public Context find(
             RequisitionActorContext.Actor actor, String receiptNumber, String assetCode) {
+        LOG.debug("Inbound receipt lookup by number {} asset code {}.", receiptNumber, assetCode);
         if (!actors.revalidateLocked(actor).has(Role.ASSET_ADMIN)) {
             throw new IllegalArgumentException("Inventory administrator required");
         }

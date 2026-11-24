@@ -7,6 +7,8 @@ import com.fams.auth.RequisitionActorContext.Actor;
 import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ import java.util.Objects;
 @Service
 @Profile("fams-product")
 public class ScrapReadService {
+    private static final Logger LOG = LoggerFactory.getLogger(ScrapReadService.class);
+
     private static final String SCOPE = " FROM fams_scrap_request r JOIN fams_asset a ON a.id=r.asset_id"
             + " WHERE (? OR r.creator_account_id=?"
             + " OR (? AND EXISTS (SELECT 1 FROM fams_account_authorization aa"
@@ -59,11 +63,13 @@ public class ScrapReadService {
 
     @Transactional
     public AssetScrapPort.EligiblePage eligible(Actor actor, int page, int size) {
+        LOG.debug("Listing scrap-eligible assets actor={} page={} size={}", actor.id(), page, size);
         return assets.eligible(actors.revalidateLocked(actor), page, size);
     }
 
     @Transactional
     public ScrapViews.RequestPage list(Actor actor, int page, int size) {
+        LOG.debug("Listing scrap requests actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateScrapReaderLocked(actor);
         Object[] scope = scope(current);
         var args = new ArrayList<Object>(Arrays.asList(scope));
@@ -79,6 +85,7 @@ public class ScrapReadService {
 
     @Transactional
     public ScrapViews.RequestPage overdueDispositions(Actor actor, int page, int size) {
+        LOG.debug("Listing overdue scrap dispositions actor={} page={} size={}", actor.id(), page, size);
         var current = actors.revalidateLocked(actor);
         if (!canListOverdue(current)) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_FOLLOW_UP_FORBIDDEN", 403);
@@ -107,6 +114,7 @@ public class ScrapReadService {
 
     @Transactional
     public ScrapViews.Request get(Actor actor, long id) {
+        LOG.debug("Reading scrap request detail actor={} requestId={}", actor.id(), id);
         var current = actors.revalidateScrapReaderLocked(actor);
         var row = visible(current, id);
         var history = db.queryForList("SELECT id,action,actor_username,occurred_at"
@@ -117,6 +125,7 @@ public class ScrapReadService {
 
     @Transactional
     public ScrapViews.ChoicePage catalog(Actor actor, long id, String kind, int page, int size) {
+        LOG.debug("Reading scrap catalog actor={} requestId={} kind={} page={}", actor.id(), id, kind, page);
         var current = actors.revalidateLocked(actor);
         var row = visible(current, id);
         boolean processing = "PROCESSING".equals(row.get("request_status"))

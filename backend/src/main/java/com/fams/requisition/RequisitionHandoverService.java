@@ -12,6 +12,8 @@ import com.fams.targetchange.TargetChangeViews;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -37,6 +39,8 @@ import java.util.Objects;
 @Service
 @Profile("fams-product")
 class RequisitionHandoverService {
+    private static final Logger LOG = LoggerFactory.getLogger(RequisitionHandoverService.class);
+
     private final JdbcTemplate db;
     private final ObjectMapper json;
     private final Clock clock;
@@ -67,8 +71,10 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.Page<RequisitionViews.PendingReceiptItem> pending(
+    public RequisitionViews.Page<RequisitionViews.PendingReceiptItem> pending(
             Actor actor, int page, int size, Long allocationId) {
+        LOG.debug("Listing pending receipt items actor={} page={} size={} allocationId={}",
+                actor.id(), page, size, allocationId);
         Current current = actors.revalidateLocked(actor);
         String from =
                 " FROM fams_requisition_allocation a JOIN fams_requisition_demand d ON"
@@ -100,7 +106,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Grant grant(Actor actor, long request, long allocation) {
+    public RequisitionViews.Grant grant(Actor actor, long request, long allocation) {
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
         var item = item(request, allocation);
@@ -134,6 +140,7 @@ class RequisitionHandoverService {
                 n(item, "version"),
                 now(),
                 Timestamp.from(clock.instant().plusSeconds(300)));
+        LOG.info("Issued receipt grant actor={} request={} allocation={}", current.id(), request, allocation);
         return new RequisitionViews.Grant(
                 token,
                 clock.instant().plusSeconds(300).toString(),
@@ -142,7 +149,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail deliver(
+    public RequisitionViews.Detail deliver(
             Actor actor,
             long request,
             long allocation,
@@ -220,6 +227,7 @@ class RequisitionHandoverService {
                 Role.WAREHOUSE_OPERATOR);
         todo(allocation, "RECEIPT", "RECEIVER", receiverAccount(target(demand)));
         progress(request);
+        LOG.info("Delivered requisition allocation actor={} request={} allocation={}", current.id(), request, allocation);
         return finish(
                 current,
                 "deliver",
@@ -232,7 +240,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.Detail warehouseAction(
+    public RequisitionViews.Detail warehouseAction(
             Actor actor,
             long request,
             long allocation,
@@ -315,6 +323,8 @@ class RequisitionHandoverService {
                 recover ? input.inspectionEvidence() : input.reason(),
                 Role.WAREHOUSE_OPERATOR);
         progress(request);
+        LOG.info("Applied warehouse handover action actor={} request={} allocation={} action={}",
+                current.id(), request, allocation, action);
         return finish(
                 current,
                 action,
@@ -327,7 +337,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    RequisitionViews.ReceiptResult receipt(
+    public RequisitionViews.ReceiptResult receipt(
             Actor actor,
             long request,
             long allocation,
@@ -412,6 +422,8 @@ class RequisitionHandoverService {
                 refuse ? input.reason() : "接收人核对实物与资产编码，确认收到",
                 Role.EMPLOYEE);
         progress(request);
+        LOG.info("Handover receipt decision actor={} request={} allocation={} refused={}",
+                current.id(), request, allocation, refuse);
         return finish(
                 current,
                 action,
@@ -471,7 +483,9 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    ProxyViews.RequisitionSnapshot proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
+    public ProxyViews.RequisitionSnapshot proxySnapshot(Actor actor, long request, long allocation, boolean executing) {
+        LOG.debug("Building proxy receipt snapshot actor={} request={} allocation={} executing={}",
+                actor.id(), request, allocation, executing);
         var current = actors.revalidateLocked(actor);
         var header = header(request);
         if (executing) { warehouse(current, header); }
@@ -512,7 +526,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    ProxyViews.RequisitionReceiptResult proxyReceipt(Actor actor, long request, long allocation,
+    public ProxyViews.RequisitionReceiptResult proxyReceipt(Actor actor, long request, long allocation,
             ProxyViews.ProxySnapshot expected, String observedCode, long confirmationId) {
         var snapshot = proxySnapshot(actor, request, allocation, true);
         // Text round-trip keeps the pre-JAVA-04 comparison semantics verbatim (integral width
@@ -530,13 +544,16 @@ class RequisitionHandoverService {
         event(actor, current, "PROXY_RECEIVED", item, observed,
                 "异常代确认许可 " + confirmationId, Role.WAREHOUSE_OPERATOR);
         progress(request);
+        LOG.info("Proxy receipt executed actor={} request={} allocation={} confirmationId={}",
+                current.id(), request, allocation, confirmationId);
         return new ProxyViews.RequisitionReceiptResult(
                 Long.toString(confirmationId), Long.toString(request), Long.toString(allocation),
                 "RECEIVED", Long.toString(target(demand)), observed);
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    RequisitionViews.ReceiptDetail receiptDetail(Actor actor, long request, long allocation) {
+    public RequisitionViews.ReceiptDetail receiptDetail(Actor actor, long request, long allocation) {
+        LOG.debug("Reading handover receipt detail actor={} request={} allocation={}", actor.id(), request, allocation);
         Current current = actors.revalidateLocked(actor);
         var header = header(request);
         var item = item(request, allocation);
@@ -567,7 +584,8 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    TargetChangeViews.RequisitionContext targetChangeContext(Actor actor, long request, long allocation) {
+    public TargetChangeViews.RequisitionContext targetChangeContext(Actor actor, long request, long allocation) {
+        LOG.debug("Reading target-change context actor={} request={} allocation={}", actor.id(), request, allocation);
         var current = actors.revalidateLocked(actor);
         var header = header(request);
         if (!current.has(Role.ASSET_ADMIN)) { warehouse(current, header); }
@@ -619,7 +637,9 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
-    void validateChangedTarget(long request, long allocation, ItemTargetChangeInput.Target target) {
+    public void validateChangedTarget(long request, long allocation, ItemTargetChangeInput.Target target) {
+        LOG.debug("Validating changed target request={} allocation={} custodyType={}",
+                request, allocation, target.custodyType());
         var header = header(request);
         if (!List.of("PERSONAL", "SHARED").contains(target.custodyType())
                 || "BORROW".equals(header.get("request_type")) && !"PERSONAL".equals(target.custodyType())) {
@@ -638,7 +658,7 @@ class RequisitionHandoverService {
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED, rollbackFor = Exception.class)
-    void applyChangedTarget(Actor actor, long request, long allocation, ItemTargetChangeInput.Target target,
+    public void applyChangedTarget(Actor actor, long request, long allocation, ItemTargetChangeInput.Target target,
             String observedCode, long proposal) {
         var current = actors.revalidateLocked(actor);
         if (!current.has(Role.ASSET_ADMIN)) { throw RequisitionFailure.forbidden(); }
@@ -659,6 +679,8 @@ class RequisitionHandoverService {
         }
         db.update("UPDATE fams_requisition SET version=version+1,updated_at=? WHERE id=?", now(), request);
         event(actor, current, "TARGET_CHANGED", item, observed, "批准目标变更 " + proposal, Role.ASSET_ADMIN);
+        LOG.info("Applied target change actor={} request={} allocation={} proposal={}",
+                current.id(), request, allocation, proposal);
     }
 
     private Map<String, Object> targetReferenceSnapshot(ItemTargetChangeInput.Target target) {

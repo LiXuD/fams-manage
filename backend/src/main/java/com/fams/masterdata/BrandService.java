@@ -66,7 +66,7 @@ class BrandService {
     }
 
     @Transactional
-    Brand create(long actorId, BrandCreateRequest request, String key, UUID requestId) {
+    public Brand create(long actorId, BrandCreateRequest request, String key, UUID requestId) {
         String operation = "createBrand";
         String digest = fingerprint.of(operation, objectMapper.writeValueAsString(request));
         Optional<Brand> replay = replay(actorId, operation, key, digest);
@@ -88,7 +88,7 @@ class BrandService {
     }
 
     @Transactional
-    Brand update(long actorId, long id, long expectedVersion,
+    public Brand update(long actorId, long id, long expectedVersion,
             BrandUpdateRequest request, String key, UUID requestId) {
         String operation = "updateBrand";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion),
@@ -117,7 +117,7 @@ class BrandService {
     }
 
     @Transactional
-    Brand changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
+    public Brand changeStatus(long actorId, long id, long expectedVersion, boolean enabled,
             String reason, String key, UUID requestId) {
         String operation = enabled ? "enableBrand" : "disableBrand";
         String digest = fingerprint.of(operation, Long.toString(id), Long.toString(expectedVersion), reason);

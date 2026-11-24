@@ -78,7 +78,7 @@ class BusinessParameterService {
     }
 
     @Transactional
-    BusinessParameterVersion create(long actorId, long expectedVersion, JsonNode raw,
+    public BusinessParameterVersion create(long actorId, long expectedVersion, JsonNode raw,
             String key, UUID requestId) {
         String operation = "createBusinessParameterVersion";
         String digest = fingerprint.of(operation, Long.toString(expectedVersion),

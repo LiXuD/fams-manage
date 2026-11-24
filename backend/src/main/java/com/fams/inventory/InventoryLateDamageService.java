@@ -7,6 +7,8 @@ import com.fams.auth.RequisitionActorContext.Current;
 import com.fams.auth.Role;
 import com.fams.repair.InventoryRepairPort;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ import java.util.UUID;
 @Service
 @Profile("fams-product")
 public class InventoryLateDamageService {
+    private static final Logger LOG = LoggerFactory.getLogger(InventoryLateDamageService.class);
     private static final String OPERATION = "LATE_DAMAGE_REPAIR";
     private final JdbcTemplate db;
     private final ObjectMapper json;
@@ -85,6 +88,7 @@ public class InventoryLateDamageService {
                                                 + " WHERE observation_id=?",
                                         Long.class,
                                         observation)));
+        LOG.debug("Late damage detail requested for observation {} page {} size {}.", observation, page, size);
         return new InventoryViews.InventoryLateDamageDetail(
                 Long.toString(taskId),
                 number(task, "version"),
@@ -324,6 +328,7 @@ public class InventoryLateDamageService {
                 fingerprint,
                 json.writeValueAsString(response),
                 now);
+        LOG.info("Late damage decision committed for observation {} by actor {}.", observation, actor.id());
         return response;
     }
 

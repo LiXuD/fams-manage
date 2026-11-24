@@ -5,6 +5,8 @@ import com.fams.product.contract.model.ErrorResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +20,18 @@ import java.util.UUID;
 @Order(-1)
 @RestControllerAdvice(assignableTypes = {RequisitionHandoverController.class, RequisitionProxyConfirmationController.class, ItemTargetChangeController.class})
 class HandoverErrorHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(HandoverErrorHandler.class);
+
     @ExceptionHandler(AssetHandoverPort.Failure.class)
     ResponseEntity<ErrorResponse> failure(
             AssetHandoverPort.Failure error, HttpServletRequest request) {
+        if (error.status() >= 500) {
+            LOG.error("Handover request failed: path={}, code={}", request.getRequestURI(),
+                    error.getMessage(), error);
+        } else {
+            LOG.warn("Handover request rejected: path={}, code={}", request.getRequestURI(),
+                    error.getMessage());
+        }
         return ResponseEntity.status(error.status())
                 .body(
                         new ErrorResponse(

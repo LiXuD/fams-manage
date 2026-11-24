@@ -44,7 +44,7 @@ class OperationLogService {
     }
 
     @Transactional
-    PageOperationLog list(int page, int pageSize, String source, String actorAccountId,
+    public PageOperationLog list(int page, int pageSize, String source, String actorAccountId,
             String occurredFrom, String occurredTo) {
         access.require();
         List<Object> arguments = new ArrayList<>();
