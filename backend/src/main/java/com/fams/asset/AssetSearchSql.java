@@ -20,11 +20,13 @@ public final class AssetSearchSql {
         {"organizationId", "a.owning_organization_id = #{filters.organizationId}"},
         {"usingOrganizationId", "a.using_organization_id = #{filters.usingOrganizationId}"},
         {"responsibleEmployeeId", "a.responsible_employee_id = #{filters.responsibleEmployeeId}"},
-        {"departmentResponsibleEmployeeId", "a.department_responsible_employee_id = #{filters.departmentResponsibleEmployeeId}"},
+        {"departmentResponsibleEmployeeId",
+                "a.department_responsible_employee_id = #{filters.departmentResponsibleEmployeeId}"},
         {"inboundDateFrom", "a.inbound_business_date &gt;= #{filters.inboundDateFrom}"},
         {"inboundDateTo", "a.inbound_business_date &lt;= #{filters.inboundDateTo}"},
         {"lastInventoryDateFrom", "a.last_inventory_business_date &gt;= #{filters.lastInventoryDateFrom}"},
         {"lastInventoryDateTo", "a.last_inventory_business_date &lt;= #{filters.lastInventoryDateTo}"},
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         {"inventoryBefore", """
             a.card_stage='ACTIVE' AND a.lifecycle_status NOT IN ('WAITING_INBOUND','SCRAPPED') AND
             <choose>
@@ -36,6 +38,7 @@ public final class AssetSearchSql {
                 </otherwise>
             </choose>
             """},
+        // CHECKSTYLE.ON: LineLength
         {"currentProcessorId", AssetLedgerWorkflowSql.PROCESSOR},
         {"businessReference", AssetLedgerWorkflowSql.REFERENCE},
         {"borrowOverdue", """
@@ -60,7 +63,8 @@ public final class AssetSearchSql {
      * @return dynamic {@code <script>} statement yielding one fams_asset row per match
      */
     public static String list() {
-        return where("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " ") + " ORDER BY a.id DESC LIMIT #{limit} OFFSET #{offset}</script>";
+        return where("SELECT a.*, " + AssetPhysicalSql.PROJECTION + " ")
+                + " ORDER BY a.id DESC LIMIT #{limit} OFFSET #{offset}</script>";
     }
 
     /**

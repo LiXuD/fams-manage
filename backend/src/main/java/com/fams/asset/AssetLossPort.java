@@ -488,7 +488,8 @@ public class AssetLossPort {
         var row =
                 db.queryForMap(
                         "SELECT"
-                            + " a.asset_code,a.serial_number,a.version,a.lifecycle_status,a.exception_status,a.card_stage,a.current_location_id,l.name"
+                            + " a.asset_code,a.serial_number,a.version,a.lifecycle_status,a.exception_status,"
+                            + "a.card_stage,a.current_location_id,l.name"
                             + " location_name,l.version location_version FROM fams_asset a LEFT"
                             + " JOIN fams_location l ON l.id=a.current_location_id WHERE a.id=?",
                         id);
@@ -852,7 +853,8 @@ public class AssetLossPort {
         return new RecoveryLocationPage(
                 items.stream().map(r -> new RecoveryLocation(r.get("id").toString(),
                         (String) r.get("name"), ((Number) r.get("version")).longValue())).toList(),
-                Objects.requireNonNull(db.queryForObject("SELECT COUNT(*) FROM fams_location WHERE status='ACTIVE'", Long.class)),
+                Objects.requireNonNull(
+                        db.queryForObject("SELECT COUNT(*) FROM fams_location WHERE status='ACTIVE'", Long.class)),
                 page,
                 size);
     }

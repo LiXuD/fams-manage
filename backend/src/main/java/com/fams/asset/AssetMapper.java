@@ -190,7 +190,8 @@ interface AssetMapper {
             VALUES (#{assetId},#{tagVersion},#{issuedAt},#{actorId},#{confirmedAt})
             """)
     int addTagPlacement(@Param("assetId") long assetId, @Param("tagVersion") long tagVersion,
-            @Param("issuedAt") Instant issuedAt, @Param("actorId") long actorId, @Param("confirmedAt") Instant confirmedAt);
+            @Param("issuedAt") Instant issuedAt, @Param("actorId") long actorId,
+            @Param("confirmedAt") Instant confirmedAt);
 
     @Insert("""
             INSERT INTO fams_asset_tag(asset_id, token_ciphertext, token_hash, tag_version, issued_at)
@@ -219,7 +220,8 @@ interface AssetMapper {
     @org.apache.ibatis.annotations.Delete("DELETE FROM fams_asset_tag WHERE asset_id=#{id}")
     int deleteTag(@Param("id") long assetId);
 
-    @Update("UPDATE fams_asset SET version = version + 1, updated_at = #{now}, updated_by = #{actorId} WHERE id = #{id} AND version = #{version}")
+    @Update("UPDATE fams_asset SET version = version + 1, updated_at = #{now}, updated_by = #{actorId} "
+            + "WHERE id = #{id} AND version = #{version}")
     int touch(@Param("id") long assetId, @Param("version") long version,
             @Param("actorId") long actorId, @Param("now") Instant now);
 
@@ -232,14 +234,17 @@ interface AssetMapper {
             @Param("now") Instant now, @Param("summary") String summary,
             @Param("actorId") long actorId);
 
-    @Select("SELECT * FROM fams_asset_timeline_event WHERE asset_id = #{id} ORDER BY occurred_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT * FROM fams_asset_timeline_event WHERE asset_id = #{id} "
+            + "ORDER BY occurred_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}")
     List<Map<String, Object>> timeline(@Param("id") long assetId, @Param("limit") int limit,
             @Param("offset") int offset);
 
     @Select("SELECT COUNT(*) FROM fams_asset_timeline_event WHERE asset_id = #{id}")
     long timelineCount(@Param("id") long assetId);
 
-    @Select("SELECT response_body_json, payload_sha256 FROM fams_idempotency_record WHERE actor_account_id = #{actorId} AND operation_id = #{operation} AND idempotency_key = #{key} AND expires_at > #{now}")
+    @Select("SELECT response_body_json, payload_sha256 FROM fams_idempotency_record "
+            + "WHERE actor_account_id = #{actorId} AND operation_id = #{operation} "
+            + "AND idempotency_key = #{key} AND expires_at > #{now}")
     Map<String, Object> replay(@Param("actorId") long actorId, @Param("operation") String operation,
             @Param("key") String key, @Param("now") Instant now);
 
@@ -283,7 +288,8 @@ interface AssetMapper {
     @Select("SELECT * FROM fams_asset_tag_print_item WHERE print_job_id = #{id} ORDER BY id")
     List<Map<String, Object>> printItems(@Param("id") long id);
 
-    @Select("SELECT * FROM fams_asset_saved_filter WHERE owner_account_id = #{ownerId} ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}")
+    @Select("SELECT * FROM fams_asset_saved_filter WHERE owner_account_id = #{ownerId} "
+            + "ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}")
     List<Map<String, Object>> savedFilters(@Param("ownerId") long ownerId,
             @Param("limit") int limit, @Param("offset") int offset);
 
@@ -308,7 +314,8 @@ interface AssetMapper {
             """)
     int updateSavedFilter(Map<String, Object> values);
 
-    @org.apache.ibatis.annotations.Delete("DELETE FROM fams_asset_saved_filter WHERE id = #{id} AND owner_account_id = #{ownerId} AND version = #{version}")
+    @org.apache.ibatis.annotations.Delete("DELETE FROM fams_asset_saved_filter WHERE id = #{id} "
+            + "AND owner_account_id = #{ownerId} AND version = #{version}")
     int deleteSavedFilter(@Param("id") long id, @Param("ownerId") long ownerId,
             @Param("version") long version);
 

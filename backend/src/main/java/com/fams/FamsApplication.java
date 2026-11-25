@@ -15,6 +15,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class FamsApplication {
 
+    /**
+     * Boots the application context and starts the embedded web server.
+     *
+     * @param args command-line arguments forwarded verbatim to Spring Boot
+     */
     public static void main(String[] args) {
         SpringApplication.run(FamsApplication.class, args);
     }

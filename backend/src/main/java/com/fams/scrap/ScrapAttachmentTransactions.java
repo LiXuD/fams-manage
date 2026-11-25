@@ -261,7 +261,8 @@ public class ScrapAttachmentTransactions {
             if (!"PENDING_ADMIN_DECISION".equals(row.get("request_status"))
                     || ((Number) row.get("version")).longValue() != version
                     || db.queryForList("SELECT id FROM fams_asset_business_lock WHERE business_type='SCRAP'"
-                            + " AND asset_id=? AND business_id=? AND business_item_id=? AND released_at IS NULL FOR UPDATE",
+                            + " AND asset_id=? AND business_id=? AND business_item_id=?"
+                            + " AND released_at IS NULL FOR UPDATE",
                             row.get("asset_id"), id, id).isEmpty()) {
                 throw new AssetHandoverPort.Failure("SCRAP_REQUEST_CHANGED", 409);
             }
@@ -288,7 +289,8 @@ public class ScrapAttachmentTransactions {
         }
         db.update("INSERT INTO fams_audit_event(request_id,actor_account_id,actor_role,action,resource_type,"
                 + "resource_id,before_version,after_version,occurred_at,detail_json) VALUES (?,?,?,?,?,?,?,?,?,?)",
-                actor.requestId().toString(), current.id(), role(current), action, type(kind), id, version, version + 1, time, detail);
+                actor.requestId().toString(), current.id(), role(current), action, type(kind), id, version,
+                version + 1, time, detail);
         db.update("INSERT INTO fams_scrap_receipt(actor_account_id,operation,request_id,scrap_request_id,"
                 + "payload_sha256,response_json,created_at) VALUES (?,?,?,?,?,?,?)",
                 current.id(), operation, key.toString(), id, hash, json.writeValueAsString(result), time);

@@ -270,8 +270,8 @@ public class ScrapReviewService {
         } else {
             todo(id, "RESTORE_REQUIRED", "ASSET_ADMIN", null, time);
         }
-        db.update("UPDATE fams_scrap_request SET request_status=?,asset_version=?,version=version+1,updated_at=? WHERE id=?",
-                status, assetVersion, time, id);
+        db.update("UPDATE fams_scrap_request SET request_status=?,asset_version=?,version=version+1,updated_at=? "
+                + "WHERE id=?", status, assetVersion, time, id);
         for (String task : List.of("APPROVAL", "CLAIM", "EXECUTE")) {
             closeTodo(id, task, time);
         }
@@ -389,7 +389,8 @@ public class ScrapReviewService {
         if (prior != null) {
             return prior;
         }
-        if (!"STANDALONE".equals(request.get("source_type")) || !"RESTORE_REQUIRED".equals(request.get("request_status"))
+        if (!"STANDALONE".equals(request.get("source_type"))
+                || !"RESTORE_REQUIRED".equals(request.get("request_status"))
                 || number(request, "version") != version || number(request, "asset_version") != input.assetVersion()) {
             throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_NOT_ALLOWED", 409);
         }
@@ -598,7 +599,8 @@ public class ScrapReviewService {
     @Transactional(rollbackFor = Exception.class)
     public Receipt executeCorrection(Actor actor, long id, long version, UUID key, CorrectionExecution input) {
         var current = current(actor, Role.WAREHOUSE_OPERATOR);
-        var processor = db.queryForList("SELECT processor_account_id FROM fams_scrap_correction WHERE id=? FOR UPDATE", id);
+        var processor = db.queryForList(
+                "SELECT processor_account_id FROM fams_scrap_correction WHERE id=? FOR UPDATE", id);
         if (processor.isEmpty()) {
             throw new AssetHandoverPort.Failure("SCRAP_CORRECTION_NOT_FOUND", 404);
         }
@@ -1474,8 +1476,9 @@ public class ScrapReviewService {
         if (approve && repairSource) {
             var proof = source.path("repairEvidence");
             if (request.get("processor_account_id") == null || !proof.has("repairVersion")
-                    || !repairs.canRestoreFromScrap(number(request, "source_business_id"), proof.path("repairVersion").asLong(-1),
-                    asset, input.assetVersion(), number(request, "processor_account_id"), repairBorrowing(proof))) {
+                    || !repairs.canRestoreFromScrap(number(request, "source_business_id"),
+                            proof.path("repairVersion").asLong(-1), asset, input.assetVersion(),
+                            number(request, "processor_account_id"), repairBorrowing(proof))) {
                 throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
             }
             if (factory) {
@@ -1485,8 +1488,9 @@ public class ScrapReviewService {
                 }
             }
         }
-        if (approve && factoryLoss != null && (!Objects.equals(request.get("processor_account_id"), factoryLoss.processorAccountId())
-                || !validFactoryLossRepair(asset, factoryLoss))) {
+        if (approve && factoryLoss != null
+                && (!Objects.equals(request.get("processor_account_id"), factoryLoss.processorAccountId())
+                        || !validFactoryLossRepair(asset, factoryLoss))) {
             throw new AssetHandoverPort.Failure("SCRAP_SOURCE_OR_OWNERSHIP_CHANGED", 409);
         }
         String status = inheritedProcessor ? "PROCESSING" : "WAITING_WAREHOUSE_CLAIM";
@@ -1535,13 +1539,16 @@ public class ScrapReviewService {
     }
 
     private boolean restoreRepair(Actor actor, Current current, Map<String, Object> request,
-            long assetVersion, long lockVersion, tools.jackson.databind.JsonNode source, Instant time, boolean factory) {
+            long assetVersion, long lockVersion, tools.jackson.databind.JsonNode source,
+            Instant time, boolean factory) {
         var proof = source.path("repairEvidence");
         if (!proof.has("repairVersion") || request.get("processor_account_id") == null) {
             return false;
         }
-        long asset = number(request, "asset_id"), id = number(request, "id"), repair = number(request, "source_business_id");
-        long repairVersion = proof.path("repairVersion").asLong(-1), processor = number(request, "processor_account_id");
+        long asset = number(request, "asset_id"), id = number(request, "id"),
+                repair = number(request, "source_business_id");
+        long repairVersion = proof.path("repairVersion").asLong(-1),
+                processor = number(request, "processor_account_id");
         if (!repairs.canRestoreFromScrap(repair, repairVersion, asset, assetVersion, processor, repairBorrowing(proof))
                 || factory && factoryEvidence(request, proof) == null
                 || !assets.restoreRepair(asset, assetVersion, id, source, current.id(), time, factory)) {
@@ -1554,7 +1561,8 @@ public class ScrapReviewService {
 
     private LoanRepairPort.Context repairBorrowing(tools.jackson.databind.JsonNode proof) {
         var borrowing = proof.path("borrowing");
-        return borrowing.isMissingNode() || borrowing.isNull() ? null : json.readValue(borrowing.toString(), LoanRepairPort.Context.class);
+        return borrowing.isMissingNode() || borrowing.isNull() ? null
+                : json.readValue(borrowing.toString(), LoanRepairPort.Context.class);
     }
 
     private ScrapEvidence factoryEvidence(Map<String, Object> request, tools.jackson.databind.JsonNode proof) {
@@ -1616,11 +1624,13 @@ public class ScrapReviewService {
 
     private RepairService.FactoryLossScrap factoryLossRepair(tools.jackson.databind.JsonNode proof) {
         var factory = proof.path("factoryRepair");
-        return factory.isMissingNode() ? null : json.readValue(factory.toString(), RepairService.FactoryLossScrap.class);
+        return factory.isMissingNode() ? null
+                : json.readValue(factory.toString(), RepairService.FactoryLossScrap.class);
     }
 
     private boolean validFactoryLossRepair(long asset, RepairService.FactoryLossScrap source) {
-        return source.equals(repairs.factoryLossScrap(source.repairId(), source.roundId(), asset, source.processorAccountId()));
+        return source.equals(
+                repairs.factoryLossScrap(source.repairId(), source.roundId(), asset, source.processorAccountId()));
     }
 
     /**
@@ -1805,8 +1815,8 @@ public class ScrapReviewService {
             var proof = source.path("repairEvidence");
             var borrowing = repairBorrowing(proof);
             assets.requireFrozenRepair(asset, input.assetVersion(), source);
-            repairs.closeFromScrap(actor, current, number(row, "source_business_id"), proof.path("repairVersion").asLong(-1),
-                    asset, input.assetVersion(), id, borrowing);
+            repairs.closeFromScrap(actor, current, number(row, "source_business_id"),
+                    proof.path("repairVersion").asLong(-1), asset, input.assetVersion(), id, borrowing);
             if (borrowing != null) {
                 loans.terminateLost(asset, borrowing.borrowerEmployeeId(), borrowing.organizationId(),
                         borrowing.id(), borrowing.version(), time);
@@ -1815,7 +1825,8 @@ public class ScrapReviewService {
             loans.requireRecovery(asset, "IN_USE", null, null);
         }
         long assetVersion = assets.executeStandalone(asset, input.assetVersion(), id, input.lockVersion(),
-                input.observedCode(), input.observedSerial(), input.locationId(), input.locationVersion(), current.id(), time);
+                input.observedCode(), input.observedSerial(), input.locationId(), input.locationVersion(),
+                current.id(), time);
         String execution = json.writeValueAsString(input);
         db.update("UPDATE fams_scrap_request SET request_status='EXECUTED',execution_snapshot_json=?,"
                 + "asset_version=?,version=version+1,updated_at=? WHERE id=?",
@@ -1823,7 +1834,8 @@ public class ScrapReviewService {
         db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
                 + "due_date,due_at,due_timezone,custody_snapshot_json,created_at,updated_at)"
                 + " VALUES (?,?,'PENDING_DISPOSITION',?,?,?,?,?,?)",
-                id, current.id(), due, due.plusDays(1).atStartOfDay(zone).toInstant(), zone.getId(), execution, time, time);
+                id, current.id(), due, due.plusDays(1).atStartOfDay(zone).toInstant(), zone.getId(), execution,
+                time, time);
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         todo(id, "DISPOSITION", "WAREHOUSE_OPERATOR", current.id(), time);
@@ -1940,8 +1952,8 @@ public class ScrapReviewService {
             loans.terminateLost(asset, borrowing.borrowerEmployeeId(), borrowing.organizationId(),
                     borrowing.id(), borrowing.version(), time);
         }
-        var facts = new java.util.LinkedHashMap<String, Object>(Map.of("occurredAt", input.occurredAt(), "method", factory.method(),
-                "recipient", factory.provider(), "recordedBy", factory.recordedBy()));
+        var facts = new java.util.LinkedHashMap<String, Object>(Map.of("occurredAt", input.occurredAt(),
+                "method", factory.method(), "recipient", factory.provider(), "recordedBy", factory.recordedBy()));
         if (initial) {
             facts.put("initialEvidence", source.path("repairEvidence").path("context").path("evidence").asText());
         } else {
@@ -2091,7 +2103,8 @@ public class ScrapReviewService {
                 execution, assetVersion, time, id);
         db.update("INSERT INTO fams_scrap_disposition(request_id,processor_account_id,disposition_status,"
                 + "custody_snapshot_json,completion_snapshot_json,created_at,updated_at)"
-                + " VALUES (?,?,'LOSS_WRITTEN_OFF',?,?,?,?)", id, current.id(), source.toString(), execution, time, time);
+                + " VALUES (?,?,'LOSS_WRITTEN_OFF',?,?,?,?)",
+                id, current.id(), source.toString(), execution, time, time);
         releaseExecutedLock(id, asset, input.lockVersion(), time);
         closeTodo(id, "EXECUTE", time);
         audit(actor, current, Role.WAREHOUSE_OPERATOR, id, version, "SCRAP_LOSS_WRITTEN_OFF", facts, time);
@@ -2253,14 +2266,16 @@ public class ScrapReviewService {
         }
         var dispositions = db.queryForList("SELECT processor_account_id,disposition_status,version"
                 + " FROM fams_scrap_disposition WHERE request_id=? FOR UPDATE", id);
-        if (dispositions.isEmpty() || !Objects.equals(dispositions.getFirst().get("processor_account_id"), current.id())) {
+        if (dispositions.isEmpty()
+                || !Objects.equals(dispositions.getFirst().get("processor_account_id"), current.id())) {
             throw new AssetHandoverPort.Failure("SCRAP_PROCESSOR_REQUIRED", 403);
         }
         var disposition = dispositions.getFirst();
         String operation = "COMPLETE_DISPOSITION:" + id;
         String hash = fingerprint(version, input);
         var prior = db.queryForList("SELECT payload_sha256,response_json FROM fams_scrap_receipt"
-                + " WHERE actor_account_id=? AND operation=? AND request_id=? FOR UPDATE", current.id(), operation, key.toString());
+                + " WHERE actor_account_id=? AND operation=? AND request_id=? FOR UPDATE",
+                current.id(), operation, key.toString());
         if (!prior.isEmpty()) {
             if (!hash.equals(prior.getFirst().get("payload_sha256"))) {
                 throw new AssetHandoverPort.Failure("SCRAP_IDEMPOTENCY_CONFLICT", 409);
@@ -2286,7 +2301,8 @@ public class ScrapReviewService {
         }
         assets.requireDispositionAsset(number(request, "asset_id"), number(request, "asset_version"),
                 input.observedCode(), input.observedSerial());
-        var operators = db.queryForList("SELECT e.name FROM fams_employee e JOIN fams_organization o ON o.id=e.organization_id"
+        var operators = db.queryForList(
+                "SELECT e.name FROM fams_employee e JOIN fams_organization o ON o.id=e.organization_id"
                 + " WHERE e.id=? AND e.version=? AND e.status='ACTIVE' AND o.status='ACTIVE' FOR UPDATE",
                 input.operatorEmployeeId(), input.operatorVersion());
         if (operators.isEmpty()) {
@@ -2298,7 +2314,8 @@ public class ScrapReviewService {
             throw new AssetHandoverPort.Failure("SCRAP_ATTACHMENT_STORAGE_UNAVAILABLE", 503);
         }
         if (Set.copyOf(input.evidenceObjectIds()).size() != input.evidenceObjectIds().size()
-                || input.evidenceObjectIds().stream().anyMatch(object -> !attachments.clean("SCRAP_DISPOSITION", id, current.id(), object))) {
+                || input.evidenceObjectIds().stream()
+                        .anyMatch(object -> !attachments.clean("SCRAP_DISPOSITION", id, current.id(), object))) {
             throw new AssetHandoverPort.Failure("SCRAP_DISPOSITION_EVIDENCE_INVALID", 409);
         }
         String detail = json.writeValueAsString(Map.of("facts", input, "operatorName", operators.getFirst().get("name"),
@@ -2393,7 +2410,8 @@ public class ScrapReviewService {
         db.update("INSERT INTO fams_audit_event(request_id,actor_account_id,actor_role,action,"
                         + "resource_type,resource_id,before_version,after_version,occurred_at,detail_json)"
                         + " VALUES (?,?,?,?,'SCRAP',?,?,?,?,?)",
-                actor.requestId().toString(), current.id(), role.name(), action, id, version, version + 1, time, detail);
+                actor.requestId().toString(), current.id(), role.name(), action, id, version, version + 1, time,
+                detail);
     }
 
     private Instant instant(Object value) {

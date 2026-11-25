@@ -146,7 +146,8 @@ public class AssetFactoryReplacementPort {
         if (serial == null || serial.isBlank() || serial.length() > 128
                 || old.get("serial_number") != null
                 && serial.strip().equalsIgnoreCase(old.get("serial_number").toString().strip())) {
-            throw AssetOperationException.conflict("ASSET_REPLACEMENT_NEW_SERIAL_REQUIRED", "Distinct new serial required.");
+            throw AssetOperationException.conflict("ASSET_REPLACEMENT_NEW_SERIAL_REQUIRED",
+                    "Distinct new serial required.");
         }
         if (input.getSource() != null && !"FACTORY_REPLACEMENT".equals(input.getSource())) {
             throw AssetOperationException.invalid("ASSET_REPLACEMENT_SOURCE_INVALID", "Replacement source required.");
@@ -189,7 +190,8 @@ public class AssetFactoryReplacementPort {
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public Trace trace(AssetActorContext.Actor actor, long asset) {
         service.get(actor, asset);
-        var rows = db.queryForList("SELECT o.*,a.asset_code AS replacement_code FROM fams_asset_factory_replacement_origin o"
+        var rows = db.queryForList(
+                "SELECT o.*,a.asset_code AS replacement_code FROM fams_asset_factory_replacement_origin o"
                 + " JOIN fams_asset a ON a.id=o.asset_id WHERE (o.asset_id=? OR o.original_asset_id=?)"
                 + " AND (a.card_stage NOT IN ('DRAFT','CANCELLED') OR a.creator_account_id=?)"
                 + " ORDER BY o.recorded_at,o.asset_id", asset, asset, actor.id());

@@ -66,7 +66,8 @@ public class ScrapService {
      * @param repairs repair-domain port supplying repair and factory-replacement sources and the lock handoff
      */
     public ScrapService(JdbcTemplate db, ObjectMapper json, Clock clock,
-            RequisitionActorContext actors, AssetScrapPort assets, LossScrapSourcePort losses, LoanLossPort loans, RepairService repairs) {
+            RequisitionActorContext actors, AssetScrapPort assets, LossScrapSourcePort losses, LoanLossPort loans,
+            RepairService repairs) {
         this.db = db;
         this.json = json;
         this.clock = clock;
@@ -303,7 +304,8 @@ public class ScrapService {
         if (prior != null) {
             return prior;
         }
-        var repair = repairs.scrapSource(actor, repairId, version, input.assetVersion(), input.ownershipVersion(), input.lockVersion());
+        var repair = repairs.scrapSource(actor, repairId, version, input.assetVersion(), input.ownershipVersion(),
+                input.lockVersion());
         return createFromRepair(actor, current, operation, key, hash, input, repair, null);
     }
 
@@ -387,7 +389,8 @@ public class ScrapService {
             RepairSubmission input) {}
 
     private Receipt replay(Current current, String operation, UUID key, String hash) {
-        var prior = db.queryForList("SELECT payload_sha256,response_json FROM fams_scrap_receipt WHERE actor_account_id=?"
+        var prior = db.queryForList(
+                "SELECT payload_sha256,response_json FROM fams_scrap_receipt WHERE actor_account_id=?"
                 + " AND operation=? AND request_id=? FOR UPDATE", current.id(), operation, key.toString());
         if (prior.isEmpty()) {
             return null;
@@ -403,9 +406,11 @@ public class ScrapService {
             Object facts, RepairLink link, Long processor) {
         var time = clock.instant().truncatedTo(ChronoUnit.MILLIS);
         db.update(
-                "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,"
+                "INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,"
+                        + "source_business_id,source_item_id,"
                         + "source_snapshot_json,reason,observed_condition,proposed_disposition,"
-                        + "asset_version,created_at,updated_at,processor_account_id,ownership_version) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        + "asset_version,created_at,updated_at,processor_account_id,ownership_version) "
+                        + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 input.assetId(), current.id(), sourceType, sourceId, link == null ? null : link.replacementId(),
                 json.writeValueAsString(source), input.reason().strip(),
                 input.observedCondition().strip(), input.proposedDisposition().strip(), input.assetVersion() + 1,
@@ -430,7 +435,8 @@ public class ScrapService {
                 id, time);
         String role = current.roles().stream().map(Enum::name).sorted().findFirst().orElseThrow();
         String detail = sourceId == null ? json.writeValueAsString(facts)
-                : json.writeValueAsString(Map.of("sourceType", sourceType, "facts", facts, "sourceId", sourceId.toString()));
+                : json.writeValueAsString(Map.of("sourceType", sourceType, "facts", facts,
+                        "sourceId", sourceId.toString()));
         db.update(
                 "INSERT INTO fams_scrap_event(request_id,action,before_version,after_version,"
                         + "actor_account_id,actor_username,actor_role,detail_json,occurred_at)"

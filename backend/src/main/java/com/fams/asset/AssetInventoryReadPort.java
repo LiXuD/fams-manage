@@ -57,7 +57,8 @@ public final class AssetInventoryReadPort {
                 return List.of();
             }
             return db.queryForList(
-                            "SELECT CAST(a.id AS CHAR) AS id,a.asset_code,a.name,t.tag_version,t.issued_at FROM fams_asset a JOIN"
+                            "SELECT CAST(a.id AS CHAR) AS id,a.asset_code,a.name,t.tag_version,t.issued_at "
+                                + "FROM fams_asset a JOIN"
                                 + " fams_asset_tag t ON t.asset_id=a.id WHERE t.token_hash=? AND"
                                 + " a.card_stage='ACTIVE' AND a.lifecycle_status<>'WAITING_INBOUND'",
                             codec.hash(value))

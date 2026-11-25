@@ -65,7 +65,8 @@ public class ScrapController {
      * @param reads read service owning list, overdue disposition, eligible, detail and catalog queries
      * @param actors request-scoped actor context used to capture the caller for every handler
      */
-    public ScrapController(ScrapService scrap, ScrapReviewService review, ScrapReadService reads, RequisitionActorContext actors) {
+    public ScrapController(ScrapService scrap, ScrapReviewService review, ScrapReadService reads,
+            RequisitionActorContext actors) {
         this.scrap = scrap;
         this.reads = reads;
         this.review = review;
@@ -297,7 +298,8 @@ public class ScrapController {
     }
 
     @ExceptionHandler(com.fams.loan.LoanRepairPort.Failure.class)
-    ResponseEntity<ErrorResponse> repairLoanRejection(com.fams.loan.LoanRepairPort.Failure failure, HttpServletRequest request) {
+    ResponseEntity<ErrorResponse> repairLoanRejection(com.fams.loan.LoanRepairPort.Failure failure,
+            HttpServletRequest request) {
         UUID id = request.getAttribute("fams.request.id") instanceof UUID value ? value : UUID.randomUUID();
         return ResponseEntity.status(409).body(new ErrorResponse(failure.getMessage(),
                 failure.getMessage(), id, Map.of()));

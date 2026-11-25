@@ -2,6 +2,7 @@ package com.fams.asset;
 
 /** Read-only predicates over the official workflow facts linked to a visible asset. */
 final class AssetLedgerWorkflowSql {
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     static final String PROCESSOR = """
             (
                 EXISTS (
@@ -34,7 +35,9 @@ final class AssetLedgerWorkflowSql {
                 )
             )
             """;
+    // CHECKSTYLE.ON: LineLength
 
+    // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
     static final String REFERENCE = """
             (
                 EXISTS (
@@ -59,6 +62,7 @@ final class AssetLedgerWorkflowSql {
                 OR EXISTS (SELECT 1 FROM fams_scrap_request s WHERE s.id=#{filters.businessReference.id} AND s.asset_id=a.id)
             )
             """;
+    // CHECKSTYLE.ON: LineLength
 
     private AssetLedgerWorkflowSql() {}
 }

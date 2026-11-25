@@ -156,7 +156,8 @@ public class AssetTransferPort {
                 db.queryForList(
                         "SELECT id,version,asset_code,name,owning_organization_id,custody_type,"
                             + "using_organization_id,responsible_employee_id,department_responsible_employee_id,"
-                            + "storage_warehouse_id,current_location_id,lifecycle_status,exception_status,card_stage,parameter_version_id"
+                            + "storage_warehouse_id,current_location_id,lifecycle_status,exception_status,card_stage,"
+                            + "parameter_version_id"
                             + " FROM fams_asset WHERE id=? FOR UPDATE",
                         id);
         if (rows.isEmpty()) {
@@ -332,7 +333,8 @@ public class AssetTransferPort {
                 db.update(
                         "UPDATE fams_asset SET"
                             + " owning_organization_id=?,custody_type=?,using_organization_id=?,"
-                            + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=?,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
+                            + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=?,"
+                            + "current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                             + " WHERE id=? AND version=?",
                         after.owningOrganizationId(),
                         after.custodyType(),

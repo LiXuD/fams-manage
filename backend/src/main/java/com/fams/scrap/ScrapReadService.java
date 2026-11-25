@@ -56,10 +56,13 @@ public class ScrapReadService {
             + " JOIN fams_account_scope_organization os ON os.data_scope_id=ds.id"
             + " WHERE aa.account_id=? AND aa.role_code='AUDIT_READ_ONLY' AND aa.superseded_at IS NULL"
             + " AND aa.authorization_status='ACTIVE' AND ds.scope_type='SPECIFIED_ORGANIZATIONS'"
-            + " AND CAST(os.organization_id AS CHAR)=COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')),"
+            + " AND CAST(os.organization_id AS CHAR)=COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,"
+            + "'$.using_organization_id')),"
             + " 'null'),CAST(a.owning_organization_id AS CHAR))))"
-            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS UNSIGNED)=?)"
-            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS UNSIGNED)=?)"
+            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.responsible_employee_id')) AS "
+            + "UNSIGNED)=?)"
+            + " OR (? AND CAST(JSON_UNQUOTE(JSON_EXTRACT(r.source_snapshot_json,'$.using_organization_id')) AS "
+            + "UNSIGNED)=?)"
             + " OR (? AND (JSON_UNQUOTE(JSON_EXTRACT(r.decision_snapshot_json,'$.decision.result'))='APPROVE'"
             + " OR EXISTS (SELECT 1 FROM fams_scrap_correction c WHERE c.request_id=r.id"
             + " AND (c.correction_status='WAITING_WAREHOUSE_CLAIM'"
@@ -267,7 +270,8 @@ public class ScrapReadService {
                 && Objects.equals(row.get("processor_account_id"), current.id());
         boolean disposing = "employee".equals(kind) && "EXECUTED".equals(row.get("request_status"))
                 && !db.queryForList("SELECT request_id FROM fams_scrap_disposition WHERE request_id=?"
-                        + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'", id, current.id()).isEmpty();
+                        + " AND processor_account_id=? AND disposition_status='PENDING_DISPOSITION'",
+                        id, current.id()).isEmpty();
         boolean correctionTarget = "bin".equals(kind) && current.has(Role.ASSET_ADMIN)
                 && "RESTORE_REQUIRED".equals(row.get("request_status")) && "STANDALONE".equals(row.get("source_type"))
                 && db.queryForList("SELECT id FROM fams_scrap_correction WHERE request_id=?"
@@ -308,7 +312,9 @@ public class ScrapReadService {
                         || Objects.equals(actor.id(), row.get("creator_account_id")));
     }
 
-    /** Recovery follows a loss write-off, so administrators, warehouse operators and the original applicant register it. */
+    /**
+     * Recovery follows a loss write-off, so administrators, warehouse operators and the original applicant register it.
+     */
     static boolean mayRequestRecovery(Current actor, Map<String, Object> row) {
         return "EXECUTED".equals(row.get("request_status"))
                 && (actor.has(Role.ASSET_ADMIN) || actor.has(Role.WAREHOUSE_OPERATOR)
@@ -348,7 +354,8 @@ public class ScrapReadService {
         var locks = db.queryForList("SELECT lock_version FROM fams_asset_business_lock"
                 + " WHERE asset_id=? AND business_type='SCRAP' AND business_id=?"
                 + " AND business_item_id=? AND released_at IS NULL", row.get("asset_id"), id, id);
-        var dispositions = db.queryForList("SELECT disposition_status,DATE_FORMAT(due_date,'%Y-%m-%d') due_date,version,custody_snapshot_json,"
+        var dispositions = db.queryForList(
+                "SELECT disposition_status,DATE_FORMAT(due_date,'%Y-%m-%d') due_date,version,custody_snapshot_json,"
                 + "completion_snapshot_json,processor_account_id FROM fams_scrap_disposition WHERE request_id=?", id);
         var correctionRows = db.queryForList("SELECT c.id,c.correction_status,c.processor_account_id,c.asset_version,"
                 + "c.lock_version,c.target_location_id,c.target_location_version,c.ownership_version,c.version,"

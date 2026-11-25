@@ -715,7 +715,9 @@ public class AssetRepairPort {
         identity.observedCode(assetId, observed);
         db.update(
                 "UPDATE fams_asset SET"
-                    + " lifecycle_status='IN_STOCK',custody_type='STORAGE',storage_warehouse_id=?,current_location_id=?,using_organization_id=NULL,responsible_employee_id=NULL,department_responsible_employee_id=NULL,version=version+1,updated_by=?,updated_at=?"
+                    + " lifecycle_status='IN_STOCK',custody_type='STORAGE',storage_warehouse_id=?,"
+                    + "current_location_id=?,using_organization_id=NULL,responsible_employee_id=NULL,"
+                    + "department_responsible_employee_id=NULL,version=version+1,updated_by=?,updated_at=?"
                     + " WHERE id=? AND version=?",
                 warehouse,
                 location,
@@ -934,7 +936,8 @@ public class AssetRepairPort {
         boolean shared = "SHARED".equals(target.custodyType());
         db.update(
                 "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
-                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
+                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,"
+                    + "current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                     + " WHERE id=? AND version=?",
                 json.readTree(sourceJson).path("lifecycle").asText(),
                 target.custodyType(),
@@ -1094,7 +1097,8 @@ public class AssetRepairPort {
         boolean shared = "SHARED".equals(target.custodyType());
         db.update(
                 "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,using_organization_id=?,"
-                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,current_location_id=?,version=version+1,updated_by=?,updated_at=?"
+                    + "responsible_employee_id=?,department_responsible_employee_id=?,storage_warehouse_id=NULL,"
+                    + "current_location_id=?,version=version+1,updated_by=?,updated_at=?"
                     + " WHERE id=? AND version=?",
                 json.readTree(sourceJson).path("lifecycle").asText(),
                 target.custodyType(),

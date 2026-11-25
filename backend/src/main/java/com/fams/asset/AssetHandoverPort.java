@@ -223,7 +223,8 @@ public class AssetHandoverPort {
         if (db.update(
                         "UPDATE fams_asset SET lifecycle_status=?,custody_type=?,"
                             + "storage_warehouse_id=NULL,current_location_id=?,using_organization_id=?,"
-                            + "responsible_employee_id=?,department_responsible_employee_id=?,version=version+1,updated_by=?,updated_at=?"
+                            + "responsible_employee_id=?,department_responsible_employee_id=?,"
+                            + "version=version+1,updated_by=?,updated_at=?"
                             + " WHERE id=? AND version=?",
                         lifecycle,
                         custody,

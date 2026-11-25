@@ -443,14 +443,16 @@ public final class ScrapViews {
         var dispositionRow = dispositions.isEmpty() ? null : dispositions.getFirst();
         boolean canDispose = dispositionRow != null && actor.has(Role.WAREHOUSE_OPERATOR)
                 && Objects.equals(dispositionRow.get("processor_account_id"), actor.id())
-                && "EXECUTED".equals(row.get("request_status")) && ScrapReviewService.physicalSource(row.get("source_type"))
+                && "EXECUTED".equals(row.get("request_status"))
+                && ScrapReviewService.physicalSource(row.get("source_type"))
                 && "PENDING_DISPOSITION".equals(dispositionRow.get("disposition_status"));
         var disposition = dispositionRow == null ? null
                 : disposition(json, dispositionRow, lossSource || factory, factory);
         var correction = correctionRows.isEmpty() ? null : correction(correctionRows.getFirst());
         var reversal = reversalRows.isEmpty() ? null : reversal(reversalRows.getFirst());
         var recovery = recoveryRows.isEmpty() ? null : recovery(recoveryRows.getFirst());
-        boolean writtenOff = dispositionRow != null && "LOSS_WRITTEN_OFF".equals(dispositionRow.get("disposition_status"));
+        boolean writtenOff = dispositionRow != null
+                && "LOSS_WRITTEN_OFF".equals(dispositionRow.get("disposition_status"));
         boolean pendingDisposal = dispositionRow != null
                 && "PENDING_DISPOSITION".equals(dispositionRow.get("disposition_status"));
         boolean correctionPending = correction != null && "PENDING_ADMIN_DECISION".equals(correction.status());

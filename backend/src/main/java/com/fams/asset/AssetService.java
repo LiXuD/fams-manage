@@ -136,7 +136,8 @@ class AssetService {
             }
         }
         if (filters.containsKey("longUninventoried") && !filters.containsKey("inventoryBefore")) {
-            throw AssetOperationException.invalid("ASSET_FILTER_INVALID", "Select a cutoff date for the inventory filter.");
+            throw AssetOperationException.invalid("ASSET_FILTER_INVALID",
+                    "Select a cutoff date for the inventory filter.");
         }
         return filters;
     }
@@ -438,11 +439,13 @@ class AssetService {
         checkVersion(asset, expectedVersion);
         if (!"ACTIVE".equals(text(asset, "card_stage")) || List.of("WAITING_INBOUND", "SCRAPPED")
                 .contains(text(asset, "lifecycle_status"))) {
-            throw AssetOperationException.conflict("ASSET_TAG_NOT_ELIGIBLE", "The asset is not eligible for placement.");
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_ELIGIBLE",
+                    "The asset is not eligible for placement.");
         }
         var tag = assetRepository.tag(id);
         if (tag == null || !hash.equals(text(tag, "token_hash"))) {
-            throw AssetOperationException.conflict("ASSET_TAG_NOT_CURRENT", "The scanned tag is not the current asset tag.");
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_CURRENT",
+                    "The scanned tag is not the current asset tag.");
         }
         long tagVersion = number(tag, "tag_version");
         var issuedAt = instant(tag, "issued_at");
@@ -474,7 +477,8 @@ class AssetService {
         Map<String, Object> asset = visible(actor, id, true);
         checkVersion(asset, expectedVersion);
         if (!"ACTIVE".equals(text(asset, "card_stage"))) {
-            throw AssetOperationException.conflict("ASSET_TAG_NOT_PRINTABLE", "Only published assets have printable tags.");
+            throw AssetOperationException.conflict("ASSET_TAG_NOT_PRINTABLE",
+                    "Only published assets have printable tags.");
         }
         required(reason, 500, "ASSET_TAG_REASON_REQUIRED");
         Map<String, Object> old = assetRepository.tag(id);
@@ -622,7 +626,8 @@ class AssetService {
         Map<String, Object> locationRow = location == null ? null : assetRepository.location(location);
         if (location != null && (locationRow == null || warehouse == null
                 || number(locationRow, "warehouse_id") != warehouse)) {
-            throw AssetOperationException.conflict("ASSET_MASTER_DATA_DISABLED", "The planned location is outside its warehouse.");
+            throw AssetOperationException.conflict("ASSET_MASTER_DATA_DISABLED",
+                    "The planned location is outside its warehouse.");
         }
         values.put("model", optional(request.getModel(), 128));
         values.put("unit", optional(request.getUnit(), 32));
@@ -657,12 +662,14 @@ class AssetService {
     private void validateExtensions(Long categoryId, Map<String, Object> extensions) {
         if (extensions == null || extensions.isEmpty()) { return; }
         if (categoryId == null) {
-            throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID", "A category is required for extension values.");
+            throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID",
+                    "A category is required for extension values.");
         }
         String templateJson = assetRepository.categoryTemplate(categoryId);
         JsonNode template = json.readTree(templateJson == null ? "[]" : templateJson);
         if (!template.isArray() || extensions.size() > template.size()) {
-            throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID", "Extension fields do not match the category.");
+            throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID",
+                    "Extension fields do not match the category.");
         }
         for (var field : extensions.entrySet()) {
             JsonNode definition = null;
@@ -685,7 +692,8 @@ class AssetService {
                 default -> false;
             };
             if (!valid) {
-                throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID", "An extension field has the wrong type.");
+                throw AssetOperationException.invalid("ASSET_EXTENSION_INVALID",
+                        "An extension field has the wrong type.");
             }
         }
     }

@@ -217,7 +217,8 @@ public class AssetScrapPort {
     }
 
     private Map<String, Object> lockedSourceAsset(long id, long version, String lifecycle, String exception) {
-        var rows = db.queryForList("SELECT id,asset_code,name,serial_number,lifecycle_status,exception_status,card_stage,"
+        var rows = db.queryForList(
+                "SELECT id,asset_code,name,serial_number,lifecycle_status,exception_status,card_stage,"
                 + "custody_type,storage_warehouse_id,current_location_id,using_organization_id,responsible_employee_id,"
                 + "department_responsible_employee_id,version FROM fams_asset WHERE id=? AND version=?"
                 + " AND card_stage='ACTIVE' AND lifecycle_status=? AND exception_status=? FOR UPDATE",
@@ -296,10 +297,13 @@ public class AssetScrapPort {
         return freezeLinked(id, version, requestId, factory ? "FACTORY_REPAIR" : "UNDER_REPAIR", "NORMAL", actor, time);
     }
 
-    private long freezeLinked(long id, long version, long requestId, String lifecycle, String exception, long actor, Instant time) {
-        if (db.update("UPDATE fams_asset a SET lifecycle_status='PENDING_SCRAP',version=version+1,updated_at=?,updated_by=?"
+    private long freezeLinked(long id, long version, long requestId, String lifecycle, String exception,
+            long actor, Instant time) {
+        if (db.update(
+                "UPDATE fams_asset a SET lifecycle_status='PENDING_SCRAP',version=version+1,updated_at=?,updated_by=?"
                 + " WHERE a.id=? AND a.version=? AND a.lifecycle_status=? AND a.exception_status=?"
-                + " AND EXISTS (SELECT 1 FROM fams_asset_business_lock b WHERE b.asset_id=a.id AND b.business_type='SCRAP'"
+                + " AND EXISTS (SELECT 1 FROM fams_asset_business_lock b "
+                + "WHERE b.asset_id=a.id AND b.business_type='SCRAP'"
                 + " AND b.business_id=? AND b.business_item_id=? AND b.released_at IS NULL)",
                 time, actor, id, version, lifecycle, exception, requestId, requestId) != 1) {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
@@ -383,7 +387,8 @@ public class AssetScrapPort {
                 || db.queryForList("SELECT a.id FROM fams_asset a JOIN fams_location l ON l.id=a.current_location_id"
                         + " LEFT JOIN fams_warehouse w ON w.id=a.storage_warehouse_id"
                         + " LEFT JOIN fams_organization o ON o.id=a.using_organization_id"
-                        + " LEFT JOIN fams_employee e ON e.id=COALESCE(a.responsible_employee_id,a.department_responsible_employee_id)"
+                        + " LEFT JOIN fams_employee e ON e.id=COALESCE(a.responsible_employee_id,"
+                        + "a.department_responsible_employee_id)"
                         + " WHERE a.id=? AND l.status='ACTIVE' AND ((a.custody_type='STORAGE' AND w.status='ACTIVE')"
                         + " OR (a.custody_type IN ('PERSONAL','SHARED') AND o.status='ACTIVE' AND e.status='ACTIVE'"
                         + " AND e.organization_id=a.using_organization_id)) FOR UPDATE", asset).isEmpty()) {
@@ -449,7 +454,8 @@ public class AssetScrapPort {
             throw new AssetHandoverPort.Failure("SCRAP_ASSET_CHANGED", 409);
         }
         mapper.event(asset, "SCRAP_EXECUTED", time,
-                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(request), "sourceType", "FACTORY_REPLACEMENT")),
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(request),
+                        "sourceType", "FACTORY_REPLACEMENT")),
                 actor);
         return version + 1;
     }
@@ -536,7 +542,8 @@ public class AssetScrapPort {
                 + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
         if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
                 || asset.get("serial_number") != null
-                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                        && !Objects.equals(asset.get("serial_number"),
+                                observedSerial == null ? null : observedSerial.strip())
                 || !"PENDING_SCRAP".equals(asset.get("lifecycle_status"))
                 || !"NORMAL".equals(asset.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
@@ -587,7 +594,8 @@ public class AssetScrapPort {
                 + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
         if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
                 || asset.get("serial_number") != null
-                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                        && !Objects.equals(asset.get("serial_number"),
+                                observedSerial == null ? null : observedSerial.strip())
                 || !"SCRAPPED".equals(asset.get("lifecycle_status"))
                 || !"NORMAL".equals(asset.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
@@ -688,7 +696,8 @@ public class AssetScrapPort {
                 + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
         if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
                 || asset.get("serial_number") != null
-                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                        && !Objects.equals(asset.get("serial_number"),
+                                observedSerial == null ? null : observedSerial.strip())
                 || !"NORMAL".equals(asset.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);
         }
@@ -731,13 +740,16 @@ public class AssetScrapPort {
     public long executeLoss(long asset, long version, long requestId, long lockVersion,
             JsonNode source, long actor, Instant time) {
         requirePending(asset, version, requestId, lockVersion);
-        if (!hasFrozenCustody(asset, version, source, "LOST") || db.update("UPDATE fams_asset SET lifecycle_status='SCRAPPED',version=version+1,updated_at=?,updated_by=?"
+        if (!hasFrozenCustody(asset, version, source, "LOST")
+                || db.update(
+                        "UPDATE fams_asset SET lifecycle_status='SCRAPPED',version=version+1,updated_at=?,updated_by=?"
                         + " WHERE id=? AND version=? AND lifecycle_status='PENDING_SCRAP' AND exception_status='LOST'",
                 time, actor, asset, version) != 1) {
             throw new AssetHandoverPort.Failure("SCRAP_LOSS_ASSET_CHANGED", 409);
         }
         mapper.event(asset, "SCRAP_EXECUTED", time,
-                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId), "sourceType", "LOSS")), actor);
+                json.writeValueAsString(Map.of("scrapRequestId", Long.toString(requestId), "sourceType", "LOSS")),
+                actor);
         return version + 1;
     }
 
@@ -761,7 +773,8 @@ public class AssetScrapPort {
     /** Only an un-disposed scrapped asset that no later business has locked may be reversed. */
     public void requireReversibleAsset(long id, long version) {
         if (db.queryForList("SELECT id FROM fams_asset WHERE id=? AND version=?"
-                        + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED' AND exception_status='NORMAL' FOR UPDATE",
+                        + " AND card_stage='ACTIVE' AND lifecycle_status='SCRAPPED' "
+                        + "AND exception_status='NORMAL' FOR UPDATE",
                         id, version).isEmpty()
                 || !db.queryForList("SELECT id FROM fams_asset_business_lock WHERE asset_id=?"
                         + " AND released_at IS NULL FOR UPDATE", id).isEmpty()) {
@@ -833,7 +846,8 @@ public class AssetScrapPort {
                 + " FROM fams_asset WHERE id=? FOR UPDATE", assetId);
         if (!Objects.equals(asset.get("asset_code"), observedCode.strip())
                 || asset.get("serial_number") != null
-                        && !Objects.equals(asset.get("serial_number"), observedSerial == null ? null : observedSerial.strip())
+                        && !Objects.equals(asset.get("serial_number"),
+                                observedSerial == null ? null : observedSerial.strip())
                 || !"SCRAPPED".equals(asset.get("lifecycle_status"))
                 || !List.of("NORMAL", "LOST").contains(asset.get("exception_status"))) {
             throw new AssetHandoverPort.Failure("SCRAP_PHYSICAL_IDENTITY_CHANGED", 409);

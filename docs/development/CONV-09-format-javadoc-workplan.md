@@ -179,3 +179,32 @@ JAVA 系列已冻结存储形状）用 `// CHECKSTYLE:OFF` / `// CHECKSTYLE:ON` 
 
 验收：`./mvnw -pl backend test`（默认生命周期已含 checkstyle）必须 BUILD SUCCESS，
 并在 `git archive HEAD` 纯净副本上复跑一次全量测试与 ArchUnit（当前 7 条规则）。
+
+## 10. 进度更新与三处更正（2026-11-25）
+
+**§9 前置条件 1、2 的 asset/scrap 档已完成**：文本块外超长行清零（重排 64 处、字面量常量折叠拆分
+23 处，18 文件 +181/−96），文本块内残留 15 行（`asset/AssetLedgerWorkflowSql` 10、
+`asset/AssetSearchSql` 1、`scrap/ScrapInitialPort` 4）已用 `/tmp/wrap_tb.py` 补 6 对 OFF/ON。
+独立复核：19 文件全部通过"代码骨架相等 + 文本块内容相等 + `/**`/`*/`/`"""`/括号计数相等 +
+无行尾空白与 Tab + 保留末尾换行"，标记行号 ∉ 文本块行号集合。`loss` 经全仓复量已无块内超长行，
+§9 第 2 条的"待补 loss(2 行)"作废。
+
+**更正一：`4607044` 的提交信息有一句是错的。** 该信息称 inventory 的 `MissingJavadocMethod`
+在 scope=public 口径归零；实际仍有 **30 处方法注释缺口**（类注释确已归零）。成因是我当时只按
+类级口径量了 inventory，把 §9 第 3 条的两个指标混为一个。方法级缺口已派代理补齐，未补前
+**不得**声称 A6 在 inventory 完成。
+
+**更正二：J-A/J-B/J-C 的派单只按类注释缺口排序，漏派了三个域的方法注释缺口。**
+`transfer`（类 32 + 方法 14）、`masterdata`（类 5 + 方法 20）、`inventory`（方法 30）当时无任何
+代理覆盖；根包 `FamsApplication.main` 也缺注释。现已补齐派单并由主代理直接补 `FamsApplication`。
+教训：派单前必须同时取 `MissingJavadocType` 与 `MissingJavadocMethod` 两个指标的**按域**分布，
+只取其一会整域漏派。
+
+**更正三：`src/main/resources/*.properties` 的 2 处超长行不折行，改为定向豁免。**
+`application.properties:3`（170 字符，`spring.autoconfigure.exclude` 的两个全限定类名）与
+`application-invalid-migration.properties:6`（121 字符，`spring.flyway.locations` 的两个位置）
+虽然可以用反斜杠续行且属性值不变，但 `scripts/verify-d6-02b.py:298` 对该文件做
+`"spring.flyway.locations=classpath:db/migration/runtime_compatibility" not in profile`
+的**字面文本匹配**，折行会让已交付的 D6-02B 验收判据失效。故 `/tmp/cs-final.xml` 增加一条
+`SuppressionSingleFilter`（`files=.*/src/main/resources/.*\.properties`，`checks=LineLength`），
+并在配置里写明理由。这是**收窄豁免**而非放宽：Java 源的 `LineLength` 仍全量生效。

@@ -70,8 +70,8 @@ public class ScrapInitialPort implements InitialScrapPort {
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'REPAIR',?,?,?,?,?,0,?,?,?,?,?,1)
                 """, opening.asset(), opening.actorId(), repairId, json.writeValueAsString(stored),
-                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
-                opening.row(), opening.time(), opening.time(), opening.actorId());
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(),
+                opening.batch().toString(), opening.row(), opening.time(), opening.time(), opening.actorId());
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         if (db.update("""
                 UPDATE fams_asset_business_lock SET business_type='SCRAP',business_id=?,business_item_id=?
@@ -172,13 +172,16 @@ public class ScrapInitialPort implements InitialScrapPort {
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'LOSS',?,?,?,?,?,0,?,?,?,?,?,?)
                 """, opening.asset(), opening.actorId(), loss.id(), json.writeValueAsString(stored),
-                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
-                opening.row(), opening.time(), opening.time(), factory == null ? null : opening.actorId(),
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(),
+                opening.batch().toString(), opening.row(), opening.time(), opening.time(),
+                factory == null ? null : opening.actorId(),
                 factory == null ? 0 : 1);
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         if (db.update("""
                 UPDATE fams_asset SET lifecycle_status='PENDING_SCRAP' WHERE id=? AND version=0 AND exception_status='LOST'
                 """, opening.asset()) != 1) {
+        // CHECKSTYLE.ON: LineLength
             throw new IllegalStateException("ASSET_IMPORT_INITIAL_LOSS_INVALID");
         }
         db.update("INSERT INTO fams_asset_business_lock(asset_id,business_type,business_id,business_item_id,"
@@ -218,6 +221,7 @@ public class ScrapInitialPort implements InitialScrapPort {
     @Override
     public void openFactoryDisposition(Opening opening, FactoryDisposition disposition) {
         var source = assets.repairSource(opening.asset(), 0, true);
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         var repair = db.queryForMap("""
                 SELECT r.id,r.source_snapshot_json,f.id AS round_id
                 FROM fams_repair_request r JOIN fams_repair_factory_round f ON f.repair_id=r.id AND f.asset_id=r.asset_id
@@ -226,7 +230,9 @@ public class ScrapInitialPort implements InitialScrapPort {
                   AND f.initial_source AND f.round_status='DISPATCHED' AND f.version=0 AND f.dispatched_at<=?
                 FOR UPDATE
                 """, opening.batch().toString(), opening.row(), opening.asset(), opening.actorId(), disposition.occurredAt());
-        if (disposition.occurredAt().isAfter(opening.time()) || !opening.proposedDisposition().equals(disposition.method())) {
+        // CHECKSTYLE.ON: LineLength
+        if (disposition.occurredAt().isAfter(opening.time())
+                || !opening.proposedDisposition().equals(disposition.method())) {
             throw new IllegalStateException("ASSET_IMPORT_FACTORY_DISPOSITION_INVALID");
         }
         long repairId = ((Number) repair.get("id")).longValue();
@@ -244,14 +250,16 @@ public class ScrapInitialPort implements InitialScrapPort {
                 "evidence", disposition.evidence()));
         var stored = new AssetScrapPort.StoredSource(source, null, proof,
                 Map.of("batchId", opening.batch().toString(), "sheetRow", Integer.toString(opening.row())));
+        // CHECKSTYLE.OFF: LineLength - frozen SQL/CSV literal; re-wrapping changes the value
         db.update("""
                 INSERT INTO fams_scrap_request(asset_id,creator_account_id,source_type,source_business_id,source_item_id,
                     source_snapshot_json,reason,observed_condition,proposed_disposition,asset_version,
                     initial_batch_id,initial_sheet_row,created_at,updated_at,processor_account_id,ownership_version)
                 VALUES (?,?,'FACTORY_REPLACEMENT',?,?,?,?,?,?,0,?,?,?,?,?,1)
                 """, opening.asset(), opening.actorId(), repairId, factId, json.writeValueAsString(stored),
-                opening.reason(), opening.observedCondition(), opening.proposedDisposition(), opening.batch().toString(),
-                opening.row(), opening.time(), opening.time(), opening.actorId());
+        // CHECKSTYLE.ON: LineLength
+                opening.reason(), opening.observedCondition(), opening.proposedDisposition(),
+                opening.batch().toString(), opening.row(), opening.time(), opening.time(), opening.actorId());
         long id = java.util.Objects.requireNonNull(db.queryForObject("SELECT LAST_INSERT_ID()", Long.class));
         if (db.update("""
                 UPDATE fams_asset_business_lock SET business_type='SCRAP',business_id=?,business_item_id=?
@@ -313,7 +321,8 @@ public class ScrapInitialPort implements InitialScrapPort {
             return Map.of();
         }
         var request = rows.getFirst();
-        if (rows.size() != 1 || !List.of("STANDALONE", "REPAIR", "LOSS", "FACTORY_REPLACEMENT").contains(request.get("source_type"))
+        if (rows.size() != 1
+                || !List.of("STANDALONE", "REPAIR", "LOSS", "FACTORY_REPLACEMENT").contains(request.get("source_type"))
                 || !"PENDING_ADMIN_DECISION".equals(request.get("request_status"))
                 || ((Number) request.get("version")).longValue() != 0) {
             throw new IllegalStateException("ASSET_IMPORT_ROLLBACK_DOWNSTREAM");

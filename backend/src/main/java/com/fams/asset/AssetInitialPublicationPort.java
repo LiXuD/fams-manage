@@ -79,7 +79,8 @@ public class AssetInitialPublicationPort {
      * @param timezone frozen zone id used to interpret sheet dates
      */
     public record Context(UUID batchId, int sheetRow, long actorId, String username,
-                          long parameterId, LocalDate businessDate, Instant now, long administratorId, String timezone) { }
+                          long parameterId, LocalDate businessDate, Instant now,
+                          long administratorId, String timezone) { }
     /**
      * Identity of the card just published. Both components are returned to the import domain, which
      * uses {@code id} to open downstream records and {@code code} for the per-row result sheet; the
@@ -211,12 +212,13 @@ public class AssetInitialPublicationPort {
         }
         if (repairOpening) {
             repairs.open(new InitialRepairPort.Opening(id, (String) values.get("serial"), asset.repairFacts(),
-                    context.batchId(), context.sheetRow(), context.actorId(), context.username(), context.administratorId(),
-                    context.timezone(), context.now()));
+                    context.batchId(), context.sheetRow(), context.actorId(), context.username(),
+                    context.administratorId(), context.timezone(), context.now()));
         }
         if (pendingScrap) {
             var scrap = new com.fams.business.InitialScrapPort.Opening(id,
-                    repairOpening ? asset.repairFacts().factory() != null ? "FACTORY_REPAIR" : "UNDER_REPAIR" : custodyLifecycle,
+                    repairOpening ? asset.repairFacts().factory() != null
+                            ? "FACTORY_REPAIR" : "UNDER_REPAIR" : custodyLifecycle,
                     asset.scrapReason().strip(), asset.scrapCondition().strip(),
                     asset.proposedDisposition().strip(), context.actorId(),
                     context.batchId(), context.sheetRow(), context.now());
